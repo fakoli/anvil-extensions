@@ -1,9 +1,16 @@
 {
   "name": "fakoli-pi-extensions",
   "private": true,
-  "keywords": ["pi-package"],
-  "workspaces": ["packages/*"],
+  "keywords": [
+    "pi-package"
+  ],
+  "workspaces": [
+    "packages/*"
+  ],
   "pi": {
-    "extensions": ["./packages/pi-condense/index.ts"]
+    "extensions": [
+      "./packages/pi-condense/index.ts",
+      "./packages/pi-insights/index.ts"
+    ]
   }
 }
