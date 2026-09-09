@@ -61,12 +61,17 @@ export function validationKey(command: string): string {
   const segments = command.split(/&&|\|\|/).map((s) => s.trim()).filter(Boolean);
   const meaningful = segments.filter((s) => !/^cd\s/.test(s));
   const target = meaningful.length ? meaningful[meaningful.length - 1] : command;
-  const words = target
+  let words = target
     .replace(/^[=!(\s]+/, "")
     .trim()
     .split(/\s+/)
-    .slice(0, 2)
+    .filter((w) => !w.startsWith("-"))
     .map((w) => w.toLowerCase());
+  if ((words[0] === "npm" || words[0] === "pnpm" || words[0] === "yarn") && words[1] === "run" && words[2]) {
+    words = words.slice(0, 3); // keep the distinguishing script name
+  } else {
+    words = words.slice(0, 2);
+  }
   return words.join(" ");
 }
 
@@ -78,11 +83,7 @@ export function classifyBash(command: string): { category: CallCategory; command
       return { category, commandKey: key, plan: milestonePlanFor(category, command, key) };
     }
   }
-  return { category: "generic", commandKey: key_generic(command), plan: null };
-}
-
-function key_generic(command: string): string {
-  return validationKey(command);
+  return { category: "generic", commandKey: validationKey(command), plan: null };
 }
 
 function milestonePlanFor(category: CallCategory, command: string, key: string): MilestonePlan | null {

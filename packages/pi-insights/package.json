@@ -20,6 +20,7 @@
   "files": [
     "index.ts",
     "src/**/*.ts",
+    "tests/*.mjs",
     "README.md"
   ],
   "pi": {
@@ -29,5 +30,8 @@
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*"
+  },
+  "scripts": {
+    "test": "node tests/run-tests.mjs"
   }
 }

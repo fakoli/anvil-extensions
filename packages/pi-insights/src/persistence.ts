@@ -1,5 +1,6 @@
 // pi-insights — checkpoint persistence via session entries (no sidecar files).
-import type { Ledger } from "./state.js";
+import type { Ledger, ValidationRecord } from "./state.js";
+import type { Milestone } from "./signals.js";
 
 export const CHECKPOINT_TYPE = "pi-insights.checkpoint";
 const CHECKPOINT_VERSION = 1;
@@ -40,8 +41,21 @@ export function fromCheckpoint(data: unknown): Ledger | null {
   const ledger = require_newLedger();
   ledger.totals = { tools: t.tools, edits: t.edits, errors: numberOr(t.errors, 0), turns: numberOr(t.turns, 0) };
   ledger.categories = isPlainObject(d.categories) ? (d.categories as Record<string, number>) : {};
-  ledger.milestones = Array.isArray(d.milestones) ? (d.milestones as Ledger["milestones"]).slice(0, 24) : [];
-  ledger.validation = Array.isArray(d.validation) ? (d.validation as Ledger["validation"]).slice(0, 16) : [];
+  ledger.milestones = Array.isArray(d.milestones)
+    ? (d.milestones as Ledger["milestones"]).filter(
+        (m) => !!m && typeof m === "object" && typeof (m as Milestone).kind === "string" && typeof (m as Milestone).key === "string",
+      ).slice(0, 24)
+    : [];
+  ledger.validation = Array.isArray(d.validation)
+    ? (d.validation as ValidationRecord[]).filter(
+        (v) =>
+          !!v &&
+          typeof v === "object" &&
+          typeof v.key === "string" &&
+          (v.outcome === "passed" || v.outcome === "failed") &&
+          typeof v.at === "number",
+      ).slice(0, 16)
+    : [];
   const p = d.pending as Record<string, unknown> | undefined;
   if (p && typeof p.points === "number") {
     ledger.pending = {

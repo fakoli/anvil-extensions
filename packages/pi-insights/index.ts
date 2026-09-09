@@ -109,9 +109,10 @@ export default function (pi: ExtensionAPI): void {
     const now = Date.now();
     if (!force && !isDirtySinceCheckpoint(ledger, now, config.checkpointIntervalMs)) return;
     try {
-      const entryId = pi.appendEntry(CHECKPOINT_TYPE, toCheckpoint(ledger));
+      // sessionManager.appendCustomEntry returns the entry id (appendEntry returns void)
+      const id = ctx.sessionManager.appendCustomEntry(CHECKPOINT_TYPE, toCheckpoint(ledger));
       ledger.lastCheckpointAt = now;
-      if (typeof entryId === "string") checkpointEntryId = entryId;
+      if (typeof id === "string" && id) checkpointEntryId = id;
     } catch {
       // persistence failures retry at the next boundary
     }
@@ -227,9 +228,9 @@ export default function (pi: ExtensionAPI): void {
     try {
       if (!active()) return;
       reconcileBranch(ctx);
-      maybeEmit(ctx, true);
+      if (ledger.pending.points > 0 || ledger.lastEmissionAt === null) maybeEmit(ctx, true);
       render(ctx);
-      checkpoint(ctx, true);
+      checkpoint(ctx);
     } catch {
       // never fail the agent turn
     }
@@ -253,6 +254,15 @@ export default function (pi: ExtensionAPI): void {
     }
   });
 
+  pi.on("session_tree", async (_event, ctx) => {
+    try {
+      reconcileBranch(ctx);
+      render(ctx);
+    } catch {
+      // observational only
+    }
+  });
+
   pi.on("session_shutdown", async (_event, ctx) => {
     try {
       checkpoint(ctx, true);
@@ -269,6 +279,12 @@ export default function (pi: ExtensionAPI): void {
       const arg = (args ?? "").trim().toLowerCase();
       if (arg === "off") {
         sessionOn = false;
+        try {
+          if (ctx.hasUI) ctx.ui.setWidget("pi-insights", []);
+        } catch {
+          // best effort
+        }
+        lastRendered = "";
         ctx.ui.notify("pi-insights: off for this session", "info");
         return;
       }
@@ -290,7 +306,7 @@ export default function (pi: ExtensionAPI): void {
       if (ctx.hasUI) {
         try {
           ctx.ui.setWidget("pi-insights", lines);
-          lastRendered = lines[0] ?? "";
+          lastRendered = lines.join("\n");
         } catch {
           ctx.ui.notify(lines.join("\n"), "info");
         }
