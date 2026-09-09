@@ -935,7 +935,9 @@ export default function (pi: ExtensionAPI) {
         const n = pendingBatches.length;
         const trigger = currentConfig.value.pruneOn === "agent-message"
           ? "agent's next text response"
-          : "/pruner now";
+          : currentConfig.value.pruneOn === "agent-settled"
+            ? "agent going idle"
+            : "/pruner now";
         if (currentConfig.value.showPruneStatusLine) {
           setPruneStatusWidget(ctx, currentConfig.value, `prune: ${n} pending`);
           safeNotify(
@@ -1001,6 +1003,18 @@ export default function (pi: ExtensionAPI) {
     if (currentConfig.value.pruneOn !== "agent-message") return;
     if (!isFinalAssistantMessage(event.message)) return;
     await flushPending(ctx, { delivery: "session", closingMessage: event.message, trigger: "message-end" });
+  });
+
+  // ── agent_settled: flush when the agent is fully idle in agent-settled mode ──
+  // agent_settled fires only when no retry, follow-up, or compaction is pending,
+  // so the main generation has finished and the serving engine is free. This is
+  // the right boundary when the summarizer shares a single-request serving slot
+  // with the session model: the summarizer never queues behind an in-flight
+  // generation, and the user is not waiting on the response either.
+  pi.on("agent_settled", async (_event, ctx) => {
+    if (!currentConfig.value.enabled) return;
+    if (currentConfig.value.pruneOn !== "agent-settled") return;
+    await flushPending(ctx, { delivery: "session", trigger: "agent-settled" });
   });
 
   // ── agent_end: last-chance cleanup only ─────────────────────────────────────
