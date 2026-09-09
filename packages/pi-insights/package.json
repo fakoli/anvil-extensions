@@ -1,0 +1,33 @@
+{
+  "name": "pi-insights",
+  "version": "0.1.0",
+  "description": "Pi coding-agent extension that shows Claude-Code-style insight lines: a deterministic, privacy-safe activity ledger rendered as a subtle widget reflecting what work the session has done.",
+  "author": "Fakoli",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-coding-agent",
+    "insights",
+    "session-stats",
+    "activity",
+    "widget"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "files": [
+    "index.ts",
+    "src/**/*.ts",
+    "README.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  }
+}
