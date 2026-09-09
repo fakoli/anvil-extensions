@@ -10,7 +10,17 @@
   "pi": {
     "extensions": [
       "./packages/pi-condense/index.ts",
-      "./packages/pi-insights/index.ts"
+      "./packages/pi-insights/index.ts",
+      "./packages/pi-permission-system/src/index.ts",
+      "./packages/pi-plan-mode/src/index.ts",
+      "./packages/pi-subagents/index.ts",
+      "./packages/pi-tool-repair/tool-repair.ts"
+    ],
+    "skills": [
+      "./packages/pi-subagents/skills"
+    ],
+    "prompts": [
+      "./packages/pi-subagents/prompts"
     ]
   }
 }
