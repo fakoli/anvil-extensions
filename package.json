@@ -14,7 +14,8 @@
       "./packages/pi-permission-system/src/index.ts",
       "./packages/pi-plan-mode/src/index.ts",
       "./packages/pi-subagents/index.ts",
-      "./packages/pi-tool-repair/tool-repair.ts"
+      "./packages/pi-tool-repair/tool-repair.ts",
+      "./packages/pi-hermes-memory/src/index.ts"
     ],
     "skills": [
       "./packages/pi-subagents/skills"
