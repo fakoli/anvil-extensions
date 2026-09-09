@@ -36,14 +36,21 @@ calls, no memory writes.
 | `PI_INSIGHTS_LINES` | `1` | widget lines (1-2) |
 
 Activity points: generic tool 1 · successful edit/write 2 · validation run 3 ·
-new milestone 6. Emission evaluates at `agent_settled` (preferred), `turn_end`,
+new milestone 6. Emission evaluates at `agent_settled` (preferred — flushes when pending
+activity exists or nothing has been emitted yet), `turn_end` (threshold-gated),
 and a 120 s fallback during long tool runs; ≥15 min idle resets the pending
-window but keeps totals and milestones.
+window but keeps totals and milestones. Checkpoints are throttled to one per
+5 minutes during activity, plus immediate checkpointing on durable milestones,
+compaction, and shutdown.
 
 ## Modes
 
 - TUI/RPC: widget + notifications.
 - JSON/print: silent tracking and checkpointing only.
+
+## Tests
+
+`npm test` (runs `node tests/run-tests.mjs`; plain node + jiti, no bun required).
 
 ## Privacy
 

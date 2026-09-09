@@ -34,11 +34,6 @@ export function newLedger(): Ledger {
 const MILESTONE_LIMIT = 24;
 const VALIDATION_LIMIT = 16;
 
-/** A milestone is "new" if its semantic key has not been recorded yet. */
-export function milestoneIsNew(ledger: Ledger, kind: MilestoneKind, key: string): boolean {
-  return !ledger.milestones.some((m) => m.kind === kind && m.key === key);
-}
-
 export function recordPending(ledger: Ledger, pending: PendingCall | null, isError: boolean, now: number): void {
   ledger.totals.tools += 1;
   ledger.pending.tools += 1;
@@ -95,7 +90,7 @@ export function recordValidationOutcome(ledger: Ledger, key: string, passed: boo
 
 export function recordTurn(ledger: Ledger, now: number): void {
   ledger.totals.turns += 1;
-  ledger.lastActivityAt = now;
+  void now; // turns alone are not activity evidence; idle reset stays honest
 }
 
 /** ≥15 min idle resets the pending window; totals and milestones survive. */
