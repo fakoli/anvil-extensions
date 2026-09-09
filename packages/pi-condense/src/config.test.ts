@@ -163,3 +163,23 @@ describe("loadConfig frontierGapThresholdTokens normalization", () => {
     }
   });
 });
+
+describe("loadConfig summarizerFallback", () => {
+  it("defaults to auto when unset", async () => {
+    await writeContextPrune({});
+    const config = await loadConfig();
+    expect(config.summarizerFallback).toBe("auto");
+  });
+
+  it("accepts none", async () => {
+    await writeContextPrune({ summarizerFallback: "none" });
+    const config = await loadConfig();
+    expect(config.summarizerFallback).toBe("none");
+  });
+
+  it("falls back to auto for an unknown value", async () => {
+    await writeContextPrune({ summarizerFallback: "session-first" });
+    const config = await loadConfig();
+    expect(config.summarizerFallback).toBe("auto");
+  });
+});

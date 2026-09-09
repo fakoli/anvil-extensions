@@ -124,9 +124,12 @@ export const PROGRESS_WIDGET_ID = "context-prune-progress";
  * When summarization (and context pruning) is triggered.
  * - "agent-message" : batches up turns and flushes when the agent sends a final text response
  *                     (a turn with no tool calls), or when the agent loop ends (default)
+ * - "agent-settled" : flush only when the agent is fully idle (no in-flight generation,
+ *                     retry, follow-up, or compaction) — the summarizer then competes
+ *                     with nothing for a single-request serving slot
  * - "on-demand"     : only when the user runs /pruner now
  */
-export type PruneOn = "on-demand" | "agent-message";
+export type PruneOn = "on-demand" | "agent-message" | "agent-settled";
 
 /**
  * Granularity of pruning batches.
@@ -253,7 +256,23 @@ export const AUTO_BUDGET_PRESETS: { value: string; label: string }[] = [
 /** Choices for the prune-on setting (used by commands and settings overlay) */
 export const PRUNE_ON_MODES: { value: PruneOn; label: string }[] = [
   { value: "agent-message", label: "On agent message" },
+  { value: "agent-settled", label: "When agent goes idle" },
   { value: "on-demand", label: "On demand" },
+];
+
+/**
+ * What happens when the configured summarizer model fails transiently.
+ * - "auto" : fall back to the session model until the summarizer recovers (legacy)
+ * - "none" : never fall back — keep targeting the configured summarizer model;
+ *            transient failures feed the outage-retry path instead. Use when the
+ *            session model shares a single-request serving slot with the summarizer
+ *            (falling back would only move the stall to the busy engine).
+ */
+export type SummarizerFallback = "auto" | "none";
+
+export const SUMMARIZER_FALLBACK_MODES: { value: SummarizerFallback; label: string }[] = [
+  { value: "auto", label: "Fall back to session model" },
+  { value: "none", label: "No fallback" },
 ];
 
 /** Extension config stored under the `contextPrune` key in `<agent-dir>/settings.json` (agent-dir honors `PI_CODING_AGENT_DIR`). */
@@ -270,6 +289,8 @@ export interface ContextPruneConfig {
   summarizerModel: string;
   /** Thinking/reasoning level to request for summarizer calls. */
   summarizerThinking: SummarizerThinking;
+  /** Transient-failure behavior of the configured summarizer model. */
+  summarizerFallback: SummarizerFallback;
   /** When to trigger summarization and pruning */
   pruneOn: PruneOn;
   /**
@@ -555,6 +576,7 @@ export const DEFAULT_CONFIG: ContextPruneConfig = {
   showPruneStatusLine: true,
   summarizerModel: "default",
   summarizerThinking: "default",
+  summarizerFallback: "auto",
   pruneOn: "agent-message",
   batchingMode: "turn",
   quietOversizedSkips: false,
@@ -723,7 +745,7 @@ export interface ContextMetricsSnapshot {
   frontierGapTokens: number;
 }
 
-export type FlushTrigger = "budget" | "delta" | "frontier-gap" | "message-end" | "manual" | "rearmed";
+export type FlushTrigger = "budget" | "delta" | "frontier-gap" | "message-end" | "agent-settled" | "manual" | "rearmed";
 
 /** Payload of CUSTOM_TYPE_FLUSH_METRICS. */
 export interface FlushMetricsEntry {

@@ -284,8 +284,13 @@ async function runSummarization(
       o.timedOut ? "warning" : "error",
     );
 
-  // No controller or no distinct fallback: single attempt, legacy behavior.
-  if (!controller || !FallbackController.hasDistinctFallback(primary, sessionModel)) {
+  // No controller, no distinct fallback, or fallback disabled: single attempt
+  // against the configured summarizer model only — never the session model.
+  if (
+    !controller ||
+    config.summarizerFallback === "none" ||
+    !FallbackController.hasDistinctFallback(primary, sessionModel)
+  ) {
     const r = await runOnce(primary, userMessage, config, ctx, options);
     switch (r.kind) {
       case "ok":
