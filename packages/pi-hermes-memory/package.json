@@ -1,7 +1,7 @@
 {
   "name": "@schovest/pi-hermes-memory",
   "version": "0.2.3",
-  "description": "\ud83e\udde0 Persistent memory + \ud83d\udd0d session search + \ud83d\udee1\ufe0f secret scanning for Pi. Token-aware policy-only memory by default, SQLite FTS5 search, auto-consolidation, procedural skills. 732 tests. Ported from Hermes agent. [fakoli fork: consolidation round-trip fidelity, short-ASCII literal search, FTS churn elimination, metadata-comment echo strip; see UPSTREAM.md]",
+  "description": "\ud83e\udde0 Persistent memory + \ud83d\udd0d session search + \ud83d\udee1\ufe0f secret scanning for Pi. Token-aware policy-only memory by default, SQLite FTS5 search, auto-consolidation, procedural skills. 863 tests. Ported from Hermes agent. [fakoli fork: consolidation round-trip fidelity, short-ASCII literal search, FTS churn elimination, metadata-comment echo strip; see UPSTREAM.md]",
   "type": "module",
   "types": "./src/index.ts",
   "exports": {
