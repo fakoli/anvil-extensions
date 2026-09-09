@@ -1,0 +1,8 @@
+# pi-condense — upstream provenance
+
+- Upstream: https://github.com/jjuraszek/pi-condense
+- Imported at tag v2.10.3, commit 76c2c09b7d273f77f09ac6da2b73295e0704054d (2026-09-07)
+- License: MIT (LICENSE retained in this directory). Author: Jacek Juraszek.
+- Verified against npm tarball pi-condense@2.10.3: shipped files identical.
+- Zero runtime dependencies; peerDeps on host @earendil-works/pi-* only.
+- Policy: never re-tag fakoli-* refs; import upstream changes only after diff review.
