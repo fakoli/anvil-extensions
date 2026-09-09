@@ -12,7 +12,7 @@
   - Echo-strip: encodeEntry + normalizeMemoryLookupText strip trailing metadata comments
     echoed from raw entries.
   - Test-infra migration: vitest suite (47 files green).
-- Open upstream findings (not yet fixed here): memory-store.ts:604, error notifies ignored
+- Open upstream findings (not yet fixed here): memory-store getAllFailureEntries (consolidation prompt metadata gap), error notifies ignored
   by RPC consumers, touchMemory never wired, negative-limit bypass, db.ts:1082 constraint
   migration drops FTS triggers.
 - Native dependency: better-sqlite3 (prebuilt binaries; first install needs
