@@ -308,3 +308,41 @@ describe("runSummarization wiring — idle reset keeps a flowing stream alive", 
     expect(notes.filter((n) => n.level === "warning")).toHaveLength(0);
   });
 });
+
+describe("runSummarization wiring — summarizerFallback none", () => {
+  it("transient primary failure: no fallback call, error notify, controller untouched", async () => {
+    const seen: string[] = [];
+    streamImpl = (model) => {
+      seen.push(model.id);
+      return errStream("provider overloaded");
+    };
+    const notes: Note[] = [];
+    const ctx = makeCtx(notes);
+    const controller = new FallbackController();
+    const r = await summarizeBatch(
+      makeBatch(),
+      { ...distinctConfig, summarizerFallback: "none" },
+      ctx,
+      { controller },
+    );
+    expect(r).toBeNull();
+    expect(seen).toEqual([PRIMARY.id]); // only the configured model was tried
+    expect(controller.inFallback).toBe(false);
+    const errors = notes.filter((n) => n.level === "error");
+    expect(errors).toHaveLength(1);
+    expect(notes.some((n) => n.msg.includes("using session model"))).toBe(false);
+  });
+
+  it("primary ok: summarizes normally (fallback setting is inert on success)", async () => {
+    streamImpl = () => okStream("- summary");
+    const notes: Note[] = [];
+    const ctx = makeCtx(notes);
+    const r = await summarizeBatch(
+      makeBatch(),
+      { ...distinctConfig, summarizerFallback: "none" },
+      ctx,
+      { controller: new FallbackController() },
+    );
+    expect(r?.summaryText).toBe("- summary");
+  });
+});

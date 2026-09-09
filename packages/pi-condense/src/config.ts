@@ -3,7 +3,8 @@ import { randomBytes } from "node:crypto";
 import { join, dirname } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { ContextPruneConfig, PruneOn, SummarizerThinking } from "./types.js";
-import { DEFAULT_CONFIG, PRUNE_ON_MODES, SUMMARIZER_THINKING_LEVELS } from "./types.js";
+import { DEFAULT_CONFIG, PRUNE_ON_MODES, SUMMARIZER_FALLBACK_MODES, SUMMARIZER_THINKING_LEVELS } from "./types.js";
+import type { SummarizerFallback } from "./types.js";
 
 /**
  * Settings location: the active pi agent's main `settings.json` under the
@@ -48,6 +49,9 @@ function normalize(existing: Partial<ContextPruneConfig>): ContextPruneConfig {
     summarizerThinking: isSummarizerThinking(merged.summarizerThinking)
       ? merged.summarizerThinking
       : DEFAULT_CONFIG.summarizerThinking,
+    summarizerFallback: SUMMARIZER_FALLBACK_MODES.some((m) => m.value === merged.summarizerFallback)
+      ? (merged.summarizerFallback as SummarizerFallback)
+      : DEFAULT_CONFIG.summarizerFallback,
     quietOversizedSkips:
       typeof merged.quietOversizedSkips === "boolean"
         ? merged.quietOversizedSkips
