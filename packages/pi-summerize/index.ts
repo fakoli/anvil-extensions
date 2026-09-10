@@ -8,7 +8,7 @@
 // silent (no model calls, no output, no notify).
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { readConfig, type SummerizeConfig } from "./src/config.js";
-import { loadFileSettings, applyFileSettings, saveSettings, clearSettings, USER_SETTINGS_PATH } from "./src/settings.js";
+import { loadFileSettings, applyFileSettings, saveSettings, clearSettings, validateSettingsObject, USER_SETTINGS_PATH } from "./src/settings.js";
 import { collectTurns, countActivity, renderObservation } from "./src/collect.js";
 import { resolveModel, runCommentary, modelLabel, COMMENTARY_INSTRUCTIONS } from "./src/commentator.js";
 import { WIDGET_KEY, commentaryWidget, wrapPlain, fallbackLine } from "./src/render.js";
@@ -55,6 +55,10 @@ interface State {
   consumed: BranchMark | null;
   degradedNotified: boolean;
   warnedModel: boolean;
+  /** /summerize dialog, session scope: applied over files, cleared at session_start. */
+  sessionOverrides: Partial<SummerizeConfig>;
+  /** Bumped at session boundaries; an in-flight dialog aborts when it changes. */
+  dialogGeneration: number;
 }
 
 export default function (pi: ExtensionAPI): void {
@@ -73,6 +77,8 @@ export default function (pi: ExtensionAPI): void {
     consumed: null,
     degradedNotified: false,
     warnedModel: false,
+    sessionOverrides: {},
+    dialogGeneration: 0,
   };
 
   const canDisplay = (ctx: ExtensionContext): boolean =>
@@ -241,6 +247,12 @@ export default function (pi: ExtensionAPI): void {
       state.lastFailure = null;
       state.consumed = null;
       state.degradedNotified = false;
+      // Session-only dialog overrides die with the session; files (user +
+      // project via ctx.cwd) reapply. In-flight dialogs are invalidated.
+      state.sessionOverrides = {};
+      state.dialogGeneration += 1;
+      reloadConfig(ctx);
+      state.sessionOn = config.enabled; // a project file with enabled:false holds
       clearWidget(ctx);
     } catch {
       // lifecycle failures must not block the session
@@ -257,77 +269,125 @@ export default function (pi: ExtensionAPI): void {
 
   // --- settings dialog (/summerize bare) ------------------------------------
 
-  /** Live-reload: rebuild config from defaults+env, then layered files, then session overrides. */
-  function reloadConfig(ctx: ExtensionContext): void {
+  /** Live-reload: defaults+env → user+project files (ctx.cwd) → session overrides. */
+  function reloadConfig(ctx: ExtensionContext, projectDir = ctx?.cwd): void {
     const fresh = readConfig();
-    const loaded = loadFileSettings(ctx.cwd);
+    const loaded = loadFileSettings(projectDir);
     applyFileSettings(fresh, loaded);
+    applyFileSettings(fresh, { overrides: state.sessionOverrides, sources: [], problems: [] });
     Object.assign(config, fresh);
     for (const problem of loaded.problems) {
       if (canDisplay(ctx)) ctx.ui.notify(`pi-summerize: ${problem}`, "warning");
     }
   }
 
+  /** Model rule shared by the dialog and file loading: "default" or provider/id. */
+  function validModelSpec(value: string): boolean {
+    return value === "default" || /^[a-zA-Z0-9_.:-]+\/[a-zA-Z0-9_.:-]+$/.test(value);
+  }
+
+  /** Reconcile the session's enabled state with the EFFECTIVE config after any commit. */
+  function reconcileEnabled(ctx: ExtensionContext, dialogEnabled: boolean | null): void {
+    if (dialogEnabled === false) {
+      // explicit off from the dialog: consumed activity stays consumed
+      invalidateActive(false);
+      state.sessionOn = false;
+      clearWidget(ctx);
+      return;
+    }
+    // The reloaded effective config decides — a reset or save may have changed
+    // it either way, and an in-flight request must be dropped when commentary
+    // is effectively off (astra round-1: never follow the stale dialog choice).
+    state.sessionOn = config.enabled;
+    if (!config.enabled) {
+      invalidateActive(false);
+      clearWidget(ctx);
+    }
+  }
+
   async function settingsDialog(ctx: ExtensionContext): Promise<void> {
     if (!canDisplay(ctx)) return;
+    const generation = state.dialogGeneration;
+    const stale = () => generation !== state.dialogGeneration;
     try {
       const enabledPick = await ctx.ui.select("Companion commentary after the agent goes idle?", ["on", "off"]);
-      if (enabledPick === undefined) return; // Esc: abandon, change nothing
+      if (enabledPick === undefined || stale()) return; // Esc or session boundary: change nothing
       const partial: Record<string, unknown> = { enabled: enabledPick === "on" };
       if (enabledPick === "on") {
         const modelPick = await ctx.ui.input(
           `Model for commentary (empty = session model; e.g. anvil/llm.secondary). Current: ${config.model}`,
-          config.model === "default" ? "" : config.model,
+          "",
         );
-        if (modelPick === undefined) return;
+        if (modelPick === undefined || stale()) return;
         const modelTrim = modelPick.trim();
         if (modelTrim.length > 0) {
+          if (!validModelSpec(modelTrim)) {
+            ctx.ui.notify(`pi-summerize: "${modelTrim}" is not a valid model (use "default" or "provider/model-id"); nothing saved`, "warning");
+            return;
+          }
           const { warning } = resolveModel(modelTrim, ctx);
           if (warning) {
-            ctx.ui.notify(`pi-summerize: ${warning}`, "warning");
+            // registry miss: refuse rather than commit a value file loading
+            // would reject (session and file scopes must agree)
+            ctx.ui.notify(`pi-summerize: ${warning.replace("using current model", "nothing saved")}`, "warning");
+            return;
           }
           partial.model = modelTrim;
+        } else {
+          partial.model = "default"; // empty input means "session model", explicitly
         }
         const intervalPick = await ctx.ui.input(
-          `Minimum seconds between commentary episodes. Current: ${Math.round(config.minIntervalMs / 1000)}`,
-          String(Math.round(config.minIntervalMs / 1000)),
+          `Minimum seconds between commentary episodes (blank keeps current ${Math.round(config.minIntervalMs / 1000)}s)`,
+          "",
         );
-        if (intervalPick === undefined) return;
-        const interval = Number(intervalPick.trim());
-        if (!Number.isFinite(interval) || interval < 0) {
-          ctx.ui.notify("pi-summerize: interval must be a non-negative number; nothing saved", "warning");
-          return;
-        }
-        partial.minIntervalSeconds = interval;
+        if (intervalPick === undefined || stale()) return;
+        const intervalTrim = intervalPick.trim();
+        if (intervalTrim.length > 0) {
+          const interval = Number(intervalTrim);
+          if (!Number.isFinite(interval) || interval < 0) {
+            ctx.ui.notify("pi-summerize: interval must be a non-negative number; nothing saved", "warning");
+            return;
+          }
+          partial.minIntervalSeconds = interval;
+        } // blank keeps the current interval
       }
       const scopePick = await ctx.ui.select("Save these settings where?", [
         `user (${USER_SETTINGS_PATH})`,
         "this session only",
         "reset saved settings",
       ]);
-      if (scopePick === undefined) return;
+      if (scopePick === undefined || stale()) return;
 
-      if (scopePick.startsWith("user")) {
-        const path = saveSettings("user", partial, ctx.cwd);
-        reloadConfig(ctx);
-        ctx.ui.notify(`pi-summerize: saved to ${path}`, "info");
-      } else if (scopePick.startsWith("reset")) {
-        const removedUser = clearSettings("user");
+      if (scopePick.startsWith("reset")) {
+        // reset = back to defaults: files AND this session's dialog overrides
+        // (a stale session-only "off" must not survive a reset — astra r1)
+        const removedUser = clearSettings("user", undefined);
         const removedProject = clearSettings("project", ctx.cwd);
+        state.sessionOverrides = {};
+        state.warnedModel = false;
         reloadConfig(ctx);
-        ctx.ui.notify(`pi-summerize: settings reset (user: ${removedUser ? "removed" : "none"}, project: ${removedProject ? "removed" : "none"})`, "info");
+        reconcileEnabled(ctx, null);
+        ctx.ui.notify(`pi-summerize: settings reset (user: ${removedUser ? "removed" : "none"}, project: ${removedProject ? "removed" : "none"}); commentary is ${config.enabled ? "on" : "off"}`, "info");
       } else {
-        // session-only: apply in-memory, touch no files
-        const loaded = { overrides: partial as Partial<SummerizeConfig>, sources: [], problems: [] };
-        applyFileSettings(config, loaded);
-        ctx.ui.notify("pi-summerize: session-only settings applied", "info");
-      }
-      if (partial.enabled === false) {
-        invalidateActive(false);
-        state.sessionOn = false;
-        clearWidget(ctx);
-      } else if (partial.enabled === true) {
-        state.sessionOn = true;
+        // dialog values pass through the SAME validation/normalization as files
+        const { overrides, problems } = validateSettingsObject(partial);
+        if (problems.length > 0) {
+          for (const problem of problems) ctx.ui.notify(`pi-summerize: ${problem}`, "warning");
+          return;
+        }
+        if (scopePick.startsWith("user")) {
+          const path = saveSettings("user", partial, ctx.cwd);
+          reloadConfig(ctx);
+          state.warnedModel = false; // a deliberate model change re-arms warnings
+          reconcileEnabled(ctx, enabledPick === "on" ? true : false);
+          ctx.ui.notify(`pi-summerize: saved to ${path}`, "info");
+        } else {
+          state.sessionOverrides = { ...state.sessionOverrides, ...overrides };
+          reloadConfig(ctx);
+          state.warnedModel = false;
+          reconcileEnabled(ctx, enabledPick === "on" ? true : false);
+          ctx.ui.notify("pi-summerize: session-only settings applied", "info");
+        }
       }
     } catch (error) {
       // dialog failures must never fail the command turn
