@@ -4,6 +4,9 @@
 // harness install (PI_INSTALL_DIR). No absolute author paths are required.
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
+import { mkdirSync, writeFileSync, readFileSync, rmSync, unlinkSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, dirname } from "node:path";
 
 const PI_INSTALL_DIR = process.env.PI_INSTALL_DIR
   ?? "/data/apps/devtools/node-24.20.0/lib/node_modules/@earendil-works/pi-coding-agent";
@@ -53,9 +56,15 @@ const { fallbackLine, WIDGET_KEY } = await jiti.import("../src/render.ts");
 
 let passed = 0;
 function test(name, fn) {
-  fn();
-  passed += 1;
-  console.log(`  ok ${name}`);
+  // await async bodies so failures propagate in order — a fire-and-forget
+  // test() turned races (e.g. the G1 flake) into late unhandled rejections
+  const out = fn();
+  const done = () => {
+    passed += 1;
+    console.log(`  ok ${name}`);
+  };
+  if (out && typeof out.then === "function") return out.then(done);
+  done();
 }
 
 function userMsg(text) {
@@ -270,8 +279,11 @@ test("sanitizeParagraph strips word-boundary underscores but keeps intraword one
 // ===========================================================================
 
 // index.ts calls readConfig() at import time — set wiring env first.
+const SETTINGS_USER = join(tmpdir(), `pi-summerize-user-${process.pid}.json`);
 process.env.PI_SUMMERIZE = "on";
 process.env.PI_SUMMERIZE_MIN_INTERVAL_SECONDS = "0";
+// settings-dialog tests must never touch the REAL user settings file
+process.env.PI_SUMMERIZE_USER_SETTINGS = SETTINGS_USER;
 const entryModule = await jiti.import("../index.ts");
 
 function makeBranch() {
@@ -505,13 +517,13 @@ await wiringTest("wiring: forced /summerize in TUI announces only when actually 
   entryModule.default(pi);
   const holder = { branch: [] };
   const ctx = makeCtx(holder);
-  await pi.commands["summerize"].handler("", ctx);
+  await pi.commands["summerize"].handler("now", ctx);
   const ok = await waitFor(() => stubState.calls.length === 1);
-  assert.ok(ok, "force launches even on empty activity");
+  assert.ok(ok, "/summerize now force-launches even on empty activity");
   assert.ok(ctx.ui.notifications.some((n) => n.msg.includes("composing")), "announced because it launched");
   // busy: second force must NOT announce
   ctx.ui.notifications.length = 0;
-  await pi.commands["summerize"].handler("", ctx);
+  await pi.commands["summerize"].handler("now", ctx);
   assert.equal(stubState.calls.length, 1, "no second call while busy");
   assert.deepEqual(ctx.ui.notifications, [], "no composing notice while busy");
   // cleanup: abort the pending request so no timers/waits dangle
@@ -589,6 +601,102 @@ await wiringTest("wiring: status distinguishes attempt vs emission and reports f
   assert.ok(statusMsg.includes("last attempt"), statusMsg);
   assert.ok(statusMsg.includes("last emission"), statusMsg);
   assert.ok(statusMsg.includes("last failure: auth"), statusMsg);
+});
+
+console.log(`\nALL tests passed (${passed} total)`);
+
+// ===========================================================================
+// Settings layering + dialog persistence (feature: /summerize settings dialog)
+// ===========================================================================
+
+const settingsMod = await jiti.import("../src/settings.ts");
+
+await test("loadFileSettings layers project over user with provenance and rejects unknown keys", () => {
+  const proj = join(base, "..", "tests", "tmp-proj-settings");
+  mkdirSync(join(proj, ".pi"), { recursive: true });
+  writeFileSync(SETTINGS_USER, JSON.stringify({ enabled: false, model: "anvil/llm.secondary" }));
+  writeFileSync(join(proj, ".pi", "pi-summerize.json"), JSON.stringify({ enabled: true, bogusKey: 1 }));
+  const loaded = settingsMod.loadFileSettings.call(null, join(proj), SETTINGS_USER);
+  assert.ok(loaded.sources.some((s) => s.startsWith("user:")), JSON.stringify(loaded.sources));
+  assert.ok(loaded.sources.some((s) => s.startsWith("project:")));
+  assert.equal(loaded.overrides.enabled, true, "project wins over user");
+  assert.equal(loaded.overrides.model, "anvil/llm.secondary");
+  assert.ok(loaded.problems.some((p) => p.includes("bogusKey")));
+  if (existsSync(SETTINGS_USER)) unlinkSync(SETTINGS_USER);
+  rmSync(proj, { recursive: true, force: true });
+});
+
+await test("saveSettings merges instead of clobbering and writes atomically", () => {
+  writeFileSync(SETTINGS_USER, JSON.stringify({ model: "keep/me" }));
+  settingsMod.saveSettings.call(null, "user", { minIntervalSeconds: 30 }, undefined, SETTINGS_USER);
+  const merged = JSON.parse(readFileSync(SETTINGS_USER, "utf8"));
+  assert.equal(merged.model, "keep/me");
+  assert.equal(merged.minIntervalSeconds, 30);
+  if (existsSync(SETTINGS_USER)) unlinkSync(SETTINGS_USER);
+});
+
+await test("session-only settings apply in memory without touching files", async () => {
+  // wiring-level: dialog with scope=session must apply overrides and not write
+  const pi = makePi();
+  entryModule.default(pi);
+  const ctx = makeCtx({ branch: [] }, { ui: {
+    widgets: {}, notifications: [],
+    setWidget() {}, notify(m, l) { this.notifications.push({ msg: m, level: l }); },
+    select: async (title, options) => (title.includes("Companion") ? "on" : options.find((o) => o.includes("session"))),
+    input: async (title) => (title.includes("Model") ? "test/other" : "45"),
+  } });
+  await pi.commands["summerize"].handler("", ctx);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.ok(ctx.ui.notifications.some((n) => n.msg.includes("session-only")));
+  assert.ok(!existsSync(SETTINGS_USER), "no user file written for session scope");
+  // status reflects the session override
+  await pi.commands["summerize"].handler("status", ctx);
+  assert.ok(ctx.ui.notifications.some((n) => n.msg.includes("test/other")));
+});
+
+await test("dialog Esc abandons without changes", async () => {
+  const pi = makePi();
+  entryModule.default(pi);
+  const ctx = makeCtx({ branch: [] }, { ui: {
+    widgets: {}, notifications: [], setWidget() {}, notify(m, l) { this.notifications.push({ msg: m, level: l }); },
+    select: async () => undefined, // Esc on first prompt
+    input: async () => undefined,
+  } });
+  await pi.commands["summerize"].handler("", ctx);
+  assert.deepEqual(ctx.ui.notifications.filter((n) => n.level === "warning"), []);
+  assert.ok(!existsSync(SETTINGS_USER));
+});
+
+await test("dialog persists to user scope and /summerize status reflects it", async () => {
+  const pi = makePi();
+  entryModule.default(pi);
+  const ctx = makeCtx({ branch: [] }, { ui: {
+    widgets: {}, notifications: [], setWidget() {}, notify(m, l) { this.notifications.push({ msg: m, level: l }); },
+    select: async (title, options) => (title.includes("Companion") ? "on" : options[0]), // user scope first
+    input: async (title) => (title.includes("Model") ? "test/secondary" : "90"),
+  } });
+  await pi.commands["summerize"].handler("", ctx);
+  const saved = JSON.parse(readFileSync(SETTINGS_USER, "utf8"));
+  assert.equal(saved.enabled, true);
+  assert.equal(saved.model, "test/secondary");
+  assert.equal(saved.minIntervalSeconds, 90);
+  // status shows the persisted model (config reloaded at save)
+  await pi.commands["summerize"].handler("status", ctx);
+  assert.ok(ctx.ui.notifications.some((n) => n.msg.includes("test/secondary")));
+  if (existsSync(SETTINGS_USER)) unlinkSync(SETTINGS_USER);
+});
+
+await test("bad interval input is refused and nothing is saved", async () => {
+  const pi = makePi();
+  entryModule.default(pi);
+  const ctx = makeCtx({ branch: [] }, { ui: {
+    widgets: {}, notifications: [], setWidget() {}, notify(m, l) { this.notifications.push({ msg: m, level: l }); },
+    select: async (title) => (title.includes("Companion") ? "on" : "user"),
+    input: async (title) => (title.includes("Model") ? "" : "-5"),
+  } });
+  await pi.commands["summerize"].handler("", ctx);
+  assert.ok(ctx.ui.notifications.some((n) => n.msg.includes("nothing saved")));
+  assert.ok(!existsSync(SETTINGS_USER));
 });
 
 console.log(`\nALL tests passed (${passed} total)`);

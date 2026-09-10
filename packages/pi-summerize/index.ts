@@ -8,6 +8,7 @@
 // silent (no model calls, no output, no notify).
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { readConfig, type SummerizeConfig } from "./src/config.js";
+import { loadFileSettings, applyFileSettings, saveSettings, clearSettings, USER_SETTINGS_PATH } from "./src/settings.js";
 import { collectTurns, countActivity, renderObservation } from "./src/collect.js";
 import { resolveModel, runCommentary, modelLabel, COMMENTARY_INSTRUCTIONS } from "./src/commentator.js";
 import { WIDGET_KEY, commentaryWidget, wrapPlain, fallbackLine } from "./src/render.js";
@@ -58,6 +59,9 @@ interface State {
 
 export default function (pi: ExtensionAPI): void {
   const config: SummerizeConfig = readConfig();
+  // Layered file settings (user/project) win over env; session overrides land
+  // via the /summerize dialog and persist per its scope choice.
+  applyFileSettings(config, loadFileSettings());
   const state: State = {
     sessionOn: true,
     turnsSinceCommentary: 0,
@@ -251,10 +255,90 @@ export default function (pi: ExtensionAPI): void {
     }
   });
 
+  // --- settings dialog (/summerize bare) ------------------------------------
+
+  /** Live-reload: rebuild config from defaults+env, then layered files, then session overrides. */
+  function reloadConfig(ctx: ExtensionContext): void {
+    const fresh = readConfig();
+    const loaded = loadFileSettings(ctx.cwd);
+    applyFileSettings(fresh, loaded);
+    Object.assign(config, fresh);
+    for (const problem of loaded.problems) {
+      if (canDisplay(ctx)) ctx.ui.notify(`pi-summerize: ${problem}`, "warning");
+    }
+  }
+
+  async function settingsDialog(ctx: ExtensionContext): Promise<void> {
+    if (!canDisplay(ctx)) return;
+    try {
+      const enabledPick = await ctx.ui.select("Companion commentary after the agent goes idle?", ["on", "off"]);
+      if (enabledPick === undefined) return; // Esc: abandon, change nothing
+      const partial: Record<string, unknown> = { enabled: enabledPick === "on" };
+      if (enabledPick === "on") {
+        const modelPick = await ctx.ui.input(
+          `Model for commentary (empty = session model; e.g. anvil/llm.secondary). Current: ${config.model}`,
+          config.model === "default" ? "" : config.model,
+        );
+        if (modelPick === undefined) return;
+        const modelTrim = modelPick.trim();
+        if (modelTrim.length > 0) {
+          const { warning } = resolveModel(modelTrim, ctx);
+          if (warning) {
+            ctx.ui.notify(`pi-summerize: ${warning}`, "warning");
+          }
+          partial.model = modelTrim;
+        }
+        const intervalPick = await ctx.ui.input(
+          `Minimum seconds between commentary episodes. Current: ${Math.round(config.minIntervalMs / 1000)}`,
+          String(Math.round(config.minIntervalMs / 1000)),
+        );
+        if (intervalPick === undefined) return;
+        const interval = Number(intervalPick.trim());
+        if (!Number.isFinite(interval) || interval < 0) {
+          ctx.ui.notify("pi-summerize: interval must be a non-negative number; nothing saved", "warning");
+          return;
+        }
+        partial.minIntervalSeconds = interval;
+      }
+      const scopePick = await ctx.ui.select("Save these settings where?", [
+        `user (${USER_SETTINGS_PATH})`,
+        "this session only",
+        "reset saved settings",
+      ]);
+      if (scopePick === undefined) return;
+
+      if (scopePick.startsWith("user")) {
+        const path = saveSettings("user", partial, ctx.cwd);
+        reloadConfig(ctx);
+        ctx.ui.notify(`pi-summerize: saved to ${path}`, "info");
+      } else if (scopePick.startsWith("reset")) {
+        const removedUser = clearSettings("user");
+        const removedProject = clearSettings("project", ctx.cwd);
+        reloadConfig(ctx);
+        ctx.ui.notify(`pi-summerize: settings reset (user: ${removedUser ? "removed" : "none"}, project: ${removedProject ? "removed" : "none"})`, "info");
+      } else {
+        // session-only: apply in-memory, touch no files
+        const loaded = { overrides: partial as Partial<SummerizeConfig>, sources: [], problems: [] };
+        applyFileSettings(config, loaded);
+        ctx.ui.notify("pi-summerize: session-only settings applied", "info");
+      }
+      if (partial.enabled === false) {
+        invalidateActive(false);
+        state.sessionOn = false;
+        clearWidget(ctx);
+      } else if (partial.enabled === true) {
+        state.sessionOn = true;
+      }
+    } catch (error) {
+      // dialog failures must never fail the command turn
+      ctx.ui.notify(`pi-summerize: settings dialog error (${error instanceof Error ? error.message : String(error)})`, "warning");
+    }
+  }
+
   // --- command --------------------------------------------------------------
 
   pi.registerCommand("summerize", {
-    description: "Compose idle commentary now; /summerize on|off|status for control",
+    description: "Configure commentary (TUI dialog); /summerize on|off|status|now",
     handler: async (args, ctx) => {
       const arg = (args ?? "").trim().toLowerCase();
       if (arg === "off") {
@@ -281,6 +365,15 @@ export default function (pi: ExtensionAPI): void {
             (state.lastText ? `\n${state.lastText}` : ""),
           "info"
         );
+        return;
+      }
+      if (arg === "now") {
+        const launched = maybeCommentary(ctx, true);
+        if (launched && canDisplay(ctx)) ctx.ui.notify("pi-summerize: composing…", "info");
+        return;
+      }
+      if (arg.length === 0) {
+        await settingsDialog(ctx);
         return;
       }
       const launched = maybeCommentary(ctx, true);
