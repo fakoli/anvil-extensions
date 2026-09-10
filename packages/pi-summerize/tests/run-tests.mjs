@@ -1,0 +1,594 @@
+// pi-summerize — logic tests. Plain node + jiti (no bun dependency on this host).
+// Run: node tests/run-tests.mjs
+// jiti resolves from the repo's own node_modules, falling back to the pi
+// harness install (PI_INSTALL_DIR). No absolute author paths are required.
+import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
+
+const PI_INSTALL_DIR = process.env.PI_INSTALL_DIR
+  ?? "/data/apps/devtools/node-24.20.0/lib/node_modules/@earendil-works/pi-coding-agent";
+
+let createJiti;
+try {
+  ({ createJiti } = await import("jiti"));
+} catch {
+  ({ createJiti } = await import(`${PI_INSTALL_DIR}/node_modules/jiti/lib/jiti.mjs`));
+}
+
+const base = fileURLToPath(new URL("../index.ts", import.meta.url));
+const stubState = { calls: [], text: undefined, defer: null, stopReason: undefined, throwInResult: null };
+globalThis.__summerizeStub = stubState;
+
+// ONE jiti instance for the whole suite: the model stream is stubbed for all
+// tests (unit tests only exercise pure functions; wiring tests drive the
+// entry). jiti's module registry is process-global, so a second instance with
+// different aliases would NOT re-resolve already-loaded modules.
+const jiti = createJiti(base, {
+  interopDefault: true,
+  fsCache: false,
+  alias: {
+    // stubbed model stream — no network in tests
+    "@earendil-works/pi-ai/compat": new URL("./stubs/pi-ai-compat-stub.mjs", import.meta.url).pathname,
+    "@earendil-works/pi-tui": `${PI_INSTALL_DIR}/node_modules/@earendil-works/pi-tui`,
+  },
+});
+
+
+const { readConfig, DEFAULTS_EXPORT } = await jiti.import("../src/config.ts");
+const {
+  collectTurns,
+  countActivity,
+  renderObservation,
+  classifyEntry,
+  EMPTY_COUNTS,
+} = await jiti.import("../src/collect.ts");
+const {
+  sanitizeParagraph,
+  isUsableParagraph,
+  resolveModel,
+  modelLabel,
+  COMMENTARY_INSTRUCTIONS,
+} = await jiti.import("../src/commentator.ts");
+const { fallbackLine, WIDGET_KEY } = await jiti.import("../src/render.ts");
+
+let passed = 0;
+function test(name, fn) {
+  fn();
+  passed += 1;
+  console.log(`  ok ${name}`);
+}
+
+function userMsg(text) {
+  return { type: "message", message: { role: "user", content: [{ type: "text", text }] } };
+}
+function assistantMsg(text, toolCalls = []) {
+  const content = [];
+  if (text) content.push({ type: "text", text });
+  for (const t of toolCalls) content.push({ type: "toolCall", name: t.name, result: t.result });
+  return { type: "message", message: { role: "assistant", content } };
+}
+
+// --- config ----------------------------------------------------------------
+
+const REAL_ENV = { ...process.env };
+function withEnv(env, fn) {
+  const saved = new Map(Object.keys(env).map((k) => [k, process.env[k]]));
+  for (const k of Object.keys(env)) process.env[k] = env[k];
+  try {
+    fn();
+  } finally {
+    for (const [k, v] of saved) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+}
+
+test("readConfig defaults", () => {
+  withEnv({ PI_SUMMERIZE_X: "ignore" }, () => {
+    const c = readConfig();
+    assert.equal(c.enabled, true);
+    assert.equal(c.model, "default");
+    assert.equal(c.minIntervalMs, DEFAULTS_EXPORT.minIntervalSeconds * 1000);
+    assert.equal(c.maxTimeoutMs, DEFAULTS_EXPORT.maxTimeoutSeconds * 1000);
+    assert.equal(c.maxInputChars, DEFAULTS_EXPORT.maxInputChars);
+    assert.equal(c.maxOutputChars, DEFAULTS_EXPORT.maxOutputChars);
+  });
+});
+
+test("readConfig parses and clamps", () => {
+  withEnv(
+    {
+      PI_SUMMERIZE: "off",
+      PI_SUMMERIZE_MODEL: "anvil/llm.secondary",
+      PI_SUMMERIZE_MIN_INTERVAL_SECONDS: "-5",
+      PI_SUMMERIZE_TIMEOUT_SECONDS: "99999",
+      PI_SUMMERIZE_MAX_OUTPUT_CHARS: "50",
+    },
+    () => {
+      const c = readConfig();
+      assert.equal(c.enabled, false);
+      assert.equal(c.model, "anvil/llm.secondary");
+      assert.equal(c.minIntervalMs, 0);
+      assert.equal(c.maxTimeoutMs, 600 * 1000);
+      assert.equal(c.maxOutputChars, 100);
+    }
+  );
+});
+
+// --- collect ----------------------------------------------------------------
+
+test("collectTurns keeps tail turns oldest-first and caps chars", () => {
+  const branch = [];
+  for (let i = 0; i < 20; i++) {
+    branch.push(userMsg(`user message ${i} ` + "x".repeat(50)));
+    branch.push(assistantMsg(`assistant reply ${i} ` + "y".repeat(50)));
+  }
+  const turns = collectTurns(branch, { maxTurns: 4, maxChars: 1000 });
+  assert.ok(turns.length <= 4 && turns.length >= 2, `got ${turns.length} turns`);
+  assert.equal(turns[0].role, "user");
+  // tail content, not head
+  assert.ok(turns[turns.length - 1].text.includes("19"), "should include the last turn");
+  assert.ok(turns.every((t) => t.text.length <= 1200));
+});
+
+test("collectTurns skips non-message entries and leading text-less turns", () => {
+  const branch = [
+    { type: "custom", customType: "checkpoint", data: {} },
+    { type: "message", message: { role: "assistant", content: [{ type: "toolCall", name: "bash" }] } },
+    userMsg("hello"),
+  ];
+  const turns = collectTurns(branch, { maxTurns: 8, maxChars: 4000 });
+  // leading tool-call-only assistant turn is dropped to center on substance;
+  // its activity is still counted by countActivity.
+  assert.equal(turns.length, 1);
+  assert.equal(turns[0].text, "hello");
+});
+
+test("countActivity tallies tools, edits, failures", () => {
+  const branch = [
+    assistantMsg(null, [{ name: "bash" }, { name: "edit" }, { name: "edit" }, { name: "bash", result: { isError: true } }]),
+    userMsg("ok"),
+    assistantMsg("done", [{ name: "read" }]),
+  ];
+  const counts = countActivity(branch);
+  assert.equal(counts.toolCalls, 5);
+  assert.equal(counts.edits, 2);
+  assert.equal(counts.failures, 1);
+});
+
+test("classifyEntry handles flat and wrapped message shapes", () => {
+  const wrapped = classifyEntry({ type: "message", message: { role: "assistant", content: [{ type: "toolCall", name: "edit" }] } });
+  const flat = classifyEntry({ role: "assistant", content: [{ type: "toolCall", name: "edit", isError: true }] });
+  assert.equal(wrapped.edit, true);
+  assert.equal(flat.failure, true);
+});
+
+test("renderObservation is bounded and names roles", () => {
+  const obs = renderObservation(
+    [{ role: "user", text: "fix the test" }, { role: "assistant", text: "fixed and validated" }],
+    { toolCalls: 5, edits: 2, failures: 0 }
+  );
+  assert.ok(obs.includes("5 tool call(s)"));
+  assert.ok(obs.includes("2 edit(s)"));
+  assert.ok(obs.includes("USER: fix the test"));
+  assert.ok(obs.includes("ASSISTANT: fixed and validated"));
+  assert.ok(obs.length < 800);
+});
+
+// --- sanitize / usability ---------------------------------------------------
+
+test("sanitizeParagraph collapses bullets, headings, and newlines", () => {
+  const raw = "# Summary\n- Fixed the parser\n- Updated tests\n\n**Done.**";
+  const out = sanitizeParagraph(raw, 700);
+  assert.ok(!out.includes("#"));
+  assert.ok(!out.includes("- "));
+  assert.ok(!out.includes("\n"));
+  assert.ok(out.includes("Fixed the parser"));
+  assert.ok(out.includes("Done."));
+});
+
+test("sanitizeParagraph hard-caps at word boundary", () => {
+  const out = sanitizeParagraph("word ".repeat(400), 100);
+  assert.ok(out.length <= 103, `length ${out.length}`);
+  assert.ok(out.endsWith("…"));
+});
+
+test("isUsableParagraph thresholds", () => {
+  assert.equal(isUsableParagraph(""), false);
+  assert.equal(isUsableParagraph("too short"), false);
+  assert.equal(isUsableParagraph("This is a perfectly usable paragraph of commentary."), true);
+});
+
+test("instructions forbid markdown and mandate one paragraph", () => {
+  assert.ok(COMMENTARY_INSTRUCTIONS.includes("No markdown"));
+  assert.ok(COMMENTARY_INSTRUCTIONS.includes("ONE short paragraph"));
+});
+
+// --- model resolution -------------------------------------------------------
+
+test("resolveModel default returns ctx.model without warning", () => {
+  const ctx = { model: { provider: "x", id: "m" }, modelRegistry: { find() { throw new Error("should not be called"); } } };
+  const { model, warning } = resolveModel("default", ctx);
+  assert.equal(model, ctx.model);
+  assert.equal(warning, undefined);
+});
+
+test("resolveModel falls back with warning on unknown model", () => {
+  const ctx = {
+    model: { provider: "x", id: "m" },
+    modelRegistry: { find() { return null; } },
+    ui: { notify() {} },
+  };
+  const { model, warning } = resolveModel("anvil/llm.secondary", ctx);
+  assert.equal(model, ctx.model);
+  assert.ok(warning?.includes("not in registry"));
+});
+
+test("resolveModel rejects malformed spec with warning", () => {
+  const ctx = { model: { provider: "x", id: "m" }, modelRegistry: { find() { return null; } }, ui: { notify() {} } };
+  const { warning } = resolveModel("no-slash", ctx);
+  assert.ok(warning?.includes("provider/model-id"));
+});
+
+// --- fallback rendering -----------------------------------------------------
+
+test("fallbackLine summarizes counts and flags failures", () => {
+  assert.equal(
+    fallbackLine({ toolCalls: 3, edits: 0, failures: 0 }),
+    "Since last commentary: 3 tool calls."
+  );
+  assert.equal(
+    fallbackLine({ toolCalls: 1, edits: 1, failures: 1 }),
+    "Since last commentary: 1 tool call, 1 edit, 1 failing call — some calls failed; the agent may retry."
+  );
+  assert.equal(fallbackLine(EMPTY_COUNTS), "Since last commentary: no activity.");
+});
+
+test("WIDGET_KEY is namespaced", () => {
+  assert.ok(WIDGET_KEY.startsWith("pi-"));
+});
+
+console.log(`\n${passed} tests passed`);
+test("sanitizeParagraph preserves inline-code identifiers with underscores", () => {
+  const out = sanitizeParagraph("Updated `foo_bar_baz.ts` and the **bold** claim.", 700);
+  assert.ok(out.includes("foo_bar_baz.ts"), out);
+  assert.ok(out.includes("bold"), out);
+  assert.ok(!out.includes("`"), out);
+  assert.ok(!out.includes("**"), out);
+});
+
+test("sanitizeParagraph strips word-boundary underscores but keeps intraword ones", () => {
+  const out = sanitizeParagraph("the _goal_ is foo_bar_baz", 700);
+  assert.ok(out.includes("the goal is foo_bar_baz"), out);
+});
+
+// ===========================================================================
+// Wiring tests — extension entry with stubbed model stream, fake pi/ctx.
+// These exist because helper-only tests let a completely broken generation
+// path pass (astra review finding 1).
+// ===========================================================================
+
+// index.ts calls readConfig() at import time — set wiring env first.
+process.env.PI_SUMMERIZE = "on";
+process.env.PI_SUMMERIZE_MIN_INTERVAL_SECONDS = "0";
+const entryModule = await jiti.import("../index.ts");
+
+function makeBranch() {
+  return [
+    userMsg("fix the failing serialization test"),
+    { type: "message", message: { role: "assistant", content: [
+      { type: "text", text: "Found the timezone bug and fixed it." },
+      { type: "toolCall", name: "edit" },
+    ] } },
+    { type: "message", message: { role: "toolResult", isError: false, toolCallId: "t1", content: [{ type: "text", text: "ok" }] } },
+    { type: "message", message: { role: "assistant", content: [{ type: "text", text: "Validated with the suite." }, { type: "toolCall", name: "bash" }] } },
+    { type: "message", message: { role: "toolResult", isError: true, toolCallId: "t2", content: [{ type: "text", text: "exit 1" }] } },
+  ];
+}
+
+function makeCtx(branchHolder, overrides = {}) {
+  const ctx = {
+    hasUI: true,
+    mode: "tui",
+    model: { provider: "test", id: "m1", name: "test/m1" },
+    modelRegistry: {
+      find: (p, m) => ({ provider: p, id: m, name: `${p}/${m}` }),
+      getApiKeyAndHeaders: async () => ({ ok: true, apiKey: "k", headers: {} }),
+      getProviderAuth: async () => null,
+    },
+    sessionManager: { getBranch: () => branchHolder.branch },
+    ui: {
+      widgets: {},
+      notifications: [],
+      setWidget(key, content, opts) { if (content === undefined) delete this.widgets[key]; else this.widgets[key] = { content, opts }; },
+      notify(msg, level) { this.notifications.push({ msg, level }); },
+    },
+  };
+  Object.assign(ctx, overrides);
+  return ctx;
+}
+
+function makePi() {
+  const handlers = {};
+  const commands = {};
+  return {
+    handlers,
+    commands,
+    on(name, fn) { handlers[name] = fn; },
+    registerCommand(name, def) { commands[name] = def; },
+  };
+}
+
+async function waitFor(predicate, ms = 500) {
+  const start = Date.now();
+  while (Date.now() - start < ms) {
+    if (predicate()) return true;
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  return predicate();
+}
+
+async function wiringTest(name, fn) {
+  try {
+    await fn();
+    passed += 1;
+    console.log(`  ok ${name}`);
+  } catch (error) {
+    console.error(`  FAIL ${name}`);
+    throw error;
+  }
+}
+
+await wiringTest("wiring: settled after a turn launches model call and sets TUI widget (blocker regression)", async () => {
+  stubState.calls = []; stubState.defer = null; stubState.throwInResult = null; stubState.text = undefined;
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const ctx = makeCtx(holder);
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  const ok = await waitFor(() => stubState.calls.length === 1 && !!ctx.ui.widgets["pi-summerize"]);
+  assert.ok(ok, "expected one model call and a widget");
+  assert.ok(typeof ctx.ui.widgets["pi-summerize"].content === "function", "TUI widget uses component factory");
+  // observation reflects the real toolResult-entry failure shape
+  const sent = stubState.calls[0].options.messages[0].content[0].text;
+  assert.ok(sent.includes("2 tool call(s)"), `sent: ${sent.slice(0, 120)}`);
+  assert.ok(sent.includes("1 failing call(s)"), "failure counted from toolResult entry");
+  assert.ok(sent.includes("COMMENT") === false);
+  assert.ok(sent.includes("terse commentator"), "instructions ride in the user message");
+});
+
+await wiringTest("wiring: print/JSON mode is fully silent (no stream, no widget, no notify)", async () => {
+  stubState.calls = [];
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const ctx = makeCtx(holder, { hasUI: false, mode: "print" });
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(stubState.calls.length, 0);
+  assert.deepEqual(Object.keys(ctx.ui.widgets), []);
+  assert.deepEqual(ctx.ui.notifications, []);
+});
+
+await wiringTest("wiring: RPC receives plain string lines, not a factory", async () => {
+  stubState.calls = []; stubState.text = "RPC paragraph about the fix.";
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const ctx = makeCtx(holder, { mode: "rpc" });
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  const ok = await waitFor(() => !!ctx.ui.widgets["pi-summerize"]);
+  assert.ok(ok);
+  const content = ctx.ui.widgets["pi-summerize"].content;
+  assert.ok(Array.isArray(content) && content.every((l) => typeof l === "string"), "RPC widget must be string[]");
+  assert.ok(content.join(" ").includes("RPC paragraph"));
+});
+
+await wiringTest("wiring: cursor gate — no NEW activity means no second commentary", async () => {
+  stubState.calls = [];
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const ctx = makeCtx(holder);
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  await waitFor(() => stubState.calls.length === 1);
+  // settle again with unchanged branch: cursor consumed, should skip
+  await pi.handlers["agent_settled"]({}, ctx);
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(stubState.calls.length, 1, "no NEW activity -> no second call");
+  // new activity arrives: gate opens, counts are delta-only
+  holder.branch.push({ type: "message", message: { role: "assistant", content: [{ type: "toolCall", name: "read" }] } });
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  const ok = await waitFor(() => stubState.calls.length === 2);
+  assert.ok(ok);
+  const sent = stubState.calls[1].options.messages[0].content[0].text;
+  assert.ok(sent.includes("1 tool call(s)"), `delta counts, not lifetime: ${sent.slice(0, 100)}`);
+  assert.ok(!sent.includes("3 tool call(s)"), "old activity not double-counted");
+});
+
+await wiringTest("wiring: off-while-pending aborts and on re-arms (no generation wedge)", async () => {
+  stubState.calls = [];
+  let releaseDefer;
+  stubState.defer = new Promise((r) => { releaseDefer = r; });
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const ctx = makeCtx(holder);
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  await waitFor(() => stubState.calls.length === 1);
+  await pi.commands["summerize"].handler("off", ctx); // aborts the pending request
+  releaseDefer();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.deepEqual(ctx.ui.widgets, {}, "off clears the widget");
+  // re-arm: on + new turn + settle must launch again
+  await pi.commands["summerize"].handler("on", ctx);
+  stubState.defer = null;
+  holder.branch.push({ type: "message", message: { role: "assistant", content: [{ type: "toolCall", name: "read" }] } });
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  const ok = await waitFor(() => stubState.calls.length === 2);
+  assert.ok(ok, "post off/on the extension still generates");
+});
+
+await wiringTest("wiring: activity during pending call drops the stale paragraph", async () => {
+  stubState.calls = []; stubState.text = "stale paragraph";
+  let releaseDefer;
+  stubState.defer = new Promise((r) => { releaseDefer = r; });
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const ctx = makeCtx(holder);
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  await waitFor(() => stubState.calls.length === 1);
+  // new turn lands while the call is pending
+  holder.branch.push({ type: "message", message: { role: "assistant", content: [{ type: "toolCall", name: "write" }] } });
+  await pi.handlers["turn_end"]({}, ctx);
+  releaseDefer();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.deepEqual(Object.keys(ctx.ui.widgets), [], "stale result must not be rendered");
+});
+
+await wiringTest("wiring: model outage falls back once, not per failure", async () => {
+  stubState.calls = [];
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const ctx = makeCtx(holder, {
+    modelRegistry: {
+      find: () => null,
+      getApiKeyAndHeaders: async () => ({ ok: false, error: "no credentials" }),
+      getProviderAuth: async () => null,
+    },
+  });
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  const first = await waitFor(() => !!ctx.ui.widgets["pi-summerize"]);
+  assert.ok(first, "fallback widget shown");
+  assert.ok(ctx.ui.notifications.some((n) => n.msg.includes("commentary unavailable")), "one degradation notice");
+  const noticeCount = ctx.ui.notifications.filter((n) => n.msg.includes("commentary unavailable")).length;
+  // second episode: fallback again, but no repeated notice
+  holder.branch.push({ type: "message", message: { role: "assistant", content: [{ type: "toolCall", name: "read" }] } });
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  await new Promise((r) => setTimeout(r, 30));
+  const noticeCountAfter = ctx.ui.notifications.filter((n) => n.msg.includes("commentary unavailable")).length;
+  assert.equal(noticeCount, 1);
+  assert.equal(noticeCountAfter, 1, "no repeat notice while degraded");
+});
+
+await wiringTest("wiring: commands stay silent in print mode and do not announce skipped launches", async () => {
+  stubState.calls = [];
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const ctx = makeCtx(holder, { hasUI: false, mode: "print" });
+  await pi.commands["summerize"].handler("on", ctx);
+  await pi.commands["summerize"].handler("off", ctx);
+  await pi.commands["summerize"].handler("status", ctx);
+  await pi.commands["summerize"].handler("", ctx);
+  await new Promise((r) => setTimeout(r, 30));
+  assert.deepEqual(ctx.ui.notifications, [], "no notify in silent mode");
+  assert.equal(stubState.calls.length, 0, "no model call in silent mode");
+});
+
+await wiringTest("wiring: forced /summerize in TUI announces only when actually launched", async () => {
+  stubState.calls = []; stubState.defer = new Promise(() => {}); // keep request pending
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: [] };
+  const ctx = makeCtx(holder);
+  await pi.commands["summerize"].handler("", ctx);
+  const ok = await waitFor(() => stubState.calls.length === 1);
+  assert.ok(ok, "force launches even on empty activity");
+  assert.ok(ctx.ui.notifications.some((n) => n.msg.includes("composing")), "announced because it launched");
+  // busy: second force must NOT announce
+  ctx.ui.notifications.length = 0;
+  await pi.commands["summerize"].handler("", ctx);
+  assert.equal(stubState.calls.length, 1, "no second call while busy");
+  assert.deepEqual(ctx.ui.notifications, [], "no composing notice while busy");
+  // cleanup: abort the pending request so no timers/waits dangle
+  await pi.handlers["session_shutdown"]({}, ctx);
+  stubState.defer = null;
+  await new Promise((r) => setTimeout(r, 10));
+});
+
+// --- astra re-review regressions (A-E) --------------------------------------
+
+await wiringTest("wiring: same-length branch replacement drops the stale paragraph", async () => {
+  stubState.calls = []; stubState.text = "stale paragraph";
+  let release;
+  stubState.defer = new Promise((r) => { release = r; });
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const ctx = makeCtx(holder);
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  const launched = await waitFor(() => stubState.calls.length === 1);
+  assert.ok(launched);
+  // replace with a DIFFERENT branch of the SAME length (navigation)
+  holder.branch = makeBranch();
+  release();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.deepEqual(Object.keys(ctx.ui.widgets), [], "equal-length navigation must drop, not render");
+  await pi.handlers["session_shutdown"]({}, ctx);
+});
+
+await wiringTest("wiring: superseded request restores consumed activity for the next settle", async () => {
+  stubState.calls = [];
+  let release;
+  stubState.defer = new Promise((r) => { release = r; });
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const ctx = makeCtx(holder);
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  assert.ok(await waitFor(() => stubState.calls.length === 1));
+  // text-only turn (no tool calls) while the request is pending
+  holder.branch.push(userMsg("any update?"));
+  await pi.handlers["turn_end"]({}, ctx); // invalidates + restores consumed activity
+  release();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.deepEqual(Object.keys(ctx.ui.widgets), [], "superseded result dropped");
+  stubState.defer = null;
+  // next settle must regenerate, re-offering the old (never shown) activity
+  await pi.handlers["agent_settled"]({}, ctx);
+  assert.ok(await waitFor(() => stubState.calls.length === 2), "activity was not lost");
+  const sent = stubState.calls[1].options.messages[0].content[0].text;
+  assert.ok(sent.includes("2 tool call(s)"), `old activity re-offered: ${sent.slice(0, 120)}`);
+  await pi.handlers["session_shutdown"]({}, ctx);
+});
+
+await wiringTest("wiring: status distinguishes attempt vs emission and reports failures", async () => {
+  stubState.calls = [];
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const ctx = makeCtx(holder, {
+    modelRegistry: {
+      find: () => null,
+      getApiKeyAndHeaders: async () => ({ ok: false, error: "no credentials" }),
+      getProviderAuth: async () => null,
+    },
+  });
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  await waitFor(() => !!ctx.ui.widgets["pi-summerize"]);
+  ctx.ui.notifications.length = 0;
+  await pi.commands["summerize"].handler("status", ctx);
+  const statusMsg = ctx.ui.notifications[0]?.msg ?? "";
+  assert.ok(statusMsg.includes("last attempt"), statusMsg);
+  assert.ok(statusMsg.includes("last emission"), statusMsg);
+  assert.ok(statusMsg.includes("last failure: auth"), statusMsg);
+});
+
+console.log(`\nALL tests passed (${passed} total)`);
