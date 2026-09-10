@@ -5,19 +5,26 @@ import { createJiti } from "/data/apps/devtools/node-24.20.0/lib/node_modules/@e
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const base = fileURLToPath(new URL("../index.ts", import.meta.url));
-const PI_ROOT = "/data/apps/devtools/node-24.20.0/lib/node_modules/@earendil-works/pi-coding-agent";
+// pi ships inside the harness install; override with PI_INSTALL_DIR elsewhere.
+const PI_INSTALL_DIR = process.env.PI_INSTALL_DIR
+  ?? "/data/apps/devtools/node-24.20.0/lib/node_modules/@earendil-works/pi-coding-agent";
+const stubState = { calls: [], text: undefined, defer: null, stopReason: undefined, throwInResult: null };
+globalThis.__summerizeStub = stubState;
+
+// ONE jiti instance for the whole suite: the model stream is stubbed for all
+// tests (unit tests only exercise pure functions; wiring tests drive the
+// entry). jiti's module registry is process-global, so a second instance with
+// different aliases would NOT re-resolve already-loaded modules.
 const jiti = createJiti(base, {
   interopDefault: true,
   fsCache: false,
-  // pi-ai/pi-tui ship inside the pi harness install; alias them for this test run.
-  // The pi-ai alias points at dist/compat.js because node path-joins the aliased
-  // specifier (dir + "/compat") without consulting the package exports map.
   alias: {
-    "@earendil-works/pi-ai/compat": `${PI_ROOT}/node_modules/@earendil-works/pi-ai/dist/compat.js`,
-    "@earendil-works/pi-ai": `${PI_ROOT}/node_modules/@earendil-works/pi-ai/dist/index.js`,
-    "@earendil-works/pi-tui": `${PI_ROOT}/node_modules/@earendil-works/pi-tui`,
+    // stubbed model stream — no network in tests
+    "@earendil-works/pi-ai/compat": new URL("./stubs/pi-ai-compat-stub.mjs", import.meta.url).pathname,
+    "@earendil-works/pi-tui": `${PI_INSTALL_DIR}/node_modules/@earendil-works/pi-tui`,
   },
 });
+
 
 const { readConfig, DEFAULTS_EXPORT } = await jiti.import("../src/config.ts");
 const {
@@ -32,7 +39,7 @@ const {
   isUsableParagraph,
   resolveModel,
   modelLabel,
-  COMMENTARY_SYSTEM_PROMPT,
+  COMMENTARY_INSTRUCTIONS,
 } = await jiti.import("../src/commentator.ts");
 const { fallbackLine, WIDGET_KEY } = await jiti.import("../src/render.ts");
 
@@ -57,11 +64,15 @@ function assistantMsg(text, toolCalls = []) {
 
 const REAL_ENV = { ...process.env };
 function withEnv(env, fn) {
+  const saved = new Map(Object.keys(env).map((k) => [k, process.env[k]]));
   for (const k of Object.keys(env)) process.env[k] = env[k];
   try {
     fn();
   } finally {
-    for (const k of Object.keys(env)) delete process.env[k];
+    for (const [k, v] of saved) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
   }
 }
 
@@ -181,9 +192,9 @@ test("isUsableParagraph thresholds", () => {
   assert.equal(isUsableParagraph("This is a perfectly usable paragraph of commentary."), true);
 });
 
-test("system prompt forbids markdown and mandates one paragraph", () => {
-  assert.ok(COMMENTARY_SYSTEM_PROMPT.includes("No markdown"));
-  assert.ok(COMMENTARY_SYSTEM_PROMPT.includes("ONE short paragraph"));
+test("instructions forbid markdown and mandate one paragraph", () => {
+  assert.ok(COMMENTARY_INSTRUCTIONS.includes("No markdown"));
+  assert.ok(COMMENTARY_INSTRUCTIONS.includes("ONE short paragraph"));
 });
 
 // --- model resolution -------------------------------------------------------
@@ -231,3 +242,258 @@ test("WIDGET_KEY is namespaced", () => {
 });
 
 console.log(`\n${passed} tests passed`);
+// ===========================================================================
+// Wiring tests — extension entry with stubbed model stream, fake pi/ctx.
+// These exist because helper-only tests let a completely broken generation
+// path pass (astra review finding 1).
+// ===========================================================================
+
+// index.ts calls readConfig() at import time — set wiring env first.
+process.env.PI_SUMMERIZE = "on";
+process.env.PI_SUMMERIZE_MIN_INTERVAL_SECONDS = "0";
+const entryModule = await jiti.import("../index.ts");
+
+function makeBranch() {
+  return [
+    userMsg("fix the failing serialization test"),
+    { type: "message", message: { role: "assistant", content: [
+      { type: "text", text: "Found the timezone bug and fixed it." },
+      { type: "toolCall", name: "edit" },
+    ] } },
+    { type: "message", message: { role: "toolResult", isError: false, toolCallId: "t1", content: [{ type: "text", text: "ok" }] } },
+    { type: "message", message: { role: "assistant", content: [{ type: "text", text: "Validated with the suite." }, { type: "toolCall", name: "bash" }] } },
+    { type: "message", message: { role: "toolResult", isError: true, toolCallId: "t2", content: [{ type: "text", text: "exit 1" }] } },
+  ];
+}
+
+function makeCtx(branchHolder, overrides = {}) {
+  const ctx = {
+    hasUI: true,
+    mode: "tui",
+    model: { provider: "test", id: "m1", name: "test/m1" },
+    modelRegistry: {
+      find: (p, m) => ({ provider: p, id: m, name: `${p}/${m}` }),
+      getApiKeyAndHeaders: async () => ({ ok: true, apiKey: "k", headers: {} }),
+      getProviderAuth: async () => null,
+    },
+    sessionManager: { getBranch: () => branchHolder.branch },
+    ui: {
+      widgets: {},
+      notifications: [],
+      setWidget(key, content, opts) { if (content === undefined) delete this.widgets[key]; else this.widgets[key] = { content, opts }; },
+      notify(msg, level) { this.notifications.push({ msg, level }); },
+    },
+  };
+  Object.assign(ctx, overrides);
+  return ctx;
+}
+
+function makePi() {
+  const handlers = {};
+  const commands = {};
+  return {
+    handlers,
+    commands,
+    on(name, fn) { handlers[name] = fn; },
+    registerCommand(name, def) { commands[name] = def; },
+  };
+}
+
+async function waitFor(predicate, ms = 500) {
+  const start = Date.now();
+  while (Date.now() - start < ms) {
+    if (predicate()) return true;
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  return predicate();
+}
+
+async function wiringTest(name, fn) {
+  try {
+    await fn();
+    passed += 1;
+    console.log(`  ok ${name}`);
+  } catch (error) {
+    console.error(`  FAIL ${name}`);
+    throw error;
+  }
+}
+
+await wiringTest("wiring: settled after a turn launches model call and sets TUI widget (blocker regression)", async () => {
+  stubState.calls = []; stubState.defer = null; stubState.throwInResult = null; stubState.text = undefined;
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const ctx = makeCtx(holder);
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  const ok = await waitFor(() => stubState.calls.length === 1 && !!ctx.ui.widgets["pi-summerize"]);
+  assert.ok(ok, "expected one model call and a widget");
+  assert.ok(typeof ctx.ui.widgets["pi-summerize"].content === "function", "TUI widget uses component factory");
+  // observation reflects the real toolResult-entry failure shape
+  const sent = stubState.calls[0].options.messages[0].content[0].text;
+  assert.ok(sent.includes("2 tool call(s)"), `sent: ${sent.slice(0, 120)}`);
+  assert.ok(sent.includes("1 failing call(s)"), "failure counted from toolResult entry");
+  assert.ok(sent.includes("COMMENT") === false);
+  assert.ok(sent.includes("terse commentator"), "instructions ride in the user message");
+});
+
+await wiringTest("wiring: print/JSON mode is fully silent (no stream, no widget, no notify)", async () => {
+  stubState.calls = [];
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const ctx = makeCtx(holder, { hasUI: false, mode: "print" });
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(stubState.calls.length, 0);
+  assert.deepEqual(Object.keys(ctx.ui.widgets), []);
+  assert.deepEqual(ctx.ui.notifications, []);
+});
+
+await wiringTest("wiring: RPC receives plain string lines, not a factory", async () => {
+  stubState.calls = []; stubState.text = "RPC paragraph about the fix.";
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const ctx = makeCtx(holder, { mode: "rpc" });
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  const ok = await waitFor(() => !!ctx.ui.widgets["pi-summerize"]);
+  assert.ok(ok);
+  const content = ctx.ui.widgets["pi-summerize"].content;
+  assert.ok(Array.isArray(content) && content.every((l) => typeof l === "string"), "RPC widget must be string[]");
+  assert.ok(content.join(" ").includes("RPC paragraph"));
+});
+
+await wiringTest("wiring: cursor gate — no NEW activity means no second commentary", async () => {
+  stubState.calls = [];
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const ctx = makeCtx(holder);
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  await waitFor(() => stubState.calls.length === 1);
+  // settle again with unchanged branch: cursor consumed, should skip
+  await pi.handlers["agent_settled"]({}, ctx);
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(stubState.calls.length, 1, "no NEW activity -> no second call");
+  // new activity arrives: gate opens, counts are delta-only
+  holder.branch.push({ type: "message", message: { role: "assistant", content: [{ type: "toolCall", name: "read" }] } });
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  const ok = await waitFor(() => stubState.calls.length === 2);
+  assert.ok(ok);
+  const sent = stubState.calls[1].options.messages[0].content[0].text;
+  assert.ok(sent.includes("1 tool call(s)"), `delta counts, not lifetime: ${sent.slice(0, 100)}`);
+  assert.ok(!sent.includes("3 tool call(s)"), "old activity not double-counted");
+});
+
+await wiringTest("wiring: off-while-pending aborts and on re-arms (no generation wedge)", async () => {
+  stubState.calls = [];
+  let releaseDefer;
+  stubState.defer = new Promise((r) => { releaseDefer = r; });
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const ctx = makeCtx(holder);
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  await waitFor(() => stubState.calls.length === 1);
+  await pi.commands["summerize"].handler("off", ctx); // aborts the pending request
+  releaseDefer();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.deepEqual(ctx.ui.widgets, {}, "off clears the widget");
+  // re-arm: on + new turn + settle must launch again
+  await pi.commands["summerize"].handler("on", ctx);
+  stubState.defer = null;
+  holder.branch.push({ type: "message", message: { role: "assistant", content: [{ type: "toolCall", name: "read" }] } });
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  const ok = await waitFor(() => stubState.calls.length === 2);
+  assert.ok(ok, "post off/on the extension still generates");
+});
+
+await wiringTest("wiring: activity during pending call drops the stale paragraph", async () => {
+  stubState.calls = []; stubState.text = "stale paragraph";
+  let releaseDefer;
+  stubState.defer = new Promise((r) => { releaseDefer = r; });
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const ctx = makeCtx(holder);
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  await waitFor(() => stubState.calls.length === 1);
+  // new turn lands while the call is pending
+  holder.branch.push({ type: "message", message: { role: "assistant", content: [{ type: "toolCall", name: "write" }] } });
+  await pi.handlers["turn_end"]({}, ctx);
+  releaseDefer();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.deepEqual(Object.keys(ctx.ui.widgets), [], "stale result must not be rendered");
+});
+
+await wiringTest("wiring: model outage falls back once, not per failure", async () => {
+  stubState.calls = [];
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const ctx = makeCtx(holder, {
+    modelRegistry: {
+      find: () => null,
+      getApiKeyAndHeaders: async () => ({ ok: false, error: "no credentials" }),
+      getProviderAuth: async () => null,
+    },
+  });
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  const first = await waitFor(() => !!ctx.ui.widgets["pi-summerize"]);
+  assert.ok(first, "fallback widget shown");
+  assert.ok(ctx.ui.notifications.some((n) => n.msg.includes("commentary unavailable")), "one degradation notice");
+  const noticeCount = ctx.ui.notifications.filter((n) => n.msg.includes("commentary unavailable")).length;
+  // second episode: fallback again, but no repeated notice
+  holder.branch.push({ type: "message", message: { role: "assistant", content: [{ type: "toolCall", name: "read" }] } });
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  await new Promise((r) => setTimeout(r, 30));
+  const noticeCountAfter = ctx.ui.notifications.filter((n) => n.msg.includes("commentary unavailable")).length;
+  assert.equal(noticeCount, 1);
+  assert.equal(noticeCountAfter, 1, "no repeat notice while degraded");
+});
+
+await wiringTest("wiring: commands stay silent in print mode and do not announce skipped launches", async () => {
+  stubState.calls = [];
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const ctx = makeCtx(holder, { hasUI: false, mode: "print" });
+  await pi.commands["summerize"].handler("on", ctx);
+  await pi.commands["summerize"].handler("off", ctx);
+  await pi.commands["summerize"].handler("status", ctx);
+  await pi.commands["summerize"].handler("", ctx);
+  await new Promise((r) => setTimeout(r, 30));
+  assert.deepEqual(ctx.ui.notifications, [], "no notify in silent mode");
+  assert.equal(stubState.calls.length, 0, "no model call in silent mode");
+});
+
+await wiringTest("wiring: forced /summerize in TUI announces only when actually launched", async () => {
+  stubState.calls = []; stubState.defer = new Promise(() => {}); // keep request pending
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: [] };
+  const ctx = makeCtx(holder);
+  await pi.commands["summerize"].handler("", ctx);
+  const ok = await waitFor(() => stubState.calls.length === 1);
+  assert.ok(ok, "force launches even on empty activity");
+  assert.ok(ctx.ui.notifications.some((n) => n.msg.includes("composing")), "announced because it launched");
+  // busy: second force must NOT announce
+  ctx.ui.notifications.length = 0;
+  await pi.commands["summerize"].handler("", ctx);
+  assert.equal(stubState.calls.length, 1, "no second call while busy");
+  assert.deepEqual(ctx.ui.notifications, [], "no composing notice while busy");
+  stubState.defer = null;
+});
+
+console.log(`\nALL tests passed (${passed} total)`);

@@ -1,13 +1,15 @@
 // pi-summerize — one prose commentary via a secondary model.
 // Mirrors pi-condense/src/summarizer.ts call discipline: pre-stream auth,
-// seat baseUrl override, idle+ceiling aborts, classified outcomes instead of
-// throws. No markdown in the output; the paragraph is sanitized before render.
+// seat baseUrl override, idle+ceiling aborts with both timers cleared on every
+// exit path, classified outcomes instead of throws. Instructions ride in the
+// user message (pi-condense shape — no options.systemPrompt). No markdown in
+// the output; the paragraph is sanitized before render.
 
 import { stream } from "@earendil-works/pi-ai/compat";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-export const COMMENTARY_SYSTEM_PROMPT = `You are a terse commentator observing an AI coding agent session for the user.
-You receive the activity since your last commentary and the most recent conversation turns.
+export const COMMENTARY_INSTRUCTIONS = `You are a terse commentator observing an AI coding agent session for the user.
+Below is the activity since your last commentary and the most recent conversation turns.
 Write ONE short paragraph of plain prose (1-3 sentences, under 80 words) for the user:
 - what the agent just did and what it means
 - note anything unresolved or next, if evident
@@ -42,14 +44,31 @@ export function resolveModel(modelSpec: string, ctx: ExtensionContext): { model:
 export function sanitizeParagraph(raw: string, maxChars: number): string {
   const noBullets = raw
     .split("\n")
-    .map((line) => line.replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+|#{1,6}\s+|>\s*)/, "").trim())
+    .map((line) => {
+      let l = line.trim();
+      l = l.replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+|#{1,6}\s+|>\s*)/, "");
+      // code fences and stray fence markers
+      l = l.replace(/^```[\w-]*\s*$/, "");
+      l = l.replace(/```/g, "");
+      // inline code + emphasis markers
+      l = l.replace(/`([^`]*)`/g, "$1");
+      l = l.replace(/\*\*([^*]+)\*\*/g, "$1");
+      l = l.replace(/\*([^*]+)\*/g, "$1");
+      l = l.replace(/__([^_]+)__/g, "$1");
+      l = l.replace(/_([^_]+)_/g, "$1");
+      // markdown links -> link text
+      l = l.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
+      return l.trim();
+    })
     .filter(Boolean)
     .join(" ");
   const collapsed = noBullets.replace(/\s+/g, " ").trim();
+  // the closing " …" lives inside the cap: reserve its width before cutting
+  const budget = Math.max(1, maxChars - 2);
   if (collapsed.length <= maxChars) return collapsed;
-  const cut = collapsed.slice(0, maxChars);
+  const cut = collapsed.slice(0, budget);
   const lastSpace = cut.lastIndexOf(" ");
-  return (lastSpace > maxChars * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd() + " …";
+  return (lastSpace > budget * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd() + " …";
 }
 
 export function isUsableParagraph(text: string): boolean {
@@ -65,19 +84,22 @@ function combineSignals(...signals: (AbortSignal | undefined)[]): AbortSignal | 
 
 /**
  * One commentary attempt. Never throws (returns classified outcomes) so the
- * agent_settled handler can stay fire-and-forget.
+ * agent_settled handler can stay fire-and-forget. `signal` is the caller's
+ * external abort (disable/supersede), combined with the internal timers.
  */
 export async function runCommentary(
   model: any,
-  systemPrompt: string,
+  instructions: string,
   observation: string,
   config: { maxTimeoutMs: number; idleTimeoutMs: number; maxOutputChars: number },
-  ctx: ExtensionContext
+  ctx: ExtensionContext,
+  signal?: AbortSignal
 ): Promise<CommentaryOutcome> {
   const timeoutController = new AbortController();
   let timedOut = false;
   let timeoutKind: "idle" | "ceiling" | null = null;
   let idleTimerId: ReturnType<typeof setTimeout> | null = null;
+  let ceilingTimerId: ReturnType<typeof setTimeout> | null = null;
 
   const bumpIdle = () => {
     if (idleTimerId !== null) clearTimeout(idleTimerId);
@@ -97,6 +119,8 @@ export async function runCommentary(
       return { kind: "auth", message: authMessage };
     }
 
+    // Mirror the main loop: resolved auth baseUrl must win over the static
+    // model baseUrl (seat-specific hosts 421 other seats).
     const providerAuth = await ctx.modelRegistry.getProviderAuth(model.provider);
     const effectiveModel = providerAuth?.auth.baseUrl
       ? { ...model, baseUrl: providerAuth.auth.baseUrl }
@@ -105,29 +129,39 @@ export async function runCommentary(
     const responseStream = stream(
       effectiveModel,
       {
-        systemPrompt,
         messages: [
-          { role: "user", content: [{ type: "text", text: observation }], timestamp: Date.now() },
+          {
+            role: "user",
+            content: [{ type: "text", text: `${instructions}\n\n---\n\n${observation}` }],
+            timestamp: Date.now(),
+          },
         ],
       },
       {
         apiKey: auth.apiKey,
         headers: auth.headers,
-        signal: combineSignals(undefined, timeoutController.signal),
+        signal: combineSignals(signal, timeoutController.signal),
       }
     );
 
-    const ceilingTimerId = setTimeout(() => {
-      timedOut = true;
-      timeoutKind ??= "ceiling";
-      timeoutController.abort();
-    }, config.maxTimeoutMs);
+    // Ceiling arms once at call start; idle arms/resets on every stream event.
+    if (config.maxTimeoutMs > 0) {
+      ceilingTimerId = setTimeout(() => {
+        timedOut = true;
+        timeoutKind ??= "ceiling";
+        timeoutController.abort();
+      }, config.maxTimeoutMs);
+    }
     bumpIdle();
 
     for await (const _event of responseStream) {
       bumpIdle();
+      if (signal?.aborted) break;
     }
-    clearTimeout(ceilingTimerId);
+
+    if (signal?.aborted) {
+      return { kind: "transient", message: "commentary aborted (superseded or disabled)" };
+    }
 
     const response = await responseStream.result();
     if (response.stopReason === "aborted") {
@@ -147,6 +181,9 @@ export async function runCommentary(
     if (!isUsableParagraph(paragraph)) return { kind: "unusable", message: "empty commentary" };
     return { kind: "ok", text: paragraph };
   } catch (error) {
+    if (signal?.aborted) {
+      return { kind: "transient", message: "commentary aborted (superseded or disabled)" };
+    }
     if (timedOut) {
       return {
         kind: "transient",
@@ -156,5 +193,6 @@ export async function runCommentary(
     return { kind: "transient", message: error instanceof Error ? error.message : String(error) };
   } finally {
     if (idleTimerId !== null) clearTimeout(idleTimerId);
+    if (ceilingTimerId !== null) clearTimeout(ceilingTimerId);
   }
 }
