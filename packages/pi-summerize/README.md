@@ -58,10 +58,23 @@ on what just happened and renders it as a dim widget **below the editor**.
 
 ## Command
 
-`/summerize` — compose commentary now (bypasses throttle and activity gate).
+`/summerize` — **settings dialog** (TUI): on/off, model (validated against
+the registry), minimum interval, and persistence scope (user file,
+session-only, or reset). Esc abandons without changes.
+`/summerize now` — compose commentary now (bypasses throttle and gate).
 `/summerize on|off` — session-local control (a new session starts on).
 `/summerize status` — model, last attempt vs last emission, last failure,
 current paragraph.
+
+## Settings persistence
+
+Layered (later wins): defaults → `PI_SUMMERIZE_*` env → `~/.pi/agent/pi-summerize.json`
+(user) → `.pi/pi-summerize.json` (project) → session overrides from the
+dialog. File keys: `enabled`, `model`, `minIntervalSeconds`,
+`timeoutSeconds`, `idleTimeoutSeconds`, `maxInputChars`, `maxOutputChars`.
+Unknown keys are reported, never silently ignored. Writes are atomic and
+merge (never clobber). Tests sandbox the user file via
+`PI_SUMMERIZE_USER_SETTINGS`.
 
 ## Modes
 
