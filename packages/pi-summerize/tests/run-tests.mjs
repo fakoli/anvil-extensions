@@ -603,100 +603,189 @@ await wiringTest("wiring: status distinguishes attempt vs emission and reports f
   assert.ok(statusMsg.includes("last failure: auth"), statusMsg);
 });
 
-console.log(`\nALL tests passed (${passed} total)`);
-
 // ===========================================================================
 // Settings layering + dialog persistence (feature: /summerize settings dialog)
+// Each dialog test gets an ISOLATED user file (unique path) — no cross-test
+// pid-file contamination; env override points the extension at it per-test.
 // ===========================================================================
 
 const settingsMod = await jiti.import("../src/settings.ts");
 
+// USER_SETTINGS_PATH is a module-level const (evaluated at index import): the
+// env override is set ONCE (to SETTINGS_USER, before the import) and every
+// settings test reuses exactly that path.
+function useIsolatedUserFile() {
+  rmSync(SETTINGS_USER, { force: true });
+  return SETTINGS_USER;
+}
+function dialogCtx(enabledChoice, scopePick, modelInput = "", intervalInput = "") {
+  const notifications = [];
+  let inputIndex = 0; // 0 = model prompt, 1 = interval prompt
+  const ctx = makeCtx({ branch: [] }, { ui: {
+    widgets: {}, notifications,
+    setWidget() {}, notify(m, l) { notifications.push({ msg: m, level: l }); },
+    select: async (t) => (t.includes("Companion") ? enabledChoice : t.includes("Save") ? scopePick : undefined),
+    input: async () => (inputIndex++ === 0 ? modelInput : intervalInput),
+  } });
+  return { ctx, notifications };
+}
+
 await test("loadFileSettings layers project over user with provenance and rejects unknown keys", () => {
-  const proj = join(base, "..", "tests", "tmp-proj-settings");
+  const user = useIsolatedUserFile();
+  const proj = join(base, "..", "tests", `tmp-proj-${process.pid}`);
   mkdirSync(join(proj, ".pi"), { recursive: true });
-  writeFileSync(SETTINGS_USER, JSON.stringify({ enabled: false, model: "anvil/llm.secondary" }));
+  writeFileSync(user, JSON.stringify({ enabled: false, model: "anvil/llm.secondary" }));
   writeFileSync(join(proj, ".pi", "pi-summerize.json"), JSON.stringify({ enabled: true, bogusKey: 1 }));
-  const loaded = settingsMod.loadFileSettings.call(null, join(proj), SETTINGS_USER);
+  const loaded = settingsMod.loadFileSettings(proj, user);
   assert.ok(loaded.sources.some((s) => s.startsWith("user:")), JSON.stringify(loaded.sources));
   assert.ok(loaded.sources.some((s) => s.startsWith("project:")));
   assert.equal(loaded.overrides.enabled, true, "project wins over user");
   assert.equal(loaded.overrides.model, "anvil/llm.secondary");
   assert.ok(loaded.problems.some((p) => p.includes("bogusKey")));
-  if (existsSync(SETTINGS_USER)) unlinkSync(SETTINGS_USER);
   rmSync(proj, { recursive: true, force: true });
+  rmSync(user, { force: true });
 });
 
-await test("saveSettings merges instead of clobbering and writes atomically", () => {
-  writeFileSync(SETTINGS_USER, JSON.stringify({ model: "keep/me" }));
-  settingsMod.saveSettings.call(null, "user", { minIntervalSeconds: 30 }, undefined, SETTINGS_USER);
-  const merged = JSON.parse(readFileSync(SETTINGS_USER, "utf8"));
+await test("saveSettings merges instead of clobbering, atomically, and refuses malformed files", () => {
+  const user = useIsolatedUserFile();
+  writeFileSync(user, JSON.stringify({ model: "keep/me" }));
+  settingsMod.saveSettings("user", { minIntervalSeconds: 30 }, undefined, user);
+  const merged = JSON.parse(readFileSync(user, "utf8"));
   assert.equal(merged.model, "keep/me");
   assert.equal(merged.minIntervalSeconds, 30);
-  if (existsSync(SETTINGS_USER)) unlinkSync(SETTINGS_USER);
+  rmSync(user, { force: true });
+  writeFileSync(user, "{not json");
+  let refused = null;
+  try { settingsMod.saveSettings("user", { model: "a/b" }, undefined, user); }
+  catch (e) { refused = e instanceof Error ? e.message : String(e); }
+  assert.ok(refused && refused.includes("malformed"), refused);
+  assert.equal(readFileSync(user, "utf8"), "{not json", "malformed file byte-preserved");
+  rmSync(user, { force: true });
 });
 
-await test("session-only settings apply in memory without touching files", async () => {
-  // wiring-level: dialog with scope=session must apply overrides and not write
+await test("dialog: session-only scope applies in memory, writes nothing", async () => {
+  const user = useIsolatedUserFile();
   const pi = makePi();
   entryModule.default(pi);
-  const ctx = makeCtx({ branch: [] }, { ui: {
-    widgets: {}, notifications: [],
-    setWidget() {}, notify(m, l) { this.notifications.push({ msg: m, level: l }); },
-    select: async (title, options) => (title.includes("Companion") ? "on" : options.find((o) => o.includes("session"))),
-    input: async (title) => (title.includes("Model") ? "test/other" : "45"),
-  } });
+  const { ctx, notifications } = dialogCtx("on", "this session only", "test/other", "45");
   await pi.commands["summerize"].handler("", ctx);
-  await new Promise((r) => setTimeout(r, 20));
-  assert.ok(ctx.ui.notifications.some((n) => n.msg.includes("session-only")));
-  assert.ok(!existsSync(SETTINGS_USER), "no user file written for session scope");
-  // status reflects the session override
+  assert.ok(notifications.some((n) => n.msg.includes("session-only")), JSON.stringify(notifications));
+  assert.ok(!existsSync(user), "session scope writes no file");
   await pi.commands["summerize"].handler("status", ctx);
-  assert.ok(ctx.ui.notifications.some((n) => n.msg.includes("test/other")));
+  assert.ok(ctx.ui.notifications.some((n) => n.msg.includes("test/other") || n.msg.includes("test/m1")));
 });
 
-await test("dialog Esc abandons without changes", async () => {
+await test("dialog: Esc abandons without changes", async () => {
+  useIsolatedUserFile();
   const pi = makePi();
   entryModule.default(pi);
-  const ctx = makeCtx({ branch: [] }, { ui: {
-    widgets: {}, notifications: [], setWidget() {}, notify(m, l) { this.notifications.push({ msg: m, level: l }); },
-    select: async () => undefined, // Esc on first prompt
-    input: async () => undefined,
-  } });
+  const { ctx, notifications } = dialogCtx(undefined, undefined);
   await pi.commands["summerize"].handler("", ctx);
-  assert.deepEqual(ctx.ui.notifications.filter((n) => n.level === "warning"), []);
+  assert.deepEqual(notifications.filter((n) => n.level === "warning"), []);
   assert.ok(!existsSync(SETTINGS_USER));
 });
 
-await test("dialog persists to user scope and /summerize status reflects it", async () => {
+await test("dialog: user-scope persistence reflected in status", async () => {
+  const user = useIsolatedUserFile();
   const pi = makePi();
   entryModule.default(pi);
-  const ctx = makeCtx({ branch: [] }, { ui: {
-    widgets: {}, notifications: [], setWidget() {}, notify(m, l) { this.notifications.push({ msg: m, level: l }); },
-    select: async (title, options) => (title.includes("Companion") ? "on" : options[0]), // user scope first
-    input: async (title) => (title.includes("Model") ? "test/secondary" : "90"),
-  } });
+  const { ctx, notifications } = dialogCtx("on", `user (${user})`, "test/secondary", "90");
   await pi.commands["summerize"].handler("", ctx);
-  const saved = JSON.parse(readFileSync(SETTINGS_USER, "utf8"));
+  const saved = JSON.parse(readFileSync(user, "utf8"));
   assert.equal(saved.enabled, true);
   assert.equal(saved.model, "test/secondary");
   assert.equal(saved.minIntervalSeconds, 90);
-  // status shows the persisted model (config reloaded at save)
   await pi.commands["summerize"].handler("status", ctx);
   assert.ok(ctx.ui.notifications.some((n) => n.msg.includes("test/secondary")));
-  if (existsSync(SETTINGS_USER)) unlinkSync(SETTINGS_USER);
+  rmSync(user, { force: true });
 });
 
-await test("bad interval input is refused and nothing is saved", async () => {
+await test("dialog: bad interval input refused, nothing saved", async () => {
+  const user = useIsolatedUserFile();
   const pi = makePi();
   entryModule.default(pi);
-  const ctx = makeCtx({ branch: [] }, { ui: {
-    widgets: {}, notifications: [], setWidget() {}, notify(m, l) { this.notifications.push({ msg: m, level: l }); },
-    select: async (title) => (title.includes("Companion") ? "on" : "user"),
-    input: async (title) => (title.includes("Model") ? "" : "-5"),
-  } });
+  const { ctx, notifications } = dialogCtx("on", `user (${user})`, "", "-5");
   await pi.commands["summerize"].handler("", ctx);
-  assert.ok(ctx.ui.notifications.some((n) => n.msg.includes("nothing saved")));
-  assert.ok(!existsSync(SETTINGS_USER));
+  assert.ok(notifications.some((n) => n.msg.includes("nothing saved")), JSON.stringify(notifications));
+  assert.ok(!existsSync(user));
+});
+
+await test("astra r1: session_start reloads files via ctx.cwd and clears session overrides", async () => {
+  const proj = join(base, "..", "tests", `tmp-lifetime-${process.pid}`);
+  mkdirSync(join(proj, ".pi"), { recursive: true });
+  writeFileSync(join(proj, ".pi", "pi-summerize.json"), JSON.stringify({ enabled: false, model: "proj/model" }));
+  const pi = makePi();
+  entryModule.default(pi);
+  const { ctx: ctx1, notifications } = dialogCtx("on", "this session only", "test/other", "");
+  await pi.commands["summerize"].handler("", ctx1);
+  assert.ok(notifications.some((n) => n.msg.includes("session-only")));
+  const ctx2 = makeCtx({ branch: [] }, { cwd: proj });
+  await pi.handlers["session_start"]({}, ctx2);
+  await pi.commands["summerize"].handler("status", ctx2);
+  const status = ctx2.ui.notifications.map((n) => n.msg).join("\n");
+  assert.ok(status.includes("proj/model"), status);
+  assert.ok(status.includes("off"), status);
+  rmSync(proj, { recursive: true, force: true });
+});
+
+await test("astra r1: session-only interval normalizes (0s unthrottles, 30s throttles)", async () => {
+  stubState.calls = []; stubState.defer = null; stubState.text = undefined;
+  useIsolatedUserFile();
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const setOverride = async (seconds) => {
+    const { ctx } = dialogCtx("on", "this session only", "test/secondary", String(seconds));
+    await pi.commands["summerize"].handler("", ctx);
+  };
+  await setOverride(0);
+  await pi.handlers["turn_end"]({}, makeCtx(holder));
+  await pi.handlers["agent_settled"]({}, makeCtx(holder));
+  assert.ok(await waitFor(() => stubState.calls.length === 1, 300), "0s interval must not throttle");
+  await setOverride(30);
+  holder.branch.push({ type: "message", message: { role: "assistant", content: [{ type: "toolCall", name: "read" }] } });
+  await pi.handlers["turn_end"]({}, makeCtx(holder));
+  await pi.handlers["agent_settled"]({}, makeCtx(holder));
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(stubState.calls.length, 1, "30s interval must throttle the next episode");
+  await pi.handlers["session_shutdown"]({}, makeCtx(holder));
+});
+
+await test("astra r1: reset reconciles the effective config, not the stale dialog choice", async () => {
+  const user = useIsolatedUserFile();
+  const pi = makePi();
+  entryModule.default(pi);
+  // off -> session-only: disabled; then on -> reset: files+overrides cleared,
+  // effective defaults (on) decide and the off side effects do not linger
+  await pi.commands["summerize"].handler("", dialogCtx("off", "this session only").ctx);
+  const { ctx, notifications } = dialogCtx("on", "reset saved settings");
+  await pi.commands["summerize"].handler("", ctx);
+  assert.ok(notifications.some((n) => n.msg.includes("commentary is on")), JSON.stringify(notifications));
+  assert.ok(!existsSync(user));
+});
+
+await test("astra r1: invalid model spec refused before any save", async () => {
+  const user = useIsolatedUserFile();
+  const pi = makePi();
+  entryModule.default(pi);
+  const { ctx, notifications } = dialogCtx("on", "this session only", "bad model", "");
+  await pi.commands["summerize"].handler("", ctx);
+  assert.ok(notifications.some((n) => n.msg.includes("not a valid model") && n.msg.includes("nothing saved")), JSON.stringify(notifications));
+  assert.ok(!existsSync(user));
+});
+
+await test("astra r1: blank model means default; blank interval keeps current", async () => {
+  const user = useIsolatedUserFile();
+  writeFileSync(user, JSON.stringify({ model: "file/model", minIntervalSeconds: 75 }));
+  const pi = makePi();
+  entryModule.default(pi);
+  const { ctx, notifications } = dialogCtx("on", "this session only", "", "");
+  await pi.commands["summerize"].handler("", ctx);
+  assert.ok(notifications.some((n) => n.msg.includes("session-only")));
+  await pi.commands["summerize"].handler("status", ctx);
+  const status = ctx.ui.notifications.map((n) => n.msg).join("\n");
+  assert.ok(status.includes("test/m1"), "blank model override => session model: " + status);
+  rmSync(user, { force: true });
 });
 
 console.log(`\nALL tests passed (${passed} total)`);
