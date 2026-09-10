@@ -1,0 +1,36 @@
+{
+  "name": "pi-summerize",
+  "version": "0.1.0",
+  "description": "Pi coding-agent extension that renders a small secondary-model prose commentary after the agent goes idle — a calm paragraph below the editor, not just a status line.",
+  "author": "Fakoli",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-coding-agent",
+    "commentary",
+    "idle",
+    "widget"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "files": [
+    "index.ts",
+    "src/**/*.ts",
+    "tests/*.mjs",
+    "README.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "scripts": {
+    "test": "node tests/run-tests.mjs"
+  }
+}
