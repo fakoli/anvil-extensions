@@ -5,20 +5,28 @@
 //
 // Contract: observational + fire-and-forget. Never mutates tool results, never
 // injects LLM-visible context, never writes memory. In print/JSON mode it is
-// silent (no model calls, no output).
+// silent (no model calls, no output, no notify).
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { readConfig, type SummerizeConfig } from "./src/config.js";
-import { collectTurns, countActivity, renderObservation, EMPTY_COUNTS, type ActivityCounts } from "./src/collect.js";
-import { resolveModel, runCommentary, modelLabel } from "./src/commentator.js";
-import { WIDGET_KEY, commentaryWidget, fallbackLine } from "./src/render.js";
+import { collectTurns, countActivity, renderObservation } from "./src/collect.js";
+import { resolveModel, runCommentary, modelLabel, COMMENTARY_INSTRUCTIONS } from "./src/commentator.js";
+import { WIDGET_KEY, commentaryWidget, wrapPlain, fallbackLine } from "./src/render.js";
+
+interface ActiveRequest {
+  abort: AbortController;
+  branchLengthAtLaunch: number;
+}
 
 interface State {
   sessionOn: boolean;
   turnsSinceCommentary: number;
   lastCommentaryAt: number | null;
   lastText: string;
-  inFlight: boolean;
-  generation: number;
+  active: ActiveRequest | null;
+  lastError: string | null;
+  /** Branch entries counted as consumed activity; only NEW activity gates/reports. */
+  cursor: number;
+  degradedNotified: boolean;
   warnedModel: boolean;
 }
 
@@ -29,84 +37,147 @@ export default function (pi: ExtensionAPI): void {
     turnsSinceCommentary: 0,
     lastCommentaryAt: null,
     lastText: "",
-    inFlight: false,
-    generation: 0,
+    active: null,
+    lastError: null,
+    cursor: 0,
+    degradedNotified: false,
     warnedModel: false,
   };
 
-  const uiOk = (ctx: ExtensionContext): boolean =>
-    config.enabled && state.sessionOn && ctx.hasUI && (ctx.mode === "tui" || ctx.mode === "rpc");
+  /** UI operations are allowed in TUI and RPC; print/JSON stay silent. */
+  const canDisplay = (ctx: ExtensionContext): boolean =>
+    ctx.hasUI && (ctx.mode === "tui" || ctx.mode === "rpc");
 
   function show(ctx: ExtensionContext, paragraph: string): void {
     try {
-      ctx.ui.setWidget(WIDGET_KEY, commentaryWidget(paragraph), { placement: "belowEditor" });
+      if (ctx.mode === "rpc") {
+        // RPC setWidget only forwards string arrays; component factories are ignored.
+        ctx.ui.setWidget(WIDGET_KEY, wrapPlain(paragraph), { placement: "belowEditor" });
+      } else {
+        ctx.ui.setWidget(WIDGET_KEY, commentaryWidget(paragraph), { placement: "belowEditor" });
+      }
       state.lastText = paragraph;
     } catch {
       // display failures never fail the agent turn
     }
   }
 
-  function maybeCommentary(ctx: ExtensionContext, force: boolean): void {
-    if (!uiOk(ctx) || state.inFlight) return;
+  function clearWidget(ctx: ExtensionContext): void {
+    try {
+      if (canDisplay(ctx)) ctx.ui.setWidget(WIDGET_KEY, undefined);
+    } catch {
+      // best effort
+    }
+    state.lastText = "";
+  }
+
+  function invalidateActive(): void {
+    if (state.active) {
+      state.active.abort.abort();
+      state.active = null;
+    }
+  }
+
+  /**
+   * Count only activity newer than the consumed cursor. If the branch shrank
+   * below the cursor (compaction/restored session), recount from zero.
+   */
+  function newActivity(branch: Array<Record<string, unknown>>): ReturnType<typeof countActivity> {
+    if (branch.length < state.cursor) state.cursor = 0;
+    return countActivity(branch.slice(state.cursor));
+  }
+
+  /** Returns true when a commentary request was actually launched. */
+  function maybeCommentary(ctx: ExtensionContext, force: boolean): boolean {
+    if (!config.enabled || !state.sessionOn || !canDisplay(ctx)) return false;
+    if (state.active) return false;
     const now = Date.now();
-    if (!force && state.turnsSinceCommentary <= 0) return;
+    if (!force && state.turnsSinceCommentary <= 0) return false;
     const since = state.lastCommentaryAt === null ? Infinity : now - state.lastCommentaryAt;
-    if (!force && since < config.minIntervalMs) return;
+    if (!force && since < config.minIntervalMs) return false;
 
     let branch: Array<Record<string, unknown>>;
     try {
       branch = ctx.sessionManager.getBranch() as unknown as Array<Record<string, unknown>>;
     } catch {
-      return;
+      return false;
     }
-    const turns = collectTurns(branch, { maxTurns: 8, maxChars: config.maxInputChars });
-    const counts = countActivity(branch);
-    if (!force && counts.toolCalls === 0) return; // nothing to comment on
+    const counts = newActivity(branch);
+    if (!force && counts.toolCalls === 0) return false; // no NEW activity to comment on
 
+    const turns = collectTurns(branch, { maxTurns: 8, maxChars: config.maxInputChars });
+    // Consume the counted slice even if the request later fails: the activity
+    // was already presented to the model (or degraded to the fallback line).
+    state.cursor = branch.length;
     state.turnsSinceCommentary = 0;
     state.lastCommentaryAt = now;
-    state.inFlight = true;
-    const generation = ++state.generation;
+
+    const abort = new AbortController();
+    state.active = { abort, branchLengthAtLaunch: branch.length };
 
     void (async () => {
       try {
         const { model, warning } = resolveModel(config.model, ctx);
         if (warning && !state.warnedModel) {
           state.warnedModel = true;
-          ctx.ui.notify(`pi-summerize: ${warning}`, "warning");
+          if (canDisplay(ctx)) ctx.ui.notify(`pi-summerize: ${warning}`, "warning");
         }
-        const observation = renderObservation(turns, counts);
+        const observation = renderObservation(turns, counts, config.maxInputChars);
         const outcome = await runCommentary(
           model,
-          // systemPrompt + one user observation; caps come from config
-          COMMENTARY_SYSTEM_PROMPT,
+          COMMENTARY_INSTRUCTIONS,
           observation,
           { maxTimeoutMs: config.maxTimeoutMs, idleTimeoutMs: config.idleTimeoutMs, maxOutputChars: config.maxOutputChars },
-          ctx
+          ctx,
+          abort.signal
         );
-        if (generation !== state.generation) return; // superseded or disabled mid-flight
+        const current = state.active;
+        if (!current || current.abort !== abort) return; // superseded, disabled, or session reset mid-flight
+        // New activity or navigation happened while the call was pending: the
+        // paragraph is already stale — drop it; the next settle will regenerate.
+        let branchNow: Array<Record<string, unknown>> | null = null;
+        try {
+          branchNow = ctx.sessionManager.getBranch() as unknown as Array<Record<string, unknown>>;
+        } catch {
+          branchNow = null;
+        }
+        if (branchNow && branchNow.length !== current.branchLengthAtLaunch) return;
+        state.active = null;
         if (outcome.kind === "ok") {
+          state.degradedNotified = false;
           show(ctx, outcome.text);
         } else {
-          // fallback keeps the widget alive without touching the fleet again
+          // deterministic fallback keeps the widget alive without touching the fleet
           show(ctx, fallbackLine(counts));
-          if (outcome.kind !== "unusable") {
-            ctx.ui.notify(`pi-summerize: commentary unavailable (${outcome.message}); showed activity summary`, "info");
+          if (outcome.kind !== "unusable" && !state.degradedNotified) {
+            state.degradedNotified = true; // once per degradation episode, not per failure
+            if (canDisplay(ctx)) {
+              ctx.ui.notify(`pi-summerize: commentary unavailable (${outcome.message}); showed activity summary`, "info");
+            }
           }
         }
-      } catch {
-        // fire-and-forget: never fail the settled turn
+      } catch (error) {
+        // fire-and-forget: never fail the settled turn, but keep the reason
+        // inspectable via /summerize status
+        state.lastError = error instanceof Error ? error.message : String(error);
       } finally {
-        if (generation === state.generation) state.inFlight = false;
+        if (state.active && state.active.abort === abort) state.active = null;
       }
     })();
+    return true;
   }
 
   // --- signals --------------------------------------------------------------
 
   pi.on("turn_end", async () => {
     try {
-      state.turnsSinceCommentary += 1;
+      if (state.active) {
+        // A new agent run started while commentary was pending: it is stale.
+        invalidateActive();
+        state.turnsSinceCommentary += 1;
+      } else {
+        state.turnsSinceCommentary += 1;
+      }
     } catch {
       // counting is best-effort
     }
@@ -124,18 +195,11 @@ export default function (pi: ExtensionAPI): void {
 
   pi.on("session_start", async (_event, ctx) => {
     try {
+      invalidateActive();
       state.turnsSinceCommentary = 0;
       state.lastCommentaryAt = null;
-      state.inFlight = false;
-      state.generation += 1; // invalidate any in-flight call from a restored session
-      if (uiOk(ctx)) {
-        try {
-          ctx.ui.setWidget(WIDGET_KEY, undefined);
-        } catch {
-          // best effort
-        }
-        state.lastText = "";
-      }
+      state.cursor = 0;
+      clearWidget(ctx);
     } catch {
       // lifecycle failures must not block the session
     }
@@ -143,7 +207,7 @@ export default function (pi: ExtensionAPI): void {
 
   pi.on("session_shutdown", async () => {
     try {
-      state.generation += 1; // cancel any in-flight commentary
+      invalidateActive();
     } catch {
       // best effort
     }
@@ -156,34 +220,31 @@ export default function (pi: ExtensionAPI): void {
     handler: async (args, ctx) => {
       const arg = (args ?? "").trim().toLowerCase();
       if (arg === "off") {
+        invalidateActive();
         state.sessionOn = false;
-        state.generation += 1; // invalidate any in-flight commentary
-        try {
-          if (ctx.hasUI) ctx.ui.setWidget(WIDGET_KEY, undefined);
-        } catch {
-          // best effort
-        }
-        state.lastText = "";
-        ctx.ui.notify("pi-summerize: off for this session", "info");
+        clearWidget(ctx);
+        if (canDisplay(ctx)) ctx.ui.notify("pi-summerize: off for this session", "info");
         return;
       }
       if (arg === "on") {
         state.sessionOn = true;
-        ctx.ui.notify("pi-summerize: on", "info");
+        if (canDisplay(ctx)) ctx.ui.notify("pi-summerize: on", "info");
         return;
       }
       if (arg === "status") {
+        if (!canDisplay(ctx)) return; // silent modes: no UI surface for status
         const { model } = resolveModel(config.model, ctx);
         const when = state.lastCommentaryAt === null ? "never" : `${Math.round((Date.now() - state.lastCommentaryAt) / 1000)}s ago`;
         ctx.ui.notify(
           `pi-summerize: ${config.enabled && state.sessionOn ? "on" : "off"} · model ${modelLabel(model)} · last ${when}` +
+            (state.lastError ? ` · last error: ${state.lastError}` : "") +
             (state.lastText ? `\n${state.lastText}` : ""),
           "info"
         );
         return;
       }
-      maybeCommentary(ctx, true);
-      ctx.ui.notify("pi-summerize: composing…", "info");
+      const launched = maybeCommentary(ctx, true);
+      if (launched && canDisplay(ctx)) ctx.ui.notify("pi-summerize: composing…", "info");
     },
   });
 }

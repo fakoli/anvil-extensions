@@ -95,19 +95,31 @@ export function collectTurns(
   const out: TurnDigest[] = [];
   for (let i = tail.length - 1; i >= 0; i--) {
     const d = tail[i];
-    const cost = d.text.length;
-    if (out.length > 0 && total + cost > options.maxChars) break;
-    total += cost;
-    out.unshift(d);
+    // Hard cap: even the first (newest) digest is truncated to the budget —
+    // maxChars is a contract, not a soft target.
+    const room = out.length === 0 ? options.maxChars : options.maxChars - total;
+    if (room <= 0) break;
+    const text = d.text.length > room ? d.text.slice(d.text.length - room) : d.text;
+    const digest: TurnDigest = { role: d.role, text, toolCalls: d.toolCalls };
+    total += text.length;
+    out.unshift(digest);
   }
   return out;
 }
 
-/** Count activity across the full branch (cheap pass, per-call counting). */
+/** Count activity across the full branch (cheap pass, per-call counting).
+ * Failed calls are detected primarily from separate toolResult entries
+ * (pi's real shape); results attached directly to the assistant toolCall
+ * block are kept as a defensive fallback. */
 export function countActivity(branch: Array<Record<string, unknown>>): ActivityCounts {
   const counts: ActivityCounts = { toolCalls: 0, edits: 0, failures: 0 };
   for (const entry of branch) {
     const message = (entry.message ?? entry) as Record<string, unknown>;
+    const role = message.role;
+    if (role === "toolResult") {
+      if (message.isError === true) counts.failures += 1;
+      continue;
+    }
     const content = message.content;
     if (!Array.isArray(content)) continue;
     for (const c of content as any[]) {
@@ -126,8 +138,8 @@ export function countActivity(branch: Array<Record<string, unknown>>): ActivityC
   return counts;
 }
 
-/** Serialize digests + counts into the commentary user-message. */
-export function renderObservation(turns: TurnDigest[], counts: ActivityCounts): string {
+/** Serialize digests + counts into the commentary user-message (hard-capped). */
+export function renderObservation(turns: TurnDigest[], counts: ActivityCounts, maxChars = 8000): string {
   const parts: string[] = [];
   parts.push(
     `Activity since last commentary: ${counts.toolCalls} tool call(s), ${counts.edits} edit(s), ${counts.failures} failing call(s).`
@@ -142,5 +154,7 @@ export function renderObservation(turns: TurnDigest[], counts: ActivityCounts): 
   } else {
     parts.push("No readable turn text available.");
   }
-  return parts.join("\n");
+  const joined = parts.join("\n");
+  if (joined.length <= maxChars) return joined;
+  return joined.slice(0, maxChars - 1) + "\u2026";
 }
