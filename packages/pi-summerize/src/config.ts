@@ -1,0 +1,52 @@
+// pi-summerize — configuration from environment variables.
+// Mirrors the repo-wide env-config conventions (pi-insights, pi-condense).
+
+export interface SummerizeConfig {
+  /** Master switch. `PI_SUMMERIZE=off` disables tracking and generation. */
+  enabled: boolean;
+  /**
+   * Model for commentary, as "provider/model-id". "default" resolves to the
+   * session's current model. Recommended for fleet setups: a secondary model
+   * (e.g. "anvil/llm.secondary") so commentary never touches the primary.
+   */
+  model: string;
+  /** Minimum seconds between commentary emissions. */
+  minIntervalMs: number;
+  /** Wall-clock ceiling for one commentary call. */
+  maxTimeoutMs: number;
+  /** Stall (no-output) ceiling for one commentary call. */
+  idleTimeoutMs: number;
+  /** Hard cap on observation payload sent to the model. */
+  maxInputChars: number;
+  /** Hard cap on the rendered paragraph. */
+  maxOutputChars: number;
+}
+
+const DEFAULTS = {
+  minIntervalSeconds: 120,
+  maxTimeoutSeconds: 45,
+  idleTimeoutSeconds: 20,
+  maxInputChars: 6000,
+  maxOutputChars: 700,
+};
+
+function num(name: string, fallbackSeconds: number, min: number, max: number): number {
+  const raw = Number(process.env[name]);
+  if (!Number.isFinite(raw)) return fallbackSeconds;
+  return Math.min(max, Math.max(min, raw));
+}
+
+export function readConfig(): SummerizeConfig {
+  const env = process.env;
+  return {
+    enabled: (env.PI_SUMMERIZE ?? "on").toLowerCase() !== "off",
+    model: env.PI_SUMMERIZE_MODEL ?? "default",
+    minIntervalMs: num("PI_SUMMERIZE_MIN_INTERVAL_SECONDS", DEFAULTS.minIntervalSeconds, 0, 3600) * 1000,
+    maxTimeoutMs: num("PI_SUMMERIZE_TIMEOUT_SECONDS", DEFAULTS.maxTimeoutSeconds, 5, 600) * 1000,
+    idleTimeoutMs: num("PI_SUMMERIZE_IDLE_TIMEOUT_SECONDS", DEFAULTS.idleTimeoutSeconds, 2, 300) * 1000,
+    maxInputChars: num("PI_SUMMERIZE_MAX_INPUT_CHARS", DEFAULTS.maxInputChars, 500, 100_000),
+    maxOutputChars: num("PI_SUMMERIZE_MAX_OUTPUT_CHARS", DEFAULTS.maxOutputChars, 100, 4000),
+  };
+}
+
+export const DEFAULTS_EXPORT = DEFAULTS;
