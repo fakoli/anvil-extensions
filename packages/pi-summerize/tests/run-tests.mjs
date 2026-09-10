@@ -1,13 +1,21 @@
 // pi-summerize — logic tests. Plain node + jiti (no bun dependency on this host).
 // Run: node tests/run-tests.mjs
+// jiti resolves from the repo's own node_modules, falling back to the pi
+// harness install (PI_INSTALL_DIR). No absolute author paths are required.
 import assert from "node:assert/strict";
-import { createJiti } from "/data/apps/devtools/node-24.20.0/lib/node_modules/@earendil-works/pi-coding-agent/node_modules/jiti/lib/jiti.mjs";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
-const base = fileURLToPath(new URL("../index.ts", import.meta.url));
-// pi ships inside the harness install; override with PI_INSTALL_DIR elsewhere.
 const PI_INSTALL_DIR = process.env.PI_INSTALL_DIR
   ?? "/data/apps/devtools/node-24.20.0/lib/node_modules/@earendil-works/pi-coding-agent";
+
+let createJiti;
+try {
+  ({ createJiti } = await import("jiti"));
+} catch {
+  ({ createJiti } = await import(`${PI_INSTALL_DIR}/node_modules/jiti/lib/jiti.mjs`));
+}
+
+const base = fileURLToPath(new URL("../index.ts", import.meta.url));
 const stubState = { calls: [], text: undefined, defer: null, stopReason: undefined, throwInResult: null };
 globalThis.__summerizeStub = stubState;
 
@@ -242,6 +250,19 @@ test("WIDGET_KEY is namespaced", () => {
 });
 
 console.log(`\n${passed} tests passed`);
+test("sanitizeParagraph preserves inline-code identifiers with underscores", () => {
+  const out = sanitizeParagraph("Updated `foo_bar_baz.ts` and the **bold** claim.", 700);
+  assert.ok(out.includes("foo_bar_baz.ts"), out);
+  assert.ok(out.includes("bold"), out);
+  assert.ok(!out.includes("`"), out);
+  assert.ok(!out.includes("**"), out);
+});
+
+test("sanitizeParagraph strips word-boundary underscores but keeps intraword ones", () => {
+  const out = sanitizeParagraph("the _goal_ is foo_bar_baz", 700);
+  assert.ok(out.includes("the goal is foo_bar_baz"), out);
+});
+
 // ===========================================================================
 // Wiring tests — extension entry with stubbed model stream, fake pi/ctx.
 // These exist because helper-only tests let a completely broken generation
@@ -493,7 +514,81 @@ await wiringTest("wiring: forced /summerize in TUI announces only when actually 
   await pi.commands["summerize"].handler("", ctx);
   assert.equal(stubState.calls.length, 1, "no second call while busy");
   assert.deepEqual(ctx.ui.notifications, [], "no composing notice while busy");
+  // cleanup: abort the pending request so no timers/waits dangle
+  await pi.handlers["session_shutdown"]({}, ctx);
   stubState.defer = null;
+  await new Promise((r) => setTimeout(r, 10));
+});
+
+// --- astra re-review regressions (A-E) --------------------------------------
+
+await wiringTest("wiring: same-length branch replacement drops the stale paragraph", async () => {
+  stubState.calls = []; stubState.text = "stale paragraph";
+  let release;
+  stubState.defer = new Promise((r) => { release = r; });
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const ctx = makeCtx(holder);
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  const launched = await waitFor(() => stubState.calls.length === 1);
+  assert.ok(launched);
+  // replace with a DIFFERENT branch of the SAME length (navigation)
+  holder.branch = makeBranch();
+  release();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.deepEqual(Object.keys(ctx.ui.widgets), [], "equal-length navigation must drop, not render");
+  await pi.handlers["session_shutdown"]({}, ctx);
+});
+
+await wiringTest("wiring: superseded request restores consumed activity for the next settle", async () => {
+  stubState.calls = [];
+  let release;
+  stubState.defer = new Promise((r) => { release = r; });
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const ctx = makeCtx(holder);
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  assert.ok(await waitFor(() => stubState.calls.length === 1));
+  // text-only turn (no tool calls) while the request is pending
+  holder.branch.push(userMsg("any update?"));
+  await pi.handlers["turn_end"]({}, ctx); // invalidates + restores consumed activity
+  release();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.deepEqual(Object.keys(ctx.ui.widgets), [], "superseded result dropped");
+  stubState.defer = null;
+  // next settle must regenerate, re-offering the old (never shown) activity
+  await pi.handlers["agent_settled"]({}, ctx);
+  assert.ok(await waitFor(() => stubState.calls.length === 2), "activity was not lost");
+  const sent = stubState.calls[1].options.messages[0].content[0].text;
+  assert.ok(sent.includes("2 tool call(s)"), `old activity re-offered: ${sent.slice(0, 120)}`);
+  await pi.handlers["session_shutdown"]({}, ctx);
+});
+
+await wiringTest("wiring: status distinguishes attempt vs emission and reports failures", async () => {
+  stubState.calls = [];
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const ctx = makeCtx(holder, {
+    modelRegistry: {
+      find: () => null,
+      getApiKeyAndHeaders: async () => ({ ok: false, error: "no credentials" }),
+      getProviderAuth: async () => null,
+    },
+  });
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  await waitFor(() => !!ctx.ui.widgets["pi-summerize"]);
+  ctx.ui.notifications.length = 0;
+  await pi.commands["summerize"].handler("status", ctx);
+  const statusMsg = ctx.ui.notifications[0]?.msg ?? "";
+  assert.ok(statusMsg.includes("last attempt"), statusMsg);
+  assert.ok(statusMsg.includes("last emission"), statusMsg);
+  assert.ok(statusMsg.includes("last failure: auth"), statusMsg);
 });
 
 console.log(`\nALL tests passed (${passed} total)`);

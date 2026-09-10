@@ -40,8 +40,11 @@ export function resolveModel(modelSpec: string, ctx: ExtensionContext): { model:
   return { model: found };
 }
 
-/** Collapse markdown-ish output into one plain paragraph, hard-capped. */
+/** Collapse markdown-ish output into one plain paragraph, hard-capped.
+ * Inline-code contents are preserved verbatim (filenames, env names);
+ * emphasis stripping is boundary-aware so `foo_bar` survives. */
 export function sanitizeParagraph(raw: string, maxChars: number): string {
+  const codeTokens: string[] = [];
   const noBullets = raw
     .split("\n")
     .map((line) => {
@@ -50,14 +53,18 @@ export function sanitizeParagraph(raw: string, maxChars: number): string {
       // code fences and stray fence markers
       l = l.replace(/^```[\w-]*\s*$/, "");
       l = l.replace(/```/g, "");
-      // inline code + emphasis markers
-      l = l.replace(/`([^`]*)`/g, "$1");
+      // inline code: contents preserved verbatim through later stripping
+      l = l.replace(/`([^`]*)`/g, (_m, inner: string) => {
+        codeTokens.push(inner);
+        return `\u0000${codeTokens.length - 1}\u0000`;
+      });
+      // emphasis markers (boundary-aware for underscores), links -> text
       l = l.replace(/\*\*([^*]+)\*\*/g, "$1");
       l = l.replace(/\*([^*]+)\*/g, "$1");
-      l = l.replace(/__([^_]+)__/g, "$1");
-      l = l.replace(/_([^_]+)_/g, "$1");
-      // markdown links -> link text
+      l = l.replace(/(?<![\w])_([^_]+)_(?![\w])/g, "$1");
       l = l.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
+      // restore inline-code contents
+      l = l.replace(/\u0000(\d+)\u0000/g, (_m, i: string) => codeTokens[Number(i)] ?? "");
       return l.trim();
     })
     .filter(Boolean)

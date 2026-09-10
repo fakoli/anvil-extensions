@@ -31,7 +31,10 @@ on what just happened and renders it as a dim widget **below the editor**.
 - **Fallback** — if the model call fails, the widget falls back to a
   deterministic one-line activity summary, so the widget is never empty after
   real activity. A notify explains the degradation once per degradation
-  episode (recovery re-arms it), not per failure.
+  episode (recovery re-arms it), not per failure. Superseded attempts (new
+  activity mid-flight) drop their result and **restore their consumed
+  activity**, so the next settle re-offers old + new together — nothing is
+  silently lost.
 - **Rendering** — TUI: component-factory widget (`pi-tui` `Text`) so the
   paragraph wraps to terminal width. RPC: plain string lines (word-wrapped) —
   RPC `setWidget` ignores factories. The paragraph replaces the previous one;
@@ -48,7 +51,7 @@ on what just happened and renders it as a dim widget **below the editor**.
 | `PI_SUMMERIZE` | `on` | `off` disables everything |
 | `PI_SUMMERIZE_MODEL` | `default` | `provider/model-id` for commentary. Recommended for fleet setups: `anvil/llm.secondary` so commentary never touches the primary model. `default` uses the session model. |
 | `PI_SUMMERIZE_MIN_INTERVAL_SECONDS` | `120` | minimum seconds between emissions (0–3600) |
-| `PI_SUMMERIZE_TIMEOUT_SECONDS` | `45` | wall-clock ceiling per call (5–600) |
+| `PI_SUMMERIZE_TIMEOUT_SECONDS` | `45` | streaming wall-clock ceiling per call; auth resolution is excluded (5–600) |
 | `PI_SUMMERIZE_IDLE_TIMEOUT_SECONDS` | `20` | stall ceiling, reset on every stream event (2–300) |
 | `PI_SUMMERIZE_MAX_INPUT_CHARS` | `6000` | hard cap on the observation payload (500–100000) |
 | `PI_SUMMERIZE_MAX_OUTPUT_CHARS` | `700` | hard cap on the rendered paragraph (100–4000) |
@@ -56,8 +59,9 @@ on what just happened and renders it as a dim widget **below the editor**.
 ## Command
 
 `/summerize` — compose commentary now (bypasses throttle and activity gate).
-`/summerize on|off` — session-local control. `/summerize status` — model,
-last emission, last error, current paragraph.
+`/summerize on|off` — session-local control (a new session starts on).
+`/summerize status` — model, last attempt vs last emission, last failure,
+current paragraph.
 
 ## Modes
 
@@ -74,9 +78,10 @@ cleared on session start.
 ## Tests
 
 `npm test` (runs `node tests/run-tests.mjs`; plain node + jiti, no bun
-required). The model stream is stubbed for all tests — no network. On hosts
-where pi is installed elsewhere, set `PI_INSTALL_DIR` to the pi harness root
-(defaults to the devtools install path this repo was built against).
+required). jiti resolves from the repo's own `node_modules`, falling back to
+the pi harness install — override the latter with `PI_INSTALL_DIR` on hosts
+where pi lives elsewhere. The model stream is stubbed for all tests — no
+network.
 
 ## Relationship to other extensions
 
