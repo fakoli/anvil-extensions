@@ -10,8 +10,16 @@ export function stream(model, options, utils) {
       })();
     },
     result: async () => {
-      // state.defer IS the promise (not a {promise,resolve} handle)
-      if (state.defer) await state.defer;
+      // state.defer IS the promise (not a {promise,resolve} handle).
+      // Abort-aware: an external abort releases an otherwise never-resolving
+      // wait so test suites cannot hang on abandoned requests.
+      if (state.defer) {
+        await new Promise((resolve) => {
+          const onAbort = () => resolve();
+          utils?.signal?.addEventListener?.("abort", onAbort, { once: true });
+          state.defer.then(resolve, resolve);
+        });
+      }
       if (state.throwInResult) throw state.throwInResult;
       if (utils?.signal?.aborted) return { stopReason: "aborted", content: [] };
       return {
