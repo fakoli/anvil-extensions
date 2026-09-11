@@ -1,0 +1,37 @@
+{
+  "name": "pi-voice-clone",
+  "version": "0.1.0",
+  "description": "Pi coding-agent extension bridging a privately-owned voice style-clone plugin: voice_prompt + voice_check tools and a /voice command for drafting in the owner\u2019s measured voice.",
+  "author": "Fakoli",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-coding-agent",
+    "voice",
+    "style-clone",
+    "voice-clone"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "files": [
+    "index.ts",
+    "src/**/*.ts",
+    "tests/*.mjs",
+    "README.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "scripts": {
+    "test": "node tests/run-tests.mjs"
+  }
+}
