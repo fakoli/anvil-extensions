@@ -1,7 +1,7 @@
 // Test stub replacing @earendil-works/pi-ai/compat for wiring tests.
-// Controlled via globalThis.__summerizeStub: { text, defer, stopReason, throwInResult, calls }.
+// Controlled via globalThis.__commentaryStub: { text, defer, stopReason, throwInResult, calls }.
 export function stream(model, options, utils) {
-  const state = globalThis.__summerizeStub;
+  const state = globalThis.__commentaryStub;
   state.calls.push({ model, options });
   return {
     [Symbol.asyncIterator]() {

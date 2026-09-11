@@ -1,4 +1,4 @@
-// pi-summerize — bounded observation collection from the session branch.
+// pi-commentary — bounded observation collection from the session branch.
 // Pure functions, no I/O. The payload must stay small and stay OUT of the
 // model-visible conversation (it only feeds the commentary call).
 

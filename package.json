@@ -15,7 +15,7 @@
       "./packages/pi-plan-mode/src/index.ts",
       "./packages/pi-subagents/index.ts",
       "./packages/pi-tool-repair/tool-repair.ts",
-      "./packages/pi-summerize/index.ts",
+      "./packages/pi-commentary/index.ts",
       "./packages/pi-hermes-memory/src/index.ts"
     ],
     "skills": [
