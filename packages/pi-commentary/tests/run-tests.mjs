@@ -209,9 +209,20 @@ test("isUsableParagraph thresholds", () => {
   assert.equal(isUsableParagraph("This is a perfectly usable paragraph of commentary."), true);
 });
 
-test("instructions forbid markdown and mandate one paragraph", () => {
+test("instructions: Claude-Code-style tips, quiet signal, no markdown", () => {
   assert.ok(COMMENTARY_INSTRUCTIONS.includes("No markdown"));
-  assert.ok(COMMENTARY_INSTRUCTIONS.includes("ONE short paragraph"));
+  assert.ok(COMMENTARY_INSTRUCTIONS.includes("ONE short tip"));
+  assert.ok(COMMENTARY_INSTRUCTIONS.includes("NOT apparent"), "tips must target what is not apparent");
+  assert.ok(COMMENTARY_INSTRUCTIONS.includes("Never narrate"), "tips must not restate the transcript");
+  assert.ok(COMMENTARY_INSTRUCTIONS.includes("exactly: NOTHING"), "quiet signal must be part of the contract");
+});
+
+test("isQuietSignal matches the NOTHING marker case-insensitively", async () => {
+  const { isQuietSignal } = await jiti.import("../src/commentator.ts");
+  assert.equal(isQuietSignal("NOTHING"), true);
+  assert.equal(isQuietSignal("  nothing "), true);
+  assert.equal(isQuietSignal("Nothing worth surfacing."), false);
+  assert.equal(isQuietSignal(""), false);
 });
 
 // --- model resolution -------------------------------------------------------
@@ -257,11 +268,11 @@ test("fallbackLine summarizes counts and flags failures", () => {
 test("banner separates commentary with accent label and dim rule", () => {
   const theme = { fg: (color, s) => `[${color}]${s}` };
   const b = banner(theme);
-  assert.ok(b.startsWith("[accent]◆ commentary "), `banner label must be accent: ${b}`);
+  assert.ok(b.startsWith("[accent]◆ tips "), `banner label must be accent: ${b}`);
   assert.ok(b.includes("[dim]─"), `rule must be dim: ${b}`);
   assert.ok(!b.includes("[default]"), `no unthemed segments: ${b}`);
   const plain = plainBanner();
-  assert.ok(plain.startsWith("◆ commentary ") && !plain.includes("["), `RPC banner is plain text: ${plain}`);
+  assert.ok(plain.startsWith("◆ tips ") && !plain.includes("["), `RPC banner is plain text: ${plain}`);
   const visible = (s) => s.replace(/\[[a-z]+\]/g, "");
   assert.equal(visible(b).length, plain.length, "TUI and RPC banners must align (same visible width)");
 });
@@ -364,6 +375,20 @@ async function wiringTest(name, fn) {
   }
 }
 
+await wiringTest("wiring: NOTHING tip clears the widget instead of showing filler", async () => {
+  stubState.calls = []; stubState.defer = null; stubState.text = "NOTHING";
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const ctx = makeCtx(holder);
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  assert.ok(await waitFor(() => stubState.calls.length === 1), "episode must consult the model");
+  await waitFor(() => true, 40);
+  assert.deepEqual(Object.keys(ctx.ui.widgets), [], "NOTHING must suppress the widget entirely");
+  await pi.handlers["session_shutdown"]({}, ctx);
+});
+
 await wiringTest("wiring: settled after a turn launches model call and sets TUI widget (blocker regression)", async () => {
   stubState.calls = []; stubState.defer = null; stubState.throwInResult = null; stubState.text = undefined;
   const pi = makePi();
@@ -380,7 +405,7 @@ await wiringTest("wiring: settled after a turn launches model call and sets TUI 
   assert.ok(sent.includes("2 tool call(s)"), `sent: ${sent.slice(0, 120)}`);
   assert.ok(sent.includes("1 failing call(s)"), "failure counted from toolResult entry");
   assert.ok(sent.includes("COMMENT") === false);
-  assert.ok(sent.includes("terse commentator"), "instructions ride in the user message");
+  assert.ok(sent.includes("terse commentator") || sent.includes("tips widget"), "instructions ride in the user message");
 });
 
 await wiringTest("wiring: print/JSON mode is fully silent (no stream, no widget, no notify)", async () => {

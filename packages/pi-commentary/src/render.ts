@@ -9,18 +9,18 @@ export const WIDGET_KEY = "pi-commentary";
 const BANNER_WIDTH = 56;
 
 /**
- * Accent banner line: separates commentary from the (plain-colored) insights
- * widget above it and gives the paragraph its own visual header.
+ * Accent banner line: separates tips from the (plain-colored) insights
+ * widget above it and gives the tip its own visual header.
  */
 export function banner(theme: any): string {
-  const label = "◆ commentary ";
+  const label = "◆ tips ";
   const rule = "─".repeat(Math.max(10, BANNER_WIDTH - label.length));
   return theme.fg("accent", label) + theme.fg("dim", rule);
 }
 
 /** Plain-text banner for RPC widgets (no ANSI available there). */
 export function plainBanner(width = BANNER_WIDTH): string {
-  const label = "◆ commentary ";
+  const label = "◆ tips ";
   return label + "─".repeat(Math.max(10, width - label.length));
 }
 

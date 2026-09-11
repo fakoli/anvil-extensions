@@ -188,6 +188,18 @@ export default function (pi: ExtensionAPI): void {
           state.lastFailure = null;
           state.lastEmissionAt = Date.now();
           show(ctx, outcome.text);
+        } else if (outcome.kind === "quiet") {
+          // Model says nothing worth surfacing: drop the stale tip instead of
+          // showing filler — tips appear only when there is something to say.
+          state.degradedNotified = false;
+          state.lastFailure = null;
+          state.lastEmissionAt = Date.now();
+          state.lastText = "";
+          try {
+            if (canDisplay(ctx)) ctx.ui.setWidget(WIDGET_KEY, undefined);
+          } catch {
+            // display failures never fail the agent turn
+          }
         } else {
           // deterministic fallback keeps the widget alive without touching the fleet
           state.lastEmissionAt = Date.now();
