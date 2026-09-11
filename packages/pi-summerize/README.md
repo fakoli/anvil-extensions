@@ -1,5 +1,12 @@
 # pi-summerize
 
+> **Not Feynman's `/summarize`.** The command is `/commentary`. Feynman's
+> `/summarize` summarizes an *external research source* (URL/PDF/file) into a
+> durable `outputs/<slug>-summary.md` artifact with RLM windowing. pi-summerize
+> has a different contract: it automatically summarizes *this session's recent
+> turns* into an ephemeral one-paragraph widget — no files written, no external
+> input, silent in JSON/print mode.
+
 A **small prose commentary after the agent goes idle** — companion to
 `pi-insights` (which owns the deterministic single status line). When the agent
 settles, pi-summerize asks a **secondary model** for a one-paragraph commentary
@@ -17,7 +24,7 @@ on what just happened and renders it as a dim widget **below the editor**.
 
 - **Trigger** — `turn_end` counts turns; `agent_settled` (fully idle) evaluates:
   at least one completed turn since the last commentary, the minimum interval
-  elapsed, and real tool activity in the branch (a forced `/summerize` bypasses
+  elapsed, and real tool activity in the branch (a forced `/commentary` bypasses
   all three).
 - **Observation** — the last ~8 conversation turns are collected from the
   session branch (text trimmed, per-entry and total char-capped) plus activity
@@ -58,12 +65,12 @@ on what just happened and renders it as a dim widget **below the editor**.
 
 ## Command
 
-`/summerize` — **settings dialog** (TUI): on/off, model (validated against
+`/commentary` — **settings dialog** (TUI): on/off, model (validated against
 the registry), minimum interval, and persistence scope (user file,
 session-only, or reset). Esc abandons without changes.
-`/summerize now` — compose commentary now (bypasses throttle and gate).
-`/summerize on|off` — session-local control (a new session starts on).
-`/summerize status` — model, last attempt vs last emission, last failure,
+`/commentary now` — compose commentary now (bypasses throttle and gate).
+`/commentary on|off` — session-local control (a new session starts on).
+`/commentary status` — model, last attempt vs last emission, last failure,
 current paragraph.
 
 ## Settings persistence

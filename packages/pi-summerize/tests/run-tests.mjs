@@ -435,12 +435,12 @@ await wiringTest("wiring: off-while-pending aborts and on re-arms (no generation
   await pi.handlers["turn_end"]({}, ctx);
   await pi.handlers["agent_settled"]({}, ctx);
   await waitFor(() => stubState.calls.length === 1);
-  await pi.commands["summerize"].handler("off", ctx); // aborts the pending request
+  await pi.commands["commentary"].handler("off", ctx); // aborts the pending request
   releaseDefer();
   await new Promise((r) => setTimeout(r, 30));
   assert.deepEqual(ctx.ui.widgets, {}, "off clears the widget");
   // re-arm: on + new turn + settle must launch again
-  await pi.commands["summerize"].handler("on", ctx);
+  await pi.commands["commentary"].handler("on", ctx);
   stubState.defer = null;
   holder.branch.push({ type: "message", message: { role: "assistant", content: [{ type: "toolCall", name: "read" }] } });
   await pi.handlers["turn_end"]({}, ctx);
@@ -502,28 +502,28 @@ await wiringTest("wiring: commands stay silent in print mode and do not announce
   entryModule.default(pi);
   const holder = { branch: makeBranch() };
   const ctx = makeCtx(holder, { hasUI: false, mode: "print" });
-  await pi.commands["summerize"].handler("on", ctx);
-  await pi.commands["summerize"].handler("off", ctx);
-  await pi.commands["summerize"].handler("status", ctx);
-  await pi.commands["summerize"].handler("", ctx);
+  await pi.commands["commentary"].handler("on", ctx);
+  await pi.commands["commentary"].handler("off", ctx);
+  await pi.commands["commentary"].handler("status", ctx);
+  await pi.commands["commentary"].handler("", ctx);
   await new Promise((r) => setTimeout(r, 30));
   assert.deepEqual(ctx.ui.notifications, [], "no notify in silent mode");
   assert.equal(stubState.calls.length, 0, "no model call in silent mode");
 });
 
-await wiringTest("wiring: forced /summerize in TUI announces only when actually launched", async () => {
+await wiringTest("wiring: forced /commentary in TUI announces only when actually launched", async () => {
   stubState.calls = []; stubState.defer = new Promise(() => {}); // keep request pending
   const pi = makePi();
   entryModule.default(pi);
   const holder = { branch: [] };
   const ctx = makeCtx(holder);
-  await pi.commands["summerize"].handler("now", ctx);
+  await pi.commands["commentary"].handler("now", ctx);
   const ok = await waitFor(() => stubState.calls.length === 1);
-  assert.ok(ok, "/summerize now force-launches even on empty activity");
+  assert.ok(ok, "/commentary now force-launches even on empty activity");
   assert.ok(ctx.ui.notifications.some((n) => n.msg.includes("composing")), "announced because it launched");
   // busy: second force must NOT announce
   ctx.ui.notifications.length = 0;
-  await pi.commands["summerize"].handler("now", ctx);
+  await pi.commands["commentary"].handler("now", ctx);
   assert.equal(stubState.calls.length, 1, "no second call while busy");
   assert.deepEqual(ctx.ui.notifications, [], "no composing notice while busy");
   // cleanup: abort the pending request so no timers/waits dangle
@@ -596,7 +596,7 @@ await wiringTest("wiring: status distinguishes attempt vs emission and reports f
   await pi.handlers["agent_settled"]({}, ctx);
   await waitFor(() => !!ctx.ui.widgets["pi-summerize"]);
   ctx.ui.notifications.length = 0;
-  await pi.commands["summerize"].handler("status", ctx);
+  await pi.commands["commentary"].handler("status", ctx);
   const statusMsg = ctx.ui.notifications[0]?.msg ?? "";
   assert.ok(statusMsg.includes("last attempt"), statusMsg);
   assert.ok(statusMsg.includes("last emission"), statusMsg);
@@ -604,7 +604,7 @@ await wiringTest("wiring: status distinguishes attempt vs emission and reports f
 });
 
 // ===========================================================================
-// Settings layering + dialog persistence (feature: /summerize settings dialog)
+// Settings layering + dialog persistence (feature: /commentary settings dialog)
 // Each dialog test gets an ISOLATED user file (unique path) — no cross-test
 // pid-file contamination; env override points the extension at it per-test.
 // ===========================================================================
@@ -668,10 +668,10 @@ await test("dialog: session-only scope applies in memory, writes nothing", async
   const pi = makePi();
   entryModule.default(pi);
   const { ctx, notifications } = dialogCtx("on", "this session only", "test/other", "45");
-  await pi.commands["summerize"].handler("", ctx);
+  await pi.commands["commentary"].handler("", ctx);
   assert.ok(notifications.some((n) => n.msg.includes("session-only")), JSON.stringify(notifications));
   assert.ok(!existsSync(user), "session scope writes no file");
-  await pi.commands["summerize"].handler("status", ctx);
+  await pi.commands["commentary"].handler("status", ctx);
   assert.ok(ctx.ui.notifications.some((n) => n.msg.includes("test/other") || n.msg.includes("test/m1")));
 });
 
@@ -680,7 +680,7 @@ await test("dialog: Esc abandons without changes", async () => {
   const pi = makePi();
   entryModule.default(pi);
   const { ctx, notifications } = dialogCtx(undefined, undefined);
-  await pi.commands["summerize"].handler("", ctx);
+  await pi.commands["commentary"].handler("", ctx);
   assert.deepEqual(notifications.filter((n) => n.level === "warning"), []);
   assert.ok(!existsSync(SETTINGS_USER));
 });
@@ -690,12 +690,12 @@ await test("dialog: user-scope persistence reflected in status", async () => {
   const pi = makePi();
   entryModule.default(pi);
   const { ctx, notifications } = dialogCtx("on", `user (${user})`, "test/secondary", "90");
-  await pi.commands["summerize"].handler("", ctx);
+  await pi.commands["commentary"].handler("", ctx);
   const saved = JSON.parse(readFileSync(user, "utf8"));
   assert.equal(saved.enabled, true);
   assert.equal(saved.model, "test/secondary");
   assert.equal(saved.minIntervalSeconds, 90);
-  await pi.commands["summerize"].handler("status", ctx);
+  await pi.commands["commentary"].handler("status", ctx);
   assert.ok(ctx.ui.notifications.some((n) => n.msg.includes("test/secondary")));
   rmSync(user, { force: true });
 });
@@ -705,7 +705,7 @@ await test("dialog: bad interval input refused, nothing saved", async () => {
   const pi = makePi();
   entryModule.default(pi);
   const { ctx, notifications } = dialogCtx("on", `user (${user})`, "", "-5");
-  await pi.commands["summerize"].handler("", ctx);
+  await pi.commands["commentary"].handler("", ctx);
   assert.ok(notifications.some((n) => n.msg.includes("nothing saved")), JSON.stringify(notifications));
   assert.ok(!existsSync(user));
 });
@@ -717,11 +717,11 @@ await test("astra r1: session_start reloads files via ctx.cwd and clears session
   const pi = makePi();
   entryModule.default(pi);
   const { ctx: ctx1, notifications } = dialogCtx("on", "this session only", "test/other", "");
-  await pi.commands["summerize"].handler("", ctx1);
+  await pi.commands["commentary"].handler("", ctx1);
   assert.ok(notifications.some((n) => n.msg.includes("session-only")));
   const ctx2 = makeCtx({ branch: [] }, { cwd: proj });
   await pi.handlers["session_start"]({}, ctx2);
-  await pi.commands["summerize"].handler("status", ctx2);
+  await pi.commands["commentary"].handler("status", ctx2);
   const status = ctx2.ui.notifications.map((n) => n.msg).join("\n");
   assert.ok(status.includes("proj/model"), status);
   assert.ok(status.includes("off"), status);
@@ -736,7 +736,7 @@ await test("astra r1: session-only interval normalizes (0s unthrottles, 30s thro
   const holder = { branch: makeBranch() };
   const setOverride = async (seconds) => {
     const { ctx } = dialogCtx("on", "this session only", "test/secondary", String(seconds));
-    await pi.commands["summerize"].handler("", ctx);
+    await pi.commands["commentary"].handler("", ctx);
   };
   await setOverride(0);
   await pi.handlers["turn_end"]({}, makeCtx(holder));
@@ -757,9 +757,9 @@ await test("astra r1: reset reconciles the effective config, not the stale dialo
   entryModule.default(pi);
   // off -> session-only: disabled; then on -> reset: files+overrides cleared,
   // effective defaults (on) decide and the off side effects do not linger
-  await pi.commands["summerize"].handler("", dialogCtx("off", "this session only").ctx);
+  await pi.commands["commentary"].handler("", dialogCtx("off", "this session only").ctx);
   const { ctx, notifications } = dialogCtx("on", "reset saved settings");
-  await pi.commands["summerize"].handler("", ctx);
+  await pi.commands["commentary"].handler("", ctx);
   assert.ok(notifications.some((n) => n.msg.includes("commentary is on")), JSON.stringify(notifications));
   assert.ok(!existsSync(user));
 });
@@ -769,7 +769,7 @@ await test("astra r1: invalid model spec refused before any save", async () => {
   const pi = makePi();
   entryModule.default(pi);
   const { ctx, notifications } = dialogCtx("on", "this session only", "bad model", "");
-  await pi.commands["summerize"].handler("", ctx);
+  await pi.commands["commentary"].handler("", ctx);
   assert.ok(notifications.some((n) => n.msg.includes("not a valid model") && n.msg.includes("nothing saved")), JSON.stringify(notifications));
   assert.ok(!existsSync(user));
 });
@@ -780,9 +780,9 @@ await test("astra r1: blank model means default; blank interval keeps current", 
   const pi = makePi();
   entryModule.default(pi);
   const { ctx, notifications } = dialogCtx("on", "this session only", "", "");
-  await pi.commands["summerize"].handler("", ctx);
+  await pi.commands["commentary"].handler("", ctx);
   assert.ok(notifications.some((n) => n.msg.includes("session-only")));
-  await pi.commands["summerize"].handler("status", ctx);
+  await pi.commands["commentary"].handler("status", ctx);
   const status = ctx.ui.notifications.map((n) => n.msg).join("\n");
   assert.ok(status.includes("test/m1"), "blank model override => session model: " + status);
   rmSync(user, { force: true });
