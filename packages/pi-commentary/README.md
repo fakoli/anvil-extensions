@@ -7,15 +7,16 @@
 > activity* into an ephemeral tips widget — no files written, no external
 > input, silent in JSON/print mode.
 
-**Claude-Code-style tips after the agent goes idle** — companion to
+**Usage-pattern tips after the agent goes idle** — companion to
 `pi-insights` (which owns the deterministic single status line). When the agent
-settles, pi-commentary asks a **secondary model** for one short tip: a specific
-actionable improvement or a non-obvious realization grounded in what was
-actually observed — never a narration of what happened. Rendered as a dim
-widget **above the editor**, under the insights line, behind an accent banner.
-When the model finds nothing worth surfacing, it answers `NOTHING` and the
-widget is dropped for that episode — tips only appear when there is something
-to say.
+settles, pi-commentary asks a **secondary model** for one short tip: a
+repeated pattern worth systemizing, a friction point, or a non-obvious
+realization grounded in what was actually observed — the cross-episode signal
+a live transcript can't show — never a narration of what happened. Rendered as
+a dim widget **above the editor**, under the insights line, behind an accent
+banner. When the model finds nothing worth surfacing, it answers `NOTHING` and
+the widget is dropped for that episode — tips only appear when there is
+something to say.
 
 ```
 ┌ pi-commentary (above editor, below insights) ───────────────┐
