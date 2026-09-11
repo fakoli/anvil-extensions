@@ -148,13 +148,21 @@ const LOCK_TIMEOUT_MS = 2000;
 const LOCK_RETRY_MS = 20;
 
 function withSettingsLock<T>(path: string, fn: () => T): T {
+  // parent MUST exist before the lock: a fresh settings directory otherwise
+  // yields ENOENT on the lock mkdir, which a naive catch misreads as
+  // contention and retries for the full timeout (astra round-2 repro)
+  mkdirSync(path.slice(0, path.lastIndexOf("/")), { recursive: true });
   const lockDir = `${path}.lock`;
   const deadline = Date.now() + LOCK_TIMEOUT_MS;
   for (;;) {
     try {
       mkdirSync(lockDir);
       break;
-    } catch {
+    } catch (error) {
+      // only genuine contention (EEXIST) is retried; every other filesystem
+      // error propagates immediately
+      const code = (error as NodeJS.ErrnoException)?.code;
+      if (code !== "EEXIST") throw error;
       if (Date.now() >= deadline) {
         throw new Error(`settings file busy: ${lockDir} held by another process`);
       }
@@ -180,7 +188,6 @@ export function saveSettings(scope: "user" | "project", partial: Record<string, 
       ? userPathOverride ?? USER_SETTINGS_PATH
       : join(resolve(projectDir ?? process.cwd()), ".pi", PROJECT_SETTINGS_NAME);
   return withSettingsLock(path, () => {
-    mkdirSync(path.slice(0, path.lastIndexOf("/")), { recursive: true });
     // merge with existing so the dialog only writes what it changed; refuse
     // to clobber an unreadable/malformed file (recovery is explicit)
     const { obj, error } = readSettingsFile(path);
