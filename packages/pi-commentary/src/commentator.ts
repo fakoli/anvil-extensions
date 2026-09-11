@@ -14,7 +14,9 @@ Below is the observed activity since your last tip and the most recent conversat
 Write ONE short tip (1-2 sentences, under 60 words) that is one of:
 - a repeated pattern worth systemizing: the same task, command, or request shape done more than once this episode is a candidate for a script, slash command, template, or saved instruction
 - a friction point: the same error debugged repeatedly, context re-pasted where a scoped reference would cover it, a task that took several correction rounds where a stated constraint up front would have landed first try
+- an outlier or misallocation: one step that consumed a disproportionate share of turns or tokens versus the rest of the episode, a debugging-dominant episode on code the user treats as stable, or output generated but never used — sometimes the task belongs to a script or linter, not an agent
 - a non-obvious realization about the code, the user's habits, or a risk they have not visibly acknowledged
+If several candidates exist, pick the single most significant one — the biggest outlier beats the first thing you notice.
 Concrete files, commands, and counts make a tip land; vagueness kills it.
 Never narrate what happened (the user saw it happen), never praise, never give advice you cannot tie to observed evidence.
 Rules: single paragraph only. No markdown, no headings, no bullets, no code fences. Never invent details not present in the observation.

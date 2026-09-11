@@ -216,6 +216,8 @@ test("instructions: Claude-Code-style tips, quiet signal, no markdown", () => {
   assert.ok(COMMENTARY_INSTRUCTIONS.includes("Never narrate"), "tips must not restate the transcript");
   assert.ok(COMMENTARY_INSTRUCTIONS.includes("exactly: NOTHING"), "quiet signal must be part of the contract");
   assert.ok(COMMENTARY_INSTRUCTIONS.includes("systemizing"), "tips must include pattern-systemizing candidates");
+  assert.ok(COMMENTARY_INSTRUCTIONS.includes("outlier"), "tips must include outlier/misallocation signals");
+  assert.ok(COMMENTARY_INSTRUCTIONS.includes("most significant"), "tips must prioritize over first-seen");
   assert.ok(!COMMENTARY_INSTRUCTIONS.toLowerCase().includes("claude"), "no external product branding in the prompt");
 });
 

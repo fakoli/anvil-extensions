@@ -10,8 +10,10 @@
 **Usage-pattern tips after the agent goes idle** — companion to
 `pi-insights` (which owns the deterministic single status line). When the agent
 settles, pi-commentary asks a **secondary model** for one short tip: a
-repeated pattern worth systemizing, a friction point, or a non-obvious
-realization grounded in what was actually observed — the cross-episode signal
+repeated pattern worth systemizing, a friction point, an outlier or
+misallocation (disproportionate turns/tokens, debugging-dominant episodes,
+generated-but-unused output), or a non-obvious realization grounded in what
+was actually observed — the cross-episode signal
 a live transcript can't show — never a narration of what happened. Rendered as
 a dim widget **above the editor**, under the insights line, behind an accent
 banner. When the model finds nothing worth surfacing, it answers `NOTHING` and
