@@ -1,24 +1,33 @@
-// pi-commentary — one prose commentary via a secondary model.
+// pi-commentary — one Claude-Code-style tip via a secondary model.
 // Mirrors pi-condense/src/summarizer.ts call discipline: pre-stream auth,
 // seat baseUrl override, idle+ceiling aborts with both timers cleared on every
 // exit path, classified outcomes instead of throws. Instructions ride in the
 // user message (pi-condense shape — no options.systemPrompt). No markdown in
-// the output; the paragraph is sanitized before render.
+// the output; the tip is sanitized before render. "NOTHING" suppresses the
+// widget for the episode — tips only appear when there is something to say.
 
 import { stream } from "@earendil-works/pi-ai/compat";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-export const COMMENTARY_INSTRUCTIONS = `You are a terse commentator observing an AI coding agent session for the user.
-Below is the activity since your last commentary and the most recent conversation turns.
-Write ONE short paragraph of plain prose (1-3 sentences, under 80 words) for the user:
-- what the agent just did and what it means
-- note anything unresolved or next, if evident
-- be specific (name files, commands, outcomes); no filler, no pleasantries
-Rules: single paragraph only. No markdown, no headings, no bullets, no code fences. Never invent details not present in the observation.`;
+export const COMMENTARY_INSTRUCTIONS = `You are the tips widget embedded in a terminal coding agent, in the spirit of Claude Code's contextual tips: you surface what is NOT apparent from the transcript the user just watched.
+Below is the observed activity since your last tip and the most recent conversation turns.
+Write ONE short tip (1-2 sentences, under 60 words) that is one of:
+- a specific, actionable improvement tied to something actually observed this episode (a workflow habit, a repeated command, a repo feature or command going unused)
+- a non-obvious realization about the code, the user's pattern, or a risk they have not visibly acknowledged
+Concrete files, commands, or numbers make a tip land; vagueness kills it.
+Never narrate what happened (the user saw it happen), never praise, never give advice you cannot tie to observed evidence.
+Rules: single paragraph only. No markdown, no headings, no bullets, no code fences. Never invent details not present in the observation.
+If there is genuinely nothing useful to surface this episode, reply with exactly: NOTHING`;
 
 export type CommentaryOutcome =
   | { kind: "ok"; text: string }
+  | { kind: "quiet" }
   | { kind: "auth" | "unusable" | "transient"; message: string };
+
+/** The model's explicit "nothing worth surfacing this episode" signal. */
+export function isQuietSignal(text: string): boolean {
+  return text.trim().toUpperCase() === "NOTHING";
+}
 
 export function modelLabel(model: any): string {
   if (!model) return "unknown model";
@@ -185,6 +194,7 @@ export async function runCommentary(
       .map((c: any) => c.text)
       .join("\n");
     const paragraph = sanitizeParagraph(text, config.maxOutputChars);
+    if (isQuietSignal(paragraph)) return { kind: "quiet" };
     if (!isUsableParagraph(paragraph)) return { kind: "unusable", message: "empty commentary" };
     return { kind: "ok", text: paragraph };
   } catch (error) {

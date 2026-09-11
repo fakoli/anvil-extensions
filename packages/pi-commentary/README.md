@@ -3,20 +3,26 @@
 > **Not Feynman's `/summarize`.** The command is `/commentary`. Feynman's
 > `/summarize` summarizes an *external research source* (URL/PDF/file) into a
 > durable `outputs/<slug>-summary.md` artifact with RLM windowing. pi-commentary
-> has a different contract: it automatically summarizes *this session's recent
-> turns* into an ephemeral one-paragraph widget — no files written, no external
+> has a different contract: it automatically turns *this session's recent
+> activity* into an ephemeral tips widget — no files written, no external
 > input, silent in JSON/print mode.
 
-A **small prose commentary after the agent goes idle** — companion to
+**Claude-Code-style tips after the agent goes idle** — companion to
 `pi-insights` (which owns the deterministic single status line). When the agent
-settles, pi-commentary asks a **secondary model** for a one-paragraph commentary
-on what just happened and renders it as a dim widget **below the editor**.
+settles, pi-commentary asks a **secondary model** for one short tip: a specific
+actionable improvement or a non-obvious realization grounded in what was
+actually observed — never a narration of what happened. Rendered as a dim
+widget **above the editor**, under the insights line, behind an accent banner.
+When the model finds nothing worth surfacing, it answers `NOTHING` and the
+widget is dropped for that episode — tips only appear when there is something
+to say.
 
 ```
-┌ pi-commentary ───────────────────────────────────────────────┐
-│ Tests are green after two rounds of fixes; the failing       │
-│ serialization case is covered. Next step is committing the   │
-│ package and opening the draft PR.                            │
+┌ pi-commentary (above editor, below insights) ───────────────┐
+│ ◆ tips ───────────────────────────────────────              │  ← accent label, dim rule
+│ You have rerun the suite 5 times without committing;         │  ← dim tip body
+│ smaller commits would make bisecting the flaky               │
+│ serialization case trivial.                                  │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -34,7 +40,8 @@ on what just happened and renders it as a dim widget **below the editor**.
 - **Commentary call** — one fire-and-forget secondary-model call, mirroring
   pi-condense's call discipline: pre-stream auth resolution, seat `baseUrl`
   override, idle-stall + wall-clock-ceiling aborts, classified outcomes
-  (`ok` / `auth` / `unusable` / `transient`) instead of throws.
+  (`ok` / `quiet` / `auth` / `unusable` / `transient`) instead of throws.
+  `quiet` (the model replied `NOTHING`) clears the widget for the episode.
 - **Fallback** — if the model call fails, the widget falls back to a
   deterministic one-line activity summary, so the widget is never empty after
   real activity. A notify explains the degradation once per degradation
