@@ -43,7 +43,6 @@ const {
   countActivity,
   renderObservation,
   classifyEntry,
-  EMPTY_COUNTS,
 } = await jiti.import("../src/collect.ts");
 const {
   sanitizeParagraph,
@@ -52,7 +51,7 @@ const {
   modelLabel,
   COMMENTARY_INSTRUCTIONS,
 } = await jiti.import("../src/commentator.ts");
-const { fallbackLine, banner, plainBanner, WIDGET_KEY } = await jiti.import("../src/render.ts");
+const { banner, plainBanner, WIDGET_KEY } = await jiti.import("../src/render.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -217,16 +216,20 @@ test("instructions: Claude-Code-style tips, quiet signal, no markdown", () => {
   assert.ok(COMMENTARY_INSTRUCTIONS.includes("exactly: NOTHING"), "quiet signal must be part of the contract");
   assert.ok(COMMENTARY_INSTRUCTIONS.includes("systemizing"), "tips must include pattern-systemizing candidates");
   assert.ok(COMMENTARY_INSTRUCTIONS.includes("outlier"), "tips must include outlier/misallocation signals");
-  assert.ok(COMMENTARY_INSTRUCTIONS.includes("most significant"), "tips must prioritize over first-seen");
+  assert.ok(COMMENTARY_INSTRUCTIONS.includes("highest-confidence"), "tips must prioritize by confidence, not first-seen");
   assert.ok(!COMMENTARY_INSTRUCTIONS.toLowerCase().includes("claude"), "no external product branding in the prompt");
 });
 
-test("isQuietSignal matches the NOTHING marker case-insensitively", async () => {
+test("isQuietSignal matches NOTHING and no-tip boilerplate, never real tips", async () => {
   const { isQuietSignal } = await jiti.import("../src/commentator.ts");
   assert.equal(isQuietSignal("NOTHING"), true);
   assert.equal(isQuietSignal("  nothing "), true);
-  assert.equal(isQuietSignal("Nothing worth surfacing."), false);
+  assert.equal(isQuietSignal("Nothing worth surfacing."), true);
+  assert.equal(isQuietSignal("No new insights."), true);
+  assert.equal(isQuietSignal("Nothing to report"), true);
   assert.equal(isQuietSignal(""), false);
+  assert.equal(isQuietSignal("Nothing here is a real tip"), false, "substring matches must not trigger quiet");
+  assert.equal(isQuietSignal("Rerunning the suite five times without committing is a systemization candidate."), false);
 });
 
 // --- model resolution -------------------------------------------------------
@@ -255,21 +258,38 @@ test("resolveModel rejects malformed spec with warning", () => {
   assert.ok(warning?.includes("provider/model-id"));
 });
 
-// --- fallback rendering -----------------------------------------------------
+// --- observation rendering -------------------------------------------------
 
-test("fallbackLine summarizes counts and flags failures", () => {
-  assert.equal(
-    fallbackLine({ toolCalls: 3, edits: 0, failures: 0 }),
-    "Since last commentary: 3 tool calls."
-  );
-  assert.equal(
-    fallbackLine({ toolCalls: 1, edits: 1, failures: 1 }),
-    "Since last commentary: 1 tool call, 1 edit, 1 failing call — some calls failed; the agent may retry."
-  );
-  assert.equal(fallbackLine(EMPTY_COUNTS), "Since last commentary: no activity.");
+test("renderObservation attaches tool/error evidence and keeps newest on overflow", async () => {
+  const { collectTurns, renderObservation } = await jiti.import("../src/collect.ts");
+  const branch = [
+    { type: "message", message: { role: "user", content: "fix the failing suite" } },
+    { type: "message", message: { role: "assistant", content: [{ type: "toolCall", name: "bash" }, { type: "toolCall", name: "bash" }] } },
+    { type: "toolResult", message: { role: "toolResult", isError: true, error: "Error: ENOENT no such file missing.json" } },
+    { type: "message", message: { role: "assistant", content: "found it" } },
+  ];
+  const turns = collectTurns(branch, { maxTurns: 8, maxChars: 4000 });
+  const obs = renderObservation(turns, { toolCalls: 2, edits: 0, failures: 1, messageChars: 20 }, 8000);
+  assert.ok(obs.includes("[tools: bash×2]"), `tool names present: ${obs.slice(-200)}`);
+  assert.ok(obs.includes("[errors: Error: ENOENT"), `error signature present: ${obs.slice(-200)}`);
+  assert.ok(obs.includes("message char(s)"), "counts include conversational evidence");
+  // overflow: the NEWEST turn survives, the oldest is what gets dropped
+  const tiny = renderObservation(turns, { toolCalls: 2, edits: 0, failures: 1, messageChars: 20 }, 260);
+  assert.ok(tiny.includes("found it"), `newest turn must survive overflow: ${tiny}`);
+  assert.ok(!tiny.includes("fix the failing suite"), "oldest turn is the one dropped");
 });
 
-test("banner separates commentary with accent label and dim rule", () => {
+test("countActivity counts conversational evidence", async () => {
+  const { countActivity } = await jiti.import("../src/collect.ts");
+  const counts = countActivity([
+    { type: "message", message: { role: "user", content: "x".repeat(500) } },
+    { type: "message", message: { role: "assistant", content: "y".repeat(50) } },
+  ]);
+  assert.equal(counts.toolCalls, 0);
+  assert.equal(counts.messageChars, 550);
+});
+
+test("banner separates tips with accent label and dim rule", () => {
   const theme = { fg: (color, s) => `[${color}]${s}` };
   const b = banner(theme);
   assert.ok(b.startsWith("[accent]◆ tips "), `banner label must be accent: ${b}`);
@@ -339,8 +359,15 @@ function makeCtx(branchHolder, overrides = {}) {
     sessionManager: { getBranch: () => branchHolder.branch },
     ui: {
       widgets: {},
+      widgetOrder: [],
       notifications: [],
-      setWidget(key, content, opts) { if (content === undefined) delete this.widgets[key]; else this.widgets[key] = { content, opts }; },
+      // Mirrors the installed host: existing key is deleted then re-inserted,
+      // so re-setting a widget moves it to the END of the render order.
+      setWidget(key, content, opts) {
+        this.widgetOrder = this.widgetOrder.filter((k) => k !== key);
+        if (content === undefined) delete this.widgets[key];
+        else { this.widgets[key] = { content, opts }; this.widgetOrder.push(key); }
+      },
       notify(msg, level) { this.notifications.push({ msg, level }); },
     },
   };
@@ -379,17 +406,65 @@ async function wiringTest(name, fn) {
   }
 }
 
-await wiringTest("wiring: NOTHING tip clears the widget instead of showing filler", async () => {
-  stubState.calls = []; stubState.defer = null; stubState.text = "NOTHING";
+await wiringTest("wiring: useful tip then NOTHING clears the existing widget", async () => {
+  stubState.calls = []; stubState.defer = null; stubState.text = "a genuinely useful tip";
   const pi = makePi();
   entryModule.default(pi);
   const holder = { branch: makeBranch() };
   const ctx = makeCtx(holder);
   await pi.handlers["turn_end"]({}, ctx);
   await pi.handlers["agent_settled"]({}, ctx);
-  assert.ok(await waitFor(() => stubState.calls.length === 1), "episode must consult the model");
-  await waitFor(() => true, 40);
+  assert.ok(await waitFor(() => Object.keys(ctx.ui.widgets).length === 1), "first episode must render a tip");
+  // Next episode: the model has nothing worth surfacing (substantial new
+  // conversational activity satisfies eligibility without tool calls)
+  holder.branch.push({ type: "message", message: { role: "user", content: "next task with substantial new context for the tip engine: ".repeat(12) } });
+  stubState.text = "NOTHING";
+  await pi.handlers["turn_end"]({}, ctx);
+  assert.deepEqual(ctx.ui.widgetOrder, [], "a new agent run drops the previous tip immediately");
+  await pi.handlers["agent_settled"]({}, ctx);
+  assert.ok(await waitFor(() => stubState.calls.length === 2), "second episode must consult the model");
+  assert.ok(await waitFor(() => stubState.calls.length === 2 && Object.keys(ctx.ui.widgets).length === 0), "NOTHING must suppress the widget entirely");
   assert.deepEqual(Object.keys(ctx.ui.widgets), [], "NOTHING must suppress the widget entirely");
+  await pi.handlers["session_shutdown"]({}, ctx);
+});
+
+await wiringTest("wiring: stale completion before next turn_end restores consumed activity (astra P1)", async () => {
+  stubState.calls = []; stubState.defer = null; stubState.text = "tip";
+  useIsolatedUserFile();
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const ctx = makeCtx(holder);
+  stubState.defer = new Promise(() => {}); // hold the request BEFORE launching
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  assert.ok(await waitFor(() => stubState.calls.length === 1), "launch");
+  // Branch grows (new user message) while the request is still in flight,
+  // and the stale result lands BEFORE the next turn_end fires.
+  holder.branch.push({ type: "message", message: { role: "user", content: "changed direction mid-flight" } });
+  stubState.defer = null;
+  await new Promise((r) => setTimeout(r, 30));
+  assert.deepEqual(Object.keys(ctx.ui.widgets), [], "stale result must not render");
+  // A subsequent text-only episode must still launch — restored activity
+  // (the tool calls from the dropped request) satisfies eligibility.
+  stubState.text = "recovered tip";
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  assert.ok(await waitFor(() => stubState.calls.length === 2), "restored activity must re-offer, not vanish");
+  await pi.handlers["session_shutdown"]({}, ctx);
+});
+
+await wiringTest("wiring: substantive conversation without tool calls is eligible (astra #6)", async () => {
+  stubState.calls = []; stubState.defer = null; stubState.text = "offline correction tip";
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: [{ type: "message", message: { role: "user", content: "remember the build must work offline. ".repeat(12) } }] };
+  const ctx = makeCtx(holder);
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  assert.ok(await waitFor(() => stubState.calls.length === 1), "text-only friction episodes must be eligible");
+  await waitFor(() => Object.keys(ctx.ui.widgets).length === 1, 60);
+  assert.ok(ctx.ui.widgets["pi-commentary"], "conversational tip renders");
   await pi.handlers["session_shutdown"]({}, ctx);
 });
 
@@ -509,7 +584,7 @@ await wiringTest("wiring: activity during pending call drops the stale paragraph
   assert.deepEqual(Object.keys(ctx.ui.widgets), [], "stale result must not be rendered");
 });
 
-await wiringTest("wiring: model outage falls back once, not per failure", async () => {
+await wiringTest("wiring: model outage goes silent — no fallback filler, one notice for auth", async () => {
   stubState.calls = [];
   const pi = makePi();
   entryModule.default(pi);
@@ -523,17 +598,20 @@ await wiringTest("wiring: model outage falls back once, not per failure", async 
   });
   await pi.handlers["turn_end"]({}, ctx);
   await pi.handlers["agent_settled"]({}, ctx);
-  const first = await waitFor(() => !!ctx.ui.widgets["pi-commentary"]);
-  assert.ok(first, "fallback widget shown");
-  assert.ok(ctx.ui.notifications.some((n) => n.msg.includes("commentary unavailable")), "one degradation notice");
+  await new Promise((r) => setTimeout(r, 40));
+  assert.deepEqual(Object.keys(ctx.ui.widgets), [], "outage must clear the widget — no counts filler");
+  assert.ok(ctx.ui.notifications.some((n) => n.msg.includes("commentary unavailable")), "one actionable auth notice");
   const noticeCount = ctx.ui.notifications.filter((n) => n.msg.includes("commentary unavailable")).length;
-  // second episode: fallback again, but no repeated notice
+  assert.equal(noticeCount, 1);
+  await pi.commands["commentary"].handler("status", ctx);
+  assert.ok(JSON.stringify(ctx.ui.notifications).includes("auth"), "status records the failure");
+  // second episode: silent again, no repeated notice
   holder.branch.push({ type: "message", message: { role: "assistant", content: [{ type: "toolCall", name: "read" }] } });
   await pi.handlers["turn_end"]({}, ctx);
   await pi.handlers["agent_settled"]({}, ctx);
   await new Promise((r) => setTimeout(r, 30));
+  assert.deepEqual(Object.keys(ctx.ui.widgets), [], "still silent on repeat failure");
   const noticeCountAfter = ctx.ui.notifications.filter((n) => n.msg.includes("commentary unavailable")).length;
-  assert.equal(noticeCount, 1);
   assert.equal(noticeCountAfter, 1, "no repeat notice while degraded");
 });
 
@@ -596,7 +674,7 @@ await wiringTest("wiring: same-length branch replacement drops the stale paragra
 });
 
 await wiringTest("wiring: widget renders above the editor (default placement, below insights)", async () => {
-  stubState.calls = []; stubState.text = "placed paragraph";
+  stubState.calls = []; stubState.text = "a placed paragraph for the tip widget";
   const pi = makePi();
   entryModule.default(pi);
   const holder = { branch: makeBranch() };
@@ -607,6 +685,11 @@ await wiringTest("wiring: widget renders above the editor (default placement, be
   const widget = ctx.ui.widgets["pi-commentary"];
   assert.ok(widget, "widget key must be pi-commentary");
   assert.equal(widget.opts?.placement, undefined, "placement must default to aboveEditor — no belowEditor option may be passed");
+  // Host semantics: an insights re-set AFTER the tip flips the stack order.
+  ctx.ui.setWidget("pi-insights", ["insights"]);
+  assert.deepEqual(ctx.ui.widgetOrder, ["pi-commentary", "pi-insights"], "documented flip under delete+reinsert");
+  await pi.handlers["turn_end"]({}, ctx);
+  assert.deepEqual(ctx.ui.widgetOrder, ["pi-insights"], "tip expires with the run — no lingering flip");
   await pi.handlers["session_shutdown"]({}, ctx);
 });
 

@@ -1,7 +1,9 @@
-// pi-commentary — a small prose commentary after the agent goes idle.
+// pi-commentary — a usage-pattern tips widget after the agent goes idle.
 // Companion to pi-insights (which owns the deterministic status line): when
-// the agent settles, this extension asks a secondary model for a ONE-paragraph
-// commentary on what just happened and renders it as a widget below the editor.
+// the agent settles, this extension asks a secondary model for ONE short tip
+// (systemizing pattern, friction point, outlier, non-obvious realization) and
+// renders it as an accent-bannered widget ABOVE the editor, below insights.
+// Silence on quiet/failure — tips appear only when there is something to say.
 //
 // Contract: observational + fire-and-forget. Never mutates tool results, never
 // injects LLM-visible context, never writes memory. In print/JSON mode it is
@@ -11,7 +13,7 @@ import { readConfig, type CommentaryConfig } from "./src/config.js";
 import { loadFileSettings, applyFileSettings, saveSettings, clearSettings, validateSettingsObject, USER_SETTINGS_PATH } from "./src/settings.js";
 import { collectTurns, countActivity, renderObservation } from "./src/collect.js";
 import { resolveModel, runCommentary, modelLabel, COMMENTARY_INSTRUCTIONS } from "./src/commentator.js";
-import { WIDGET_KEY, commentaryWidget, wrapPlain, fallbackLine, plainBanner } from "./src/render.js";
+import { WIDGET_KEY, commentaryWidget, wrapPlain, plainBanner } from "./src/render.js";
 
 interface BranchMark {
   length: number;
@@ -40,7 +42,7 @@ interface ActiveRequest {
   abort: AbortController;
   branchMark: BranchMark;
   /** State to restore if superseded before display: consumed-but-unshown activity must not be lost. */
-  restore: { consumed: BranchMark | null; lastCommentaryAt: number | null };
+  restore: { consumed: BranchMark | null };
 }
 
 interface State {
@@ -53,6 +55,8 @@ interface State {
   active: ActiveRequest | null;
   /** Activity entries already covered by a commentary (or its fallback). */
   consumed: BranchMark | null;
+  /** Launch time of the most recent commentary attempt (attempt-rate floor). */
+  lastCommentaryAt: number | null;
   degradedNotified: boolean;
   warnedModel: boolean;
   /** /commentary dialog, session scope: applied over files, cleared at session_start. */
@@ -75,6 +79,7 @@ export default function (pi: ExtensionAPI): void {
     lastText: "",
     active: null,
     consumed: null,
+    lastCommentaryAt: null,
     degradedNotified: false,
     warnedModel: false,
     sessionOverrides: {},
@@ -107,13 +112,13 @@ export default function (pi: ExtensionAPI): void {
     state.lastText = "";
   }
 
-  /** Invalidate the in-flight request. `restoreActivity` re-offers consumed-but-unshown activity (supersede); user-disable does not. */
+  /** Invalidate the in-flight request. `restoreActivity` re-offers consumed-but-unshown activity (supersede); user-disable does not.
+   * The attempt clock is deliberately NOT restored — a superseded call still cost an attempt. */
   function invalidateActive(restoreActivity: boolean): void {
     const active = state.active;
     if (!active) return;
     if (restoreActivity) {
       state.consumed = active.restore.consumed;
-      state.lastCommentaryAt = active.restore.lastCommentaryAt;
     }
     state.active = null;
     active.abort.abort();
@@ -135,13 +140,14 @@ export default function (pi: ExtensionAPI): void {
       return false;
     }
     const counts = countActivity(deltaSince(branch, state.consumed));
-    if (!force && counts.toolCalls === 0) return false; // no NEW activity to comment on
+    // Eligibility: real tool activity, or substantive conversation (pure-chat
+    // episodes can carry correctable friction the model should see).
+    if (!force && counts.toolCalls === 0 && counts.messageChars < 400) return false;
 
     const turns = collectTurns(branch, { maxTurns: 8, maxChars: config.maxInputChars });
     // Consume the counted slice up-front. If the request is later superseded
     // (not disabled), the restore point re-offers it so nothing is silently lost.
     const consumedBefore = state.consumed;
-    const lastAttemptBefore = state.lastCommentaryAt;
     state.consumed = markOf(branch);
     state.turnsSinceCommentary = 0;
     state.lastCommentaryAt = now;
@@ -151,7 +157,7 @@ export default function (pi: ExtensionAPI): void {
     state.active = {
       abort,
       branchMark: markOf(branch),
-      restore: { consumed: consumedBefore, lastCommentaryAt: lastAttemptBefore },
+      restore: { consumed: consumedBefore },
     };
 
     void (async () => {
@@ -181,7 +187,17 @@ export default function (pi: ExtensionAPI): void {
         } catch {
           branchNow = null;
         }
-        if (!branchNow || !isSameBranch(branchNow, current.branchMark)) return;
+        if (!branchNow || !isSameBranch(branchNow, current.branchMark)) {
+          // Stale on arrival: the branch moved while the request was in flight.
+          // Restore the consumed-but-unshown activity ONLY if no newer request
+          // has launched (turn_end would have restored it via invalidateActive;
+          // rolling back over a newer launch would discard ITS consumption).
+          if (state.active === current) {
+            state.consumed = current.restore.consumed;
+            state.active = null;
+          }
+          return;
+        }
         state.active = null;
         if (outcome.kind === "ok") {
           state.degradedNotified = false;
@@ -194,23 +210,19 @@ export default function (pi: ExtensionAPI): void {
           state.degradedNotified = false;
           state.lastFailure = null;
           state.lastEmissionAt = Date.now();
-          state.lastText = "";
-          try {
-            if (canDisplay(ctx)) ctx.ui.setWidget(WIDGET_KEY, undefined);
-          } catch {
-            // display failures never fail the agent turn
-          }
+          clearWidget(ctx);
         } else {
-          // deterministic fallback keeps the widget alive without touching the fleet
+          // Silence on failure: a counts line is narration filler in a tips
+          // product (insights owns counts) — an empty optional widget is less
+          // distracting than advice whose context has expired or diagnostics
+          // that teach users to ignore the banner.
           state.lastEmissionAt = Date.now();
-          show(ctx, fallbackLine(counts));
-          if (outcome.kind !== "unusable") {
-            state.lastFailure = `${outcome.kind}: ${outcome.message}`;
-            if (!state.degradedNotified) {
-              state.degradedNotified = true; // once per degradation episode, not per failure
-              if (canDisplay(ctx)) {
-                ctx.ui.notify(`pi-commentary: commentary unavailable (${outcome.message}); showed activity summary`, "info");
-              }
+          state.lastFailure = `${outcome.kind}: ${outcome.message}`;
+          clearWidget(ctx);
+          if (outcome.kind === "auth" && !state.degradedNotified) {
+            state.degradedNotified = true; // actionable config problem: say it once
+            if (canDisplay(ctx)) {
+              ctx.ui.notify(`pi-commentary: commentary unavailable (${outcome.message}); run /commentary to reconfigure`, "warning");
             }
           }
         }
@@ -227,14 +239,18 @@ export default function (pi: ExtensionAPI): void {
 
   // --- signals --------------------------------------------------------------
 
-  pi.on("turn_end", async () => {
+  pi.on("turn_end", async (_event, ctx) => {
     try {
       // A new agent run started: any pending commentary is stale. Its consumed
       // activity is restored so the next settle re-offers old + new together.
       invalidateActive(true);
       state.turnsSinceCommentary += 1;
+      // The previous tip's context is spent once a new run begins — drop it
+      // (also re-anchors placement: insights re-inserts its widget on this
+      // event, which would otherwise flip the above-editor stack order).
+      clearWidget(ctx);
     } catch {
-      // counting is best-effort
+      // counting and display are best-effort
     }
   });
 

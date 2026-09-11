@@ -16,20 +16,36 @@ Write ONE short tip (1-2 sentences, under 60 words) that is one of:
 - a friction point: the same error debugged repeatedly, context re-pasted where a scoped reference would cover it, a task that took several correction rounds where a stated constraint up front would have landed first try
 - an outlier or misallocation: one step that consumed a disproportionate share of turns or tokens versus the rest of the episode, a debugging-dominant episode on code the user treats as stable, or output generated but never used — sometimes the task belongs to a script or linter, not an agent
 - a non-obvious realization about the code, the user's habits, or a risk they have not visibly acknowledged
-If several candidates exist, pick the single most significant one — the biggest outlier beats the first thing you notice.
+If several candidates exist, pick the one with the highest-confidence actionable reduction in future cost or risk — a big outlier beats a minor nit.
+Negative example: rerunning tests after separate edits is normal verification, not waste; do not flag it.
 Concrete files, commands, and counts make a tip land; vagueness kills it.
 Never narrate what happened (the user saw it happen), never praise, never give advice you cannot tie to observed evidence.
 Rules: single paragraph only. No markdown, no headings, no bullets, no code fences. Never invent details not present in the observation.
-If there is genuinely nothing useful to surface this episode, reply with exactly: NOTHING`;
+If there is genuinely nothing useful to surface this episode — including when the evidence is incomplete or the issue is already resolved — reply with exactly: NOTHING`;
 
 export type CommentaryOutcome =
   | { kind: "ok"; text: string }
   | { kind: "quiet" }
   | { kind: "auth" | "unusable" | "transient"; message: string };
 
-/** The model's explicit "nothing worth surfacing this episode" signal. */
+/** The model's explicit "nothing worth surfacing this episode" signal.
+ * Exact NOTHING plus a small fixed set of no-tip boilerplate phrases; never a
+ * substring match, so real tips containing these words still surface. */
+const QUIET_PHRASES = new Set([
+  "nothing",
+  "no tips",
+  "no tip",
+  "no tip this episode",
+  "no new insights",
+  "nothing to report",
+  "nothing worth surfacing",
+  "nothing worth flagging",
+  "nothing to surface",
+]);
+
 export function isQuietSignal(text: string): boolean {
-  return text.trim().toUpperCase() === "NOTHING";
+  const normalized = text.trim().toLowerCase().replace(/[.!]+$/, "");
+  return QUIET_PHRASES.has(normalized);
 }
 
 export function modelLabel(model: any): string {
