@@ -70,7 +70,7 @@ something to say.
 |---|---|---|
 | `PI_COMMENTARY` | `on` | `off` disables everything |
 | `PI_COMMENTARY_MODEL` | `default` | `provider/model-id` for commentary. Recommended for fleet setups: `anvil/llm.secondary` so commentary never touches the primary model. `default` uses the session model. |
-| `PI_COMMENTARY_MIN_INTERVAL_SECONDS` | `120` | minimum seconds between attempts — the attempt-rate floor (0–3600). Stamp is at launch; superseded attempts do not roll it back. |
+| `PI_COMMENTARY_MIN_INTERVAL_SECONDS` | `300` | minimum seconds between attempts — the attempt-rate floor (0–3600). Stamp is at launch; superseded attempts do not roll it back. |
 | `PI_COMMENTARY_TIMEOUT_SECONDS` | `45` | streaming wall-clock ceiling per call; auth resolution is excluded (5–600) |
 | `PI_COMMENTARY_IDLE_TIMEOUT_SECONDS` | `20` | stall ceiling, reset on every stream event (2–300) |
 | `PI_COMMENTARY_MAX_INPUT_CHARS` | `6000` | hard cap on the observation payload (500–100000) |

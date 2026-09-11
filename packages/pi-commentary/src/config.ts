@@ -23,7 +23,7 @@ export interface CommentaryConfig {
 }
 
 const DEFAULTS = {
-  minIntervalSeconds: 120,
+  minIntervalSeconds: 300,
   maxTimeoutSeconds: 45,
   idleTimeoutSeconds: 20,
   maxInputChars: 6000,
