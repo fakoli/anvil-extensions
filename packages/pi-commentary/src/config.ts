@@ -1,8 +1,8 @@
-// pi-summerize — configuration from environment variables.
+// pi-commentary — configuration from environment variables.
 // Mirrors the repo-wide env-config conventions (pi-insights, pi-condense).
 
 export interface SummerizeConfig {
-  /** Master switch. `PI_SUMMERIZE=off` disables tracking and generation. */
+  /** Master switch. `PI_COMMENTARY=off` disables tracking and generation. */
   enabled: boolean;
   /**
    * Model for commentary, as "provider/model-id". "default" resolves to the
@@ -39,13 +39,13 @@ function num(name: string, fallbackSeconds: number, min: number, max: number): n
 export function readConfig(): SummerizeConfig {
   const env = process.env;
   return {
-    enabled: (env.PI_SUMMERIZE ?? "on").toLowerCase() !== "off",
-    model: env.PI_SUMMERIZE_MODEL ?? "default",
-    minIntervalMs: num("PI_SUMMERIZE_MIN_INTERVAL_SECONDS", DEFAULTS.minIntervalSeconds, 0, 3600) * 1000,
-    maxTimeoutMs: num("PI_SUMMERIZE_TIMEOUT_SECONDS", DEFAULTS.maxTimeoutSeconds, 5, 600) * 1000,
-    idleTimeoutMs: num("PI_SUMMERIZE_IDLE_TIMEOUT_SECONDS", DEFAULTS.idleTimeoutSeconds, 2, 300) * 1000,
-    maxInputChars: num("PI_SUMMERIZE_MAX_INPUT_CHARS", DEFAULTS.maxInputChars, 500, 100_000),
-    maxOutputChars: num("PI_SUMMERIZE_MAX_OUTPUT_CHARS", DEFAULTS.maxOutputChars, 100, 4000),
+    enabled: (env.PI_COMMENTARY ?? "on").toLowerCase() !== "off",
+    model: env.PI_COMMENTARY_MODEL ?? "default",
+    minIntervalMs: num("PI_COMMENTARY_MIN_INTERVAL_SECONDS", DEFAULTS.minIntervalSeconds, 0, 3600) * 1000,
+    maxTimeoutMs: num("PI_COMMENTARY_TIMEOUT_SECONDS", DEFAULTS.maxTimeoutSeconds, 5, 600) * 1000,
+    idleTimeoutMs: num("PI_COMMENTARY_IDLE_TIMEOUT_SECONDS", DEFAULTS.idleTimeoutSeconds, 2, 300) * 1000,
+    maxInputChars: num("PI_COMMENTARY_MAX_INPUT_CHARS", DEFAULTS.maxInputChars, 500, 100_000),
+    maxOutputChars: num("PI_COMMENTARY_MAX_OUTPUT_CHARS", DEFAULTS.maxOutputChars, 100, 4000),
   };
 }
 

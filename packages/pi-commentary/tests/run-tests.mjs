@@ -1,4 +1,4 @@
-// pi-summerize — logic tests. Plain node + jiti (no bun dependency on this host).
+// pi-commentary — logic tests. Plain node + jiti (no bun dependency on this host).
 // Run: node tests/run-tests.mjs
 // jiti resolves from the repo's own node_modules, falling back to the pi
 // harness install (PI_INSTALL_DIR). No absolute author paths are required.
@@ -20,7 +20,7 @@ try {
 
 const base = fileURLToPath(new URL("../index.ts", import.meta.url));
 const stubState = { calls: [], text: undefined, defer: null, stopReason: undefined, throwInResult: null };
-globalThis.__summerizeStub = stubState;
+globalThis.__commentaryStub = stubState;
 
 // ONE jiti instance for the whole suite: the model stream is stubbed for all
 // tests (unit tests only exercise pure functions; wiring tests drive the
@@ -94,7 +94,7 @@ function withEnv(env, fn) {
 }
 
 test("readConfig defaults", () => {
-  withEnv({ PI_SUMMERIZE_X: "ignore" }, () => {
+  withEnv({ PI_COMMENTARY_X: "ignore" }, () => {
     const c = readConfig();
     assert.equal(c.enabled, true);
     assert.equal(c.model, "default");
@@ -108,11 +108,11 @@ test("readConfig defaults", () => {
 test("readConfig parses and clamps", () => {
   withEnv(
     {
-      PI_SUMMERIZE: "off",
-      PI_SUMMERIZE_MODEL: "anvil/llm.secondary",
-      PI_SUMMERIZE_MIN_INTERVAL_SECONDS: "-5",
-      PI_SUMMERIZE_TIMEOUT_SECONDS: "99999",
-      PI_SUMMERIZE_MAX_OUTPUT_CHARS: "50",
+      PI_COMMENTARY: "off",
+      PI_COMMENTARY_MODEL: "anvil/llm.secondary",
+      PI_COMMENTARY_MIN_INTERVAL_SECONDS: "-5",
+      PI_COMMENTARY_TIMEOUT_SECONDS: "99999",
+      PI_COMMENTARY_MAX_OUTPUT_CHARS: "50",
     },
     () => {
       const c = readConfig();
@@ -279,11 +279,11 @@ test("sanitizeParagraph strips word-boundary underscores but keeps intraword one
 // ===========================================================================
 
 // index.ts calls readConfig() at import time — set wiring env first.
-const SETTINGS_USER = join(tmpdir(), `pi-summerize-user-${process.pid}.json`);
-process.env.PI_SUMMERIZE = "on";
-process.env.PI_SUMMERIZE_MIN_INTERVAL_SECONDS = "0";
+const SETTINGS_USER = join(tmpdir(), `pi-commentary-user-${process.pid}.json`);
+process.env.PI_COMMENTARY = "on";
+process.env.PI_COMMENTARY_MIN_INTERVAL_SECONDS = "0";
 // settings-dialog tests must never touch the REAL user settings file
-process.env.PI_SUMMERIZE_USER_SETTINGS = SETTINGS_USER;
+process.env.PI_COMMENTARY_USER_SETTINGS = SETTINGS_USER;
 const entryModule = await jiti.import("../index.ts");
 
 function makeBranch() {
@@ -360,9 +360,9 @@ await wiringTest("wiring: settled after a turn launches model call and sets TUI 
   const ctx = makeCtx(holder);
   await pi.handlers["turn_end"]({}, ctx);
   await pi.handlers["agent_settled"]({}, ctx);
-  const ok = await waitFor(() => stubState.calls.length === 1 && !!ctx.ui.widgets["pi-summerize"]);
+  const ok = await waitFor(() => stubState.calls.length === 1 && !!ctx.ui.widgets["pi-commentary"]);
   assert.ok(ok, "expected one model call and a widget");
-  assert.ok(typeof ctx.ui.widgets["pi-summerize"].content === "function", "TUI widget uses component factory");
+  assert.ok(typeof ctx.ui.widgets["pi-commentary"].content === "function", "TUI widget uses component factory");
   // observation reflects the real toolResult-entry failure shape
   const sent = stubState.calls[0].options.messages[0].content[0].text;
   assert.ok(sent.includes("2 tool call(s)"), `sent: ${sent.slice(0, 120)}`);
@@ -393,9 +393,9 @@ await wiringTest("wiring: RPC receives plain string lines, not a factory", async
   const ctx = makeCtx(holder, { mode: "rpc" });
   await pi.handlers["turn_end"]({}, ctx);
   await pi.handlers["agent_settled"]({}, ctx);
-  const ok = await waitFor(() => !!ctx.ui.widgets["pi-summerize"]);
+  const ok = await waitFor(() => !!ctx.ui.widgets["pi-commentary"]);
   assert.ok(ok);
-  const content = ctx.ui.widgets["pi-summerize"].content;
+  const content = ctx.ui.widgets["pi-commentary"].content;
   assert.ok(Array.isArray(content) && content.every((l) => typeof l === "string"), "RPC widget must be string[]");
   assert.ok(content.join(" ").includes("RPC paragraph"));
 });
@@ -482,7 +482,7 @@ await wiringTest("wiring: model outage falls back once, not per failure", async 
   });
   await pi.handlers["turn_end"]({}, ctx);
   await pi.handlers["agent_settled"]({}, ctx);
-  const first = await waitFor(() => !!ctx.ui.widgets["pi-summerize"]);
+  const first = await waitFor(() => !!ctx.ui.widgets["pi-commentary"]);
   assert.ok(first, "fallback widget shown");
   assert.ok(ctx.ui.notifications.some((n) => n.msg.includes("commentary unavailable")), "one degradation notice");
   const noticeCount = ctx.ui.notifications.filter((n) => n.msg.includes("commentary unavailable")).length;
@@ -594,7 +594,7 @@ await wiringTest("wiring: status distinguishes attempt vs emission and reports f
   });
   await pi.handlers["turn_end"]({}, ctx);
   await pi.handlers["agent_settled"]({}, ctx);
-  await waitFor(() => !!ctx.ui.widgets["pi-summerize"]);
+  await waitFor(() => !!ctx.ui.widgets["pi-commentary"]);
   ctx.ui.notifications.length = 0;
   await pi.commands["commentary"].handler("status", ctx);
   const statusMsg = ctx.ui.notifications[0]?.msg ?? "";
@@ -635,7 +635,7 @@ await test("loadFileSettings layers project over user with provenance and reject
   const proj = join(base, "..", "tests", `tmp-proj-${process.pid}`);
   mkdirSync(join(proj, ".pi"), { recursive: true });
   writeFileSync(user, JSON.stringify({ enabled: false, model: "anvil/llm.secondary" }));
-  writeFileSync(join(proj, ".pi", "pi-summerize.json"), JSON.stringify({ enabled: true, bogusKey: 1 }));
+  writeFileSync(join(proj, ".pi", "pi-commentary.json"), JSON.stringify({ enabled: true, bogusKey: 1 }));
   const loaded = settingsMod.loadFileSettings(proj, user);
   assert.ok(loaded.sources.some((s) => s.startsWith("user:")), JSON.stringify(loaded.sources));
   assert.ok(loaded.sources.some((s) => s.startsWith("project:")));
@@ -711,9 +711,9 @@ await test("dialog: bad interval input refused, nothing saved", async () => {
 });
 
 await test("astra r1: session_start reloads files via ctx.cwd and clears session overrides", async () => {
-  const proj = join(tmpdir(), `pi-summerize-lifetime-${process.pid}`);
+  const proj = join(tmpdir(), `pi-commentary-lifetime-${process.pid}`);
   mkdirSync(join(proj, ".pi"), { recursive: true });
-  writeFileSync(join(proj, ".pi", "pi-summerize.json"), JSON.stringify({ enabled: false, model: "proj/model" }));
+  writeFileSync(join(proj, ".pi", "pi-commentary.json"), JSON.stringify({ enabled: false, model: "proj/model" }));
   try {
     const pi = makePi();
     entryModule.default(pi);
@@ -781,7 +781,7 @@ await test("astra r2: reset with OPPOSITE dialog choice reconciles to effective 
     await pi.commands["commentary"].handler("", dialogCtx("off", "this session only").ctx);
     stubState.defer = null; // release; the aborted request resolves with stopReason "aborted"
     await new Promise((r) => setTimeout(r, 30));
-    assert.ok(!ctxB.ui.widgets["pi-summerize"], "aborted in-flight request must not show a widget");
+    assert.ok(!ctxB.ui.widgets["pi-commentary"], "aborted in-flight request must not show a widget");
     // Stale-choice disagreement: dialog picks "off" + reset while the effective
     // config is on. The pick must NOT disable commentary — post-reset effective
     // state wins, and generation actually resumes (not just the notification).
@@ -837,11 +837,11 @@ await test("astra r2: blank model means default; blank interval keeps the file v
 
 await test("astra r2: save creates missing settings parent dir without 2s contention retry", async () => {
   const { saveSettings } = await jiti.import("../src/settings.ts");
-  const freshDir = join(tmpdir(), `pi-summerize-fresh-${process.pid}`);
+  const freshDir = join(tmpdir(), `pi-commentary-fresh-${process.pid}`);
   rmSync(freshDir, { recursive: true, force: true });
   try {
     const start = Date.now();
-    const path = saveSettings("user", { enabled: false }, undefined, join(freshDir, "nested", "pi-summerize.json"));
+    const path = saveSettings("user", { enabled: false }, undefined, join(freshDir, "nested", "pi-commentary.json"));
     const elapsed = Date.now() - start;
     assert.ok(existsSync(path), "save must create the missing parent dir and file");
     assert.equal(JSON.parse(readFileSync(path, "utf8")).enabled, false);
@@ -850,7 +850,7 @@ await test("astra r2: save creates missing settings parent dir without 2s conten
     rmSync(freshDir, { recursive: true, force: true });
   }
   // a BARE RELATIVE filename resolves its parent to "." (dirname, not string slicing)
-  const bareDir = join(tmpdir(), `pi-summerize-bare-${process.pid}`);
+  const bareDir = join(tmpdir(), `pi-commentary-bare-${process.pid}`);
   mkdirSync(bareDir, { recursive: true });
   const oldCwd = process.cwd();
   process.chdir(bareDir);
