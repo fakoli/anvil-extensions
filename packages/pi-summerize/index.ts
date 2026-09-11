@@ -55,7 +55,7 @@ interface State {
   consumed: BranchMark | null;
   degradedNotified: boolean;
   warnedModel: boolean;
-  /** /summerize dialog, session scope: applied over files, cleared at session_start. */
+  /** /commentary dialog, session scope: applied over files, cleared at session_start. */
   sessionOverrides: Partial<SummerizeConfig>;
   /** Bumped at session boundaries; an in-flight dialog aborts when it changes. */
   dialogGeneration: number;
@@ -64,7 +64,7 @@ interface State {
 export default function (pi: ExtensionAPI): void {
   const config: SummerizeConfig = readConfig();
   // Layered file settings (user/project) win over env; session overrides land
-  // via the /summerize dialog and persist per its scope choice.
+  // via the /commentary dialog and persist per its scope choice.
   applyFileSettings(config, loadFileSettings());
   const state: State = {
     sessionOn: true,
@@ -204,7 +204,7 @@ export default function (pi: ExtensionAPI): void {
         }
       } catch (error) {
         // fire-and-forget: never fail the settled turn, but keep the reason
-        // inspectable via /summerize status
+        // inspectable via /commentary status
         state.lastFailure = error instanceof Error ? error.message : String(error);
       } finally {
         if (state.active && state.active.abort === abort) state.active = null;
@@ -267,7 +267,7 @@ export default function (pi: ExtensionAPI): void {
     }
   });
 
-  // --- settings dialog (/summerize bare) ------------------------------------
+  // --- settings dialog (/commentary bare) ------------------------------------
 
   /** Live-reload: defaults+env → user+project files (ctx.cwd) → session overrides. */
   function reloadConfig(ctx: ExtensionContext, projectDir = ctx?.cwd): void {
@@ -397,8 +397,8 @@ export default function (pi: ExtensionAPI): void {
 
   // --- command --------------------------------------------------------------
 
-  pi.registerCommand("summerize", {
-    description: "Configure commentary (TUI dialog); /summerize on|off|status|now",
+  pi.registerCommand("commentary", {
+    description: "Configure commentary (TUI dialog); /commentary on|off|status|now",
     handler: async (args, ctx) => {
       const arg = (args ?? "").trim().toLowerCase();
       if (arg === "off") {
