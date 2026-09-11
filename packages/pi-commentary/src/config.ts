@@ -1,7 +1,7 @@
 // pi-commentary — configuration from environment variables.
 // Mirrors the repo-wide env-config conventions (pi-insights, pi-condense).
 
-export interface SummerizeConfig {
+export interface CommentaryConfig {
   /** Master switch. `PI_COMMENTARY=off` disables tracking and generation. */
   enabled: boolean;
   /**
@@ -23,7 +23,7 @@ export interface SummerizeConfig {
 }
 
 const DEFAULTS = {
-  minIntervalSeconds: 120,
+  minIntervalSeconds: 300,
   maxTimeoutSeconds: 45,
   idleTimeoutSeconds: 20,
   maxInputChars: 6000,
@@ -36,7 +36,7 @@ function num(name: string, fallbackSeconds: number, min: number, max: number): n
   return Math.min(max, Math.max(min, raw));
 }
 
-export function readConfig(): SummerizeConfig {
+export function readConfig(): CommentaryConfig {
   const env = process.env;
   return {
     enabled: (env.PI_COMMENTARY ?? "on").toLowerCase() !== "off",

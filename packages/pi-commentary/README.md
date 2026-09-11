@@ -3,20 +3,29 @@
 > **Not Feynman's `/summarize`.** The command is `/commentary`. Feynman's
 > `/summarize` summarizes an *external research source* (URL/PDF/file) into a
 > durable `outputs/<slug>-summary.md` artifact with RLM windowing. pi-commentary
-> has a different contract: it automatically summarizes *this session's recent
-> turns* into an ephemeral one-paragraph widget — no files written, no external
+> has a different contract: it automatically turns *this session's recent
+> activity* into an ephemeral tips widget — no files written, no external
 > input, silent in JSON/print mode.
 
-A **small prose commentary after the agent goes idle** — companion to
+**Usage-pattern tips after the agent goes idle** — companion to
 `pi-insights` (which owns the deterministic single status line). When the agent
-settles, pi-commentary asks a **secondary model** for a one-paragraph commentary
-on what just happened and renders it as a dim widget **below the editor**.
+settles, pi-commentary asks a **secondary model** for one short tip: a
+repeated pattern worth systemizing, a friction point, an outlier or
+misallocation (disproportionate turns/tokens, debugging-dominant episodes,
+generated-but-unused output), or a non-obvious realization grounded in what
+was actually observed — the signal a live transcript buries
+a live transcript can't show — never a narration of what happened. Rendered as
+a dim widget **above the editor**, under the insights line, behind an accent
+banner. When the model finds nothing worth surfacing, it answers `NOTHING` and
+the widget is dropped for that episode — tips only appear when there is
+something to say.
 
 ```
-┌ pi-commentary ───────────────────────────────────────────────┐
-│ Tests are green after two rounds of fixes; the failing       │
-│ serialization case is covered. Next step is committing the   │
-│ package and opening the draft PR.                            │
+┌ pi-commentary (above editor, below insights) ───────────────┐
+│ ◆ tips ───────────────────────────────────────              │  ← accent label, dim rule
+│ You have rerun the suite 5 times without committing;         │  ← dim tip body
+│ smaller commits would make bisecting the flaky               │
+│ serialization case trivial.                                  │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -34,14 +43,18 @@ on what just happened and renders it as a dim widget **below the editor**.
 - **Commentary call** — one fire-and-forget secondary-model call, mirroring
   pi-condense's call discipline: pre-stream auth resolution, seat `baseUrl`
   override, idle-stall + wall-clock-ceiling aborts, classified outcomes
-  (`ok` / `auth` / `unusable` / `transient`) instead of throws.
-- **Fallback** — if the model call fails, the widget falls back to a
-  deterministic one-line activity summary, so the widget is never empty after
-  real activity. A notify explains the degradation once per degradation
-  episode (recovery re-arms it), not per failure. Superseded attempts (new
-  activity mid-flight) drop their result and **restore their consumed
-  activity**, so the next settle re-offers old + new together — nothing is
-  silently lost.
+  (`ok` / `quiet` / `auth` / `unusable` / `transient`) instead of throws.
+  `quiet` (the model replied `NOTHING`) clears the widget for the episode.
+- **Silence on quiet and failure** — when the model has nothing worth
+  surfacing (`NOTHING`) or the call fails (`auth` / `unusable` / `transient`),
+  the widget is cleared for the episode: an empty optional widget is less
+  distracting than filler, and insights already owns activity counts. Only
+  actionable config problems (`auth`) notify — once per degradation episode
+  (recovery re-arms it); `/commentary status` always records the failure.
+  Superseded attempts (new activity mid-flight) drop their result and
+  **restore their consumed activity** — even when the stale result lands
+  before the next turn — so the next settle re-offers old + new together;
+  nothing is silently lost. The attempt clock is never rolled back.
 - **Rendering** — TUI: component-factory widget (`pi-tui` `Text`) so the
   paragraph wraps to terminal width. RPC: plain string lines (word-wrapped) —
   RPC `setWidget` ignores factories. The paragraph replaces the previous one;
@@ -57,7 +70,7 @@ on what just happened and renders it as a dim widget **below the editor**.
 |---|---|---|
 | `PI_COMMENTARY` | `on` | `off` disables everything |
 | `PI_COMMENTARY_MODEL` | `default` | `provider/model-id` for commentary. Recommended for fleet setups: `anvil/llm.secondary` so commentary never touches the primary model. `default` uses the session model. |
-| `PI_COMMENTARY_MIN_INTERVAL_SECONDS` | `120` | minimum seconds between emissions (0–3600) |
+| `PI_COMMENTARY_MIN_INTERVAL_SECONDS` | `300` | minimum seconds between attempts — the attempt-rate floor (0–3600). Stamp is at launch; superseded attempts do not roll it back. |
 | `PI_COMMENTARY_TIMEOUT_SECONDS` | `45` | streaming wall-clock ceiling per call; auth resolution is excluded (5–600) |
 | `PI_COMMENTARY_IDLE_TIMEOUT_SECONDS` | `20` | stall ceiling, reset on every stream event (2–300) |
 | `PI_COMMENTARY_MAX_INPUT_CHARS` | `6000` | hard cap on the observation payload (500–100000) |
@@ -86,7 +99,7 @@ merge (never clobber). Tests sandbox the user file via
 
 ## Modes
 
-- TUI/RPC: widget below the editor.
+- TUI/RPC: widget above the editor, below the insights line.
 - JSON/print: silent (no generation, no output).
 
 ## Privacy
