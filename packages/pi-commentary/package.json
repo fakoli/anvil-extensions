@@ -1,5 +1,5 @@
 {
-  "name": "pi-summerize",
+  "name": "pi-commentary",
   "version": "0.1.0",
   "description": "Pi coding-agent extension that renders a small secondary-model prose commentary after the agent goes idle — a calm paragraph below the editor, not just a status line.",
   "author": "Fakoli",

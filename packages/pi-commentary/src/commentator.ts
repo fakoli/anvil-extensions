@@ -1,4 +1,4 @@
-// pi-summerize — one prose commentary via a secondary model.
+// pi-commentary — one prose commentary via a secondary model.
 // Mirrors pi-condense/src/summarizer.ts call discipline: pre-stream auth,
 // seat baseUrl override, idle+ceiling aborts with both timers cleared on every
 // exit path, classified outcomes instead of throws. Instructions ride in the
@@ -29,7 +29,7 @@ export function resolveModel(modelSpec: string, ctx: ExtensionContext): { model:
   if (modelSpec === "default") return { model: ctx.model };
   const slashIndex = modelSpec.indexOf("/");
   if (slashIndex === -1) {
-    return { model: ctx.model, warning: `invalid PI_SUMMERIZE_MODEL "${modelSpec}", expected "provider/model-id"; using current model` };
+    return { model: ctx.model, warning: `invalid PI_COMMENTARY_MODEL "${modelSpec}", expected "provider/model-id"; using current model` };
   }
   const provider = modelSpec.slice(0, slashIndex);
   const modelId = modelSpec.slice(slashIndex + 1);
