@@ -1,4 +1,4 @@
-// pi-commentary — one Claude-Code-style tip via a secondary model.
+// pi-commentary — one usage-pattern tip via a secondary model.
 // Mirrors pi-condense/src/summarizer.ts call discipline: pre-stream auth,
 // seat baseUrl override, idle+ceiling aborts with both timers cleared on every
 // exit path, classified outcomes instead of throws. Instructions ride in the
@@ -9,12 +9,13 @@
 import { stream } from "@earendil-works/pi-ai/compat";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-export const COMMENTARY_INSTRUCTIONS = `You are the tips widget embedded in a terminal coding agent, in the spirit of Claude Code's contextual tips: you surface what is NOT apparent from the transcript the user just watched.
+export const COMMENTARY_INSTRUCTIONS = `You are the tips widget embedded in a terminal coding agent. You surface what is NOT apparent from the transcript the user just watched: patterns across their activity, not narration of it.
 Below is the observed activity since your last tip and the most recent conversation turns.
 Write ONE short tip (1-2 sentences, under 60 words) that is one of:
-- a specific, actionable improvement tied to something actually observed this episode (a workflow habit, a repeated command, a repo feature or command going unused)
-- a non-obvious realization about the code, the user's pattern, or a risk they have not visibly acknowledged
-Concrete files, commands, or numbers make a tip land; vagueness kills it.
+- a repeated pattern worth systemizing: the same task, command, or request shape done more than once this episode is a candidate for a script, slash command, template, or saved instruction
+- a friction point: the same error debugged repeatedly, context re-pasted where a scoped reference would cover it, a task that took several correction rounds where a stated constraint up front would have landed first try
+- a non-obvious realization about the code, the user's habits, or a risk they have not visibly acknowledged
+Concrete files, commands, and counts make a tip land; vagueness kills it.
 Never narrate what happened (the user saw it happen), never praise, never give advice you cannot tie to observed evidence.
 Rules: single paragraph only. No markdown, no headings, no bullets, no code fences. Never invent details not present in the observation.
 If there is genuinely nothing useful to surface this episode, reply with exactly: NOTHING`;

@@ -215,6 +215,8 @@ test("instructions: Claude-Code-style tips, quiet signal, no markdown", () => {
   assert.ok(COMMENTARY_INSTRUCTIONS.includes("NOT apparent"), "tips must target what is not apparent");
   assert.ok(COMMENTARY_INSTRUCTIONS.includes("Never narrate"), "tips must not restate the transcript");
   assert.ok(COMMENTARY_INSTRUCTIONS.includes("exactly: NOTHING"), "quiet signal must be part of the contract");
+  assert.ok(COMMENTARY_INSTRUCTIONS.includes("systemizing"), "tips must include pattern-systemizing candidates");
+  assert.ok(!COMMENTARY_INSTRUCTIONS.toLowerCase().includes("claude"), "no external product branding in the prompt");
 });
 
 test("isQuietSignal matches the NOTHING marker case-insensitively", async () => {
