@@ -420,6 +420,7 @@ export default function (pi: ExtensionAPI): void {
         const emitted = state.lastEmissionAt === null ? "never" : `${Math.round((Date.now() - state.lastEmissionAt) / 1000)}s ago`;
         ctx.ui.notify(
           `pi-summerize: ${config.enabled && state.sessionOn ? "on" : "off"} · model ${modelLabel(model)}` +
+            ` · interval ${Math.round(config.minIntervalMs / 1000)}s` +
             ` · last attempt ${attempt} · last emission ${emitted}` +
             (state.lastFailure ? ` · last failure: ${state.lastFailure}` : "") +
             (state.lastText ? `\n${state.lastText}` : ""),
