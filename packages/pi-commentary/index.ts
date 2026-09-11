@@ -1,4 +1,4 @@
-// pi-summerize — a small prose commentary after the agent goes idle.
+// pi-commentary — a small prose commentary after the agent goes idle.
 // Companion to pi-insights (which owns the deterministic status line): when
 // the agent settles, this extension asks a secondary model for a ONE-paragraph
 // commentary on what just happened and renders it as a widget below the editor.
@@ -159,7 +159,7 @@ export default function (pi: ExtensionAPI): void {
         const { model, warning } = resolveModel(config.model, ctx);
         if (warning && !state.warnedModel) {
           state.warnedModel = true;
-          if (canDisplay(ctx)) ctx.ui.notify(`pi-summerize: ${warning}`, "warning");
+          if (canDisplay(ctx)) ctx.ui.notify(`pi-commentary: ${warning}`, "warning");
         }
         const observation = renderObservation(turns, counts, config.maxInputChars);
         const outcome = await runCommentary(
@@ -197,7 +197,7 @@ export default function (pi: ExtensionAPI): void {
             if (!state.degradedNotified) {
               state.degradedNotified = true; // once per degradation episode, not per failure
               if (canDisplay(ctx)) {
-                ctx.ui.notify(`pi-summerize: commentary unavailable (${outcome.message}); showed activity summary`, "info");
+                ctx.ui.notify(`pi-commentary: commentary unavailable (${outcome.message}); showed activity summary`, "info");
               }
             }
           }
@@ -278,7 +278,7 @@ export default function (pi: ExtensionAPI): void {
     applyFileSettings(fresh, { overrides: state.sessionOverrides, sources: [], problems: [] });
     Object.assign(config, fresh);
     for (const problem of loaded.problems) {
-      if (canDisplay(ctx)) ctx.ui.notify(`pi-summerize: ${problem}`, "warning");
+      if (canDisplay(ctx)) ctx.ui.notify(`pi-commentary: ${problem}`, "warning");
     }
   }
 
@@ -325,14 +325,14 @@ export default function (pi: ExtensionAPI): void {
         const modelTrim = modelPick.trim();
         if (modelTrim.length > 0) {
           if (!validModelSpec(modelTrim)) {
-            ctx.ui.notify(`pi-summerize: "${modelTrim}" is not a valid model (use "default" or "provider/model-id"); nothing saved`, "warning");
+            ctx.ui.notify(`pi-commentary: "${modelTrim}" is not a valid model (use "default" or "provider/model-id"); nothing saved`, "warning");
             return;
           }
           const { warning } = resolveModel(modelTrim, ctx);
           if (warning) {
             // registry miss: refuse rather than commit a value file loading
             // would reject (session and file scopes must agree)
-            ctx.ui.notify(`pi-summerize: ${warning.replace("using current model", "nothing saved")}`, "warning");
+            ctx.ui.notify(`pi-commentary: ${warning.replace("using current model", "nothing saved")}`, "warning");
             return;
           }
           partial.model = modelTrim;
@@ -348,7 +348,7 @@ export default function (pi: ExtensionAPI): void {
         if (intervalTrim.length > 0) {
           const interval = Number(intervalTrim);
           if (!Number.isFinite(interval) || interval < 0) {
-            ctx.ui.notify("pi-summerize: interval must be a non-negative number; nothing saved", "warning");
+            ctx.ui.notify("pi-commentary: interval must be a non-negative number; nothing saved", "warning");
             return;
           }
           partial.minIntervalSeconds = interval;
@@ -370,12 +370,12 @@ export default function (pi: ExtensionAPI): void {
         state.warnedModel = false;
         reloadConfig(ctx);
         reconcileEnabled(ctx, null);
-        ctx.ui.notify(`pi-summerize: settings reset (user: ${removedUser ? "removed" : "none"}, project: ${removedProject ? "removed" : "none"}); commentary is ${config.enabled ? "on" : "off"}`, "info");
+        ctx.ui.notify(`pi-commentary: settings reset (user: ${removedUser ? "removed" : "none"}, project: ${removedProject ? "removed" : "none"}); commentary is ${config.enabled ? "on" : "off"}`, "info");
       } else {
         // dialog values pass through the SAME validation/normalization as files
         const { overrides, problems } = validateSettingsObject(partial);
         if (problems.length > 0) {
-          for (const problem of problems) ctx.ui.notify(`pi-summerize: ${problem}`, "warning");
+          for (const problem of problems) ctx.ui.notify(`pi-commentary: ${problem}`, "warning");
           return;
         }
         if (scopePick.startsWith("user")) {
@@ -383,13 +383,13 @@ export default function (pi: ExtensionAPI): void {
           reloadConfig(ctx);
           state.warnedModel = false; // a deliberate model change re-arms warnings
           reconcileEnabled(ctx, enabledPick === "on" ? true : false);
-          ctx.ui.notify(`pi-summerize: saved to ${path}`, "info");
+          ctx.ui.notify(`pi-commentary: saved to ${path}`, "info");
         } else {
           state.sessionOverrides = { ...state.sessionOverrides, ...overrides };
           reloadConfig(ctx);
           state.warnedModel = false;
           reconcileEnabled(ctx, enabledPick === "on" ? true : false);
-          ctx.ui.notify("pi-summerize: session-only settings applied", "info");
+          ctx.ui.notify("pi-commentary: session-only settings applied", "info");
         }
       }
     } catch (error) {
@@ -397,7 +397,7 @@ export default function (pi: ExtensionAPI): void {
       try {
         // dialog failures must never fail the command turn (best effort —
         // the context itself may already be gone)
-        ctx.ui.notify(`pi-summerize: settings dialog error (${error instanceof Error ? error.message : String(error)})`, "warning");
+        ctx.ui.notify(`pi-commentary: settings dialog error (${error instanceof Error ? error.message : String(error)})`, "warning");
       } catch {
         // best effort
       }
@@ -414,12 +414,12 @@ export default function (pi: ExtensionAPI): void {
         invalidateActive(false); // user disable: consumed activity stays consumed
         state.sessionOn = false;
         clearWidget(ctx);
-        if (canDisplay(ctx)) ctx.ui.notify("pi-summerize: off for this session", "info");
+        if (canDisplay(ctx)) ctx.ui.notify("pi-commentary: off for this session", "info");
         return;
       }
       if (arg === "on") {
         state.sessionOn = true;
-        if (canDisplay(ctx)) ctx.ui.notify("pi-summerize: on", "info");
+        if (canDisplay(ctx)) ctx.ui.notify("pi-commentary: on", "info");
         return;
       }
       if (arg === "status") {
@@ -428,7 +428,7 @@ export default function (pi: ExtensionAPI): void {
         const attempt = state.lastAttemptAt === null ? "never" : `${Math.round((Date.now() - state.lastAttemptAt) / 1000)}s ago`;
         const emitted = state.lastEmissionAt === null ? "never" : `${Math.round((Date.now() - state.lastEmissionAt) / 1000)}s ago`;
         ctx.ui.notify(
-          `pi-summerize: ${config.enabled && state.sessionOn ? "on" : "off"} · model ${modelLabel(model)}` +
+          `pi-commentary: ${config.enabled && state.sessionOn ? "on" : "off"} · model ${modelLabel(model)}` +
             ` · interval ${Math.round(config.minIntervalMs / 1000)}s` +
             ` · last attempt ${attempt} · last emission ${emitted}` +
             (state.lastFailure ? ` · last failure: ${state.lastFailure}` : "") +
@@ -439,7 +439,7 @@ export default function (pi: ExtensionAPI): void {
       }
       if (arg === "now") {
         const launched = maybeCommentary(ctx, true);
-        if (launched && canDisplay(ctx)) ctx.ui.notify("pi-summerize: composing…", "info");
+        if (launched && canDisplay(ctx)) ctx.ui.notify("pi-commentary: composing…", "info");
         return;
       }
       if (arg.length === 0) {
@@ -447,7 +447,7 @@ export default function (pi: ExtensionAPI): void {
         return;
       }
       const launched = maybeCommentary(ctx, true);
-      if (launched && canDisplay(ctx)) ctx.ui.notify("pi-summerize: composing…", "info");
+      if (launched && canDisplay(ctx)) ctx.ui.notify("pi-commentary: composing…", "info");
     },
   });
 }

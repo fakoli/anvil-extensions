@@ -1,10 +1,10 @@
-// pi-summerize — widget rendering. Uses the component-factory form of
+// pi-commentary — widget rendering. Uses the component-factory form of
 // ctx.ui.setWidget so the pi-tui Text component wraps the paragraph to the
 // terminal width (no manual width math here).
 
 import { Text } from "@earendil-works/pi-tui";
 
-export const WIDGET_KEY = "pi-summerize";
+export const WIDGET_KEY = "pi-commentary";
 
 /** Widget factory for a commentary paragraph. Dim reads as commentary, not chat. */
 export function commentaryWidget(paragraph: string): (tui: any, theme: any) => any {

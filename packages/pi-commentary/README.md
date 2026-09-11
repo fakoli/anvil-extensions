@@ -1,19 +1,19 @@
-# pi-summerize
+# pi-commentary
 
 > **Not Feynman's `/summarize`.** The command is `/commentary`. Feynman's
 > `/summarize` summarizes an *external research source* (URL/PDF/file) into a
-> durable `outputs/<slug>-summary.md` artifact with RLM windowing. pi-summerize
+> durable `outputs/<slug>-summary.md` artifact with RLM windowing. pi-commentary
 > has a different contract: it automatically summarizes *this session's recent
 > turns* into an ephemeral one-paragraph widget — no files written, no external
 > input, silent in JSON/print mode.
 
 A **small prose commentary after the agent goes idle** — companion to
 `pi-insights` (which owns the deterministic single status line). When the agent
-settles, pi-summerize asks a **secondary model** for a one-paragraph commentary
+settles, pi-commentary asks a **secondary model** for a one-paragraph commentary
 on what just happened and renders it as a dim widget **below the editor**.
 
 ```
-┌ pi-summerize ───────────────────────────────────────────────┐
+┌ pi-commentary ───────────────────────────────────────────────┐
 │ Tests are green after two rounds of fixes; the failing       │
 │ serialization case is covered. Next step is committing the   │
 │ package and opening the draft PR.                            │
@@ -55,13 +55,13 @@ on what just happened and renders it as a dim widget **below the editor**.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `PI_SUMMERIZE` | `on` | `off` disables everything |
-| `PI_SUMMERIZE_MODEL` | `default` | `provider/model-id` for commentary. Recommended for fleet setups: `anvil/llm.secondary` so commentary never touches the primary model. `default` uses the session model. |
-| `PI_SUMMERIZE_MIN_INTERVAL_SECONDS` | `120` | minimum seconds between emissions (0–3600) |
-| `PI_SUMMERIZE_TIMEOUT_SECONDS` | `45` | streaming wall-clock ceiling per call; auth resolution is excluded (5–600) |
-| `PI_SUMMERIZE_IDLE_TIMEOUT_SECONDS` | `20` | stall ceiling, reset on every stream event (2–300) |
-| `PI_SUMMERIZE_MAX_INPUT_CHARS` | `6000` | hard cap on the observation payload (500–100000) |
-| `PI_SUMMERIZE_MAX_OUTPUT_CHARS` | `700` | hard cap on the rendered paragraph (100–4000) |
+| `PI_COMMENTARY` | `on` | `off` disables everything |
+| `PI_COMMENTARY_MODEL` | `default` | `provider/model-id` for commentary. Recommended for fleet setups: `anvil/llm.secondary` so commentary never touches the primary model. `default` uses the session model. |
+| `PI_COMMENTARY_MIN_INTERVAL_SECONDS` | `120` | minimum seconds between emissions (0–3600) |
+| `PI_COMMENTARY_TIMEOUT_SECONDS` | `45` | streaming wall-clock ceiling per call; auth resolution is excluded (5–600) |
+| `PI_COMMENTARY_IDLE_TIMEOUT_SECONDS` | `20` | stall ceiling, reset on every stream event (2–300) |
+| `PI_COMMENTARY_MAX_INPUT_CHARS` | `6000` | hard cap on the observation payload (500–100000) |
+| `PI_COMMENTARY_MAX_OUTPUT_CHARS` | `700` | hard cap on the rendered paragraph (100–4000) |
 
 ## Command
 
@@ -76,13 +76,13 @@ current paragraph.
 
 ## Settings persistence
 
-Layered (later wins): defaults → `PI_SUMMERIZE_*` env → `~/.pi/agent/pi-summerize.json`
-(user) → `.pi/pi-summerize.json` (project) → session overrides from the
+Layered (later wins): defaults → `PI_COMMENTARY_*` env → `~/.pi/agent/pi-commentary.json`
+(user) → `.pi/pi-commentary.json` (project) → session overrides from the
 dialog. File keys: `enabled`, `model`, `minIntervalSeconds`,
 `timeoutSeconds`, `idleTimeoutSeconds`, `maxInputChars`, `maxOutputChars`.
 Unknown keys are reported, never silently ignored. Writes are atomic and
 merge (never clobber). Tests sandbox the user file via
-`PI_SUMMERIZE_USER_SETTINGS`.
+`PI_COMMENTARY_USER_SETTINGS`.
 
 ## Modes
 
@@ -108,5 +108,5 @@ network.
 
 - `pi-insights` — the terse deterministic activity line; complementary, no
   shared state.
-- `pi-condense` — summarizes *for the model's future context*; pi-summerize
+- `pi-condense` — summarizes *for the model's future context*; pi-commentary
   comments *for the human, right now*. Deliberately separate contracts.

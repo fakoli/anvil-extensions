@@ -1,7 +1,7 @@
-// pi-summerize — layered settings persistence.
+// pi-commentary — layered settings persistence.
 //
-// Resolution order (later wins): defaults → env (PI_SUMMERIZE_*) → user file
-// (~/.pi/agent/pi-summerize.json) → project file (.pi/pi-summerize.json) →
+// Resolution order (later wins): defaults → env (PI_COMMENTARY_*) → user file
+// (~/.pi/agent/pi-commentary.json) → project file (.pi/pi-commentary.json) →
 // session (in-memory, /commentary dialog). Files carry the SAME shape as the
 // env vars but camelCase keys; unknown keys are rejected on read so typos
 // fail loudly instead of silently disabling a setting.
@@ -14,8 +14,8 @@ import type { SummerizeConfig } from "./config.js";
 // Env override exists for tests and sandboxed environments; production uses
 // the standard path under the pi agent dir.
 export const USER_SETTINGS_PATH =
-  process.env.PI_SUMMERIZE_USER_SETTINGS ?? join(homedir(), ".pi", "agent", "pi-summerize.json");
-export const PROJECT_SETTINGS_NAME = "pi-summerize.json";
+  process.env.PI_COMMENTARY_USER_SETTINGS ?? join(homedir(), ".pi", "agent", "pi-commentary.json");
+export const PROJECT_SETTINGS_NAME = "pi-commentary.json";
 
 /** Keys allowed in settings files, with their SummerizeConfig mapping. */
 const FILE_KEYS: Record<string, keyof SummerizeConfig> = {
@@ -43,7 +43,7 @@ const BOUNDS: Record<string, [number, number]> = {
 
 export interface LoadedSettings {
   overrides: Partial<SummerizeConfig>;
-  sources: string[]; // human-readable provenance, e.g. "user:/home/x/.pi/agent/pi-summerize.json"
+  sources: string[]; // human-readable provenance, e.g. "user:/home/x/.pi/agent/pi-commentary.json"
   problems: string[]; // validation failures (reported via notify, never thrown)
 }
 
