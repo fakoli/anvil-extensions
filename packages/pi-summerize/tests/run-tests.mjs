@@ -711,7 +711,7 @@ await test("dialog: bad interval input refused, nothing saved", async () => {
 });
 
 await test("astra r1: session_start reloads files via ctx.cwd and clears session overrides", async () => {
-  const proj = join(base, "..", "tests", `tmp-lifetime-${process.pid}`);
+  const proj = join(tmpdir(), `pi-summerize-lifetime-${process.pid}`);
   mkdirSync(join(proj, ".pi"), { recursive: true });
   writeFileSync(join(proj, ".pi", "pi-summerize.json"), JSON.stringify({ enabled: false, model: "proj/model" }));
   const pi = makePi();
@@ -728,7 +728,7 @@ await test("astra r1: session_start reloads files via ctx.cwd and clears session
   rmSync(proj, { recursive: true, force: true });
 });
 
-await test("astra r1: session-only interval normalizes (0s unthrottles, 30s throttles)", async () => {
+await test("astra r2: 30s throttles a successor episode; 0s removes an EXISTING throttle", async () => {
   stubState.calls = []; stubState.defer = null; stubState.text = undefined;
   useIsolatedUserFile();
   const pi = makePi();
@@ -738,30 +738,62 @@ await test("astra r1: session-only interval normalizes (0s unthrottles, 30s thro
     const { ctx } = dialogCtx("on", "this session only", "test/secondary", String(seconds));
     await pi.commands["commentary"].handler("", ctx);
   };
-  await setOverride(0);
+  await setOverride(30);
   await pi.handlers["turn_end"]({}, makeCtx(holder));
   await pi.handlers["agent_settled"]({}, makeCtx(holder));
-  assert.ok(await waitFor(() => stubState.calls.length === 1, 300), "0s interval must not throttle");
-  await setOverride(30);
+  assert.ok(await waitFor(() => stubState.calls.length === 1, 300), "first episode must generate");
+  // A successor inside the window is throttled by the EXISTING interval
   holder.branch.push({ type: "message", message: { role: "assistant", content: [{ type: "toolCall", name: "read" }] } });
   await pi.handlers["turn_end"]({}, makeCtx(holder));
   await pi.handlers["agent_settled"]({}, makeCtx(holder));
-  await new Promise((r) => setTimeout(r, 30));
-  assert.equal(stubState.calls.length, 1, "30s interval must throttle the next episode");
+  await new Promise((r) => setTimeout(r, 40));
+  assert.equal(stubState.calls.length, 1, "30s interval must throttle the successor episode");
+  // 0s must REMOVE that existing throttle — not merely be unthrottled on a fresh first emission
+  await setOverride(0);
+  holder.branch.push({ type: "message", message: { role: "assistant", content: [{ type: "toolCall", name: "read" }] } });
+  await pi.handlers["turn_end"]({}, makeCtx(holder));
+  await pi.handlers["agent_settled"]({}, makeCtx(holder));
+  assert.ok(await waitFor(() => stubState.calls.length === 2, 300), "0s interval must remove the existing throttle");
   await pi.handlers["session_shutdown"]({}, makeCtx(holder));
 });
 
-await test("astra r1: reset reconciles the effective config, not the stale dialog choice", async () => {
+await test("astra r2: reset with OPPOSITE dialog choice reconciles to effective state", async () => {
   const user = useIsolatedUserFile();
   const pi = makePi();
   entryModule.default(pi);
-  // off -> session-only: disabled; then on -> reset: files+overrides cleared,
-  // effective defaults (on) decide and the off side effects do not linger
-  await pi.commands["commentary"].handler("", dialogCtx("off", "this session only").ctx);
-  const { ctx, notifications } = dialogCtx("on", "reset saved settings");
-  await pi.commands["commentary"].handler("", ctx);
-  assert.ok(notifications.some((n) => n.msg.includes("commentary is on")), JSON.stringify(notifications));
-  assert.ok(!existsSync(user));
+  stubState.calls = []; stubState.defer = null; stubState.text = undefined;
+  try {
+    // Baseline: commentary actually generates (defaults on)
+    const holderA = { branch: makeBranch() };
+    await pi.handlers["turn_end"]({}, makeCtx(holderA));
+    await pi.handlers["agent_settled"]({}, makeCtx(holderA));
+    assert.ok(await waitFor(() => stubState.calls.length === 1, 300), "baseline episode must generate");
+    // A live request in flight when the dialog turns commentary off is cancelled
+    const holderB = { branch: makeBranch() };
+    const ctxB = makeCtx(holderB);
+    stubState.defer = new Promise(() => {}); // hold the request open
+    await pi.handlers["turn_end"]({}, ctxB);
+    await pi.handlers["agent_settled"]({}, ctxB);
+    assert.ok(await waitFor(() => stubState.calls.length === 2, 300), "in-flight episode must launch");
+    await pi.commands["commentary"].handler("", dialogCtx("off", "this session only").ctx);
+    stubState.defer = null; // release; the aborted request resolves with stopReason "aborted"
+    await new Promise((r) => setTimeout(r, 30));
+    assert.ok(!ctxB.ui.widgets["pi-summerize"], "aborted in-flight request must not show a widget");
+    // Stale-choice disagreement: dialog picks "off" + reset while the effective
+    // config is on. The pick must NOT disable commentary — post-reset effective
+    // state wins, and generation actually resumes (not just the notification).
+    process.env.PI_SUMMERIZE_MIN_INTERVAL_SECONDS = "0"; // let a fresh episode pass the interval check
+    const { ctx, notifications } = dialogCtx("off", "reset saved settings");
+    await pi.commands["commentary"].handler("", ctx);
+    assert.ok(notifications.some((n) => n.msg.includes("commentary is on")), JSON.stringify(notifications));
+    holderB.branch.push({ type: "message", message: { role: "assistant", content: [{ type: "toolCall", name: "read" }] } });
+    await pi.handlers["turn_end"]({}, ctxB);
+    await pi.handlers["agent_settled"]({}, ctxB);
+    assert.ok(await waitFor(() => stubState.calls.length === 3, 300), "reset must actually re-enable generation despite the opposite dialog choice");
+  } finally {
+    delete process.env.PI_SUMMERIZE_MIN_INTERVAL_SECONDS;
+    await pi.handlers["session_shutdown"]({}, makeCtx({ branch: [] }));
+  }
 });
 
 await test("astra r1: invalid model spec refused before any save", async () => {
@@ -774,18 +806,69 @@ await test("astra r1: invalid model spec refused before any save", async () => {
   assert.ok(!existsSync(user));
 });
 
-await test("astra r1: blank model means default; blank interval keeps current", async () => {
+await test("astra r2: blank model means default; blank interval keeps the file value", async () => {
   const user = useIsolatedUserFile();
   writeFileSync(user, JSON.stringify({ model: "file/model", minIntervalSeconds: 75 }));
   const pi = makePi();
   entryModule.default(pi);
+  stubState.calls = []; stubState.defer = null; stubState.text = undefined;
   const { ctx, notifications } = dialogCtx("on", "this session only", "", "");
   await pi.commands["commentary"].handler("", ctx);
   assert.ok(notifications.some((n) => n.msg.includes("session-only")));
   await pi.commands["commentary"].handler("status", ctx);
   const status = ctx.ui.notifications.map((n) => n.msg).join("\n");
   assert.ok(status.includes("test/m1"), "blank model override => session model: " + status);
+  assert.ok(status.includes("75s"), "blank interval must retain the file value (75s): " + status);
+  // Behaviorally: the retained 75s actually throttles a successor episode
+  const holder = { branch: makeBranch() };
+  await pi.handlers["turn_end"]({}, makeCtx(holder));
+  await pi.handlers["agent_settled"]({}, makeCtx(holder));
+  assert.ok(await waitFor(() => stubState.calls.length === 1, 300), "first episode must generate");
+  holder.branch.push({ type: "message", message: { role: "assistant", content: [{ type: "toolCall", name: "read" }] } });
+  await pi.handlers["turn_end"]({}, makeCtx(holder));
+  await pi.handlers["agent_settled"]({}, makeCtx(holder));
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(stubState.calls.length, 1, "retained 75s interval must throttle the successor episode");
   rmSync(user, { force: true });
+});
+
+await test("astra r2: save creates missing settings parent dir without 2s contention retry", async () => {
+  const { saveSettings } = await jiti.import("../src/settings.ts");
+  const freshDir = join(tmpdir(), `pi-summerize-fresh-${process.pid}`);
+  rmSync(freshDir, { recursive: true, force: true });
+  try {
+    const start = Date.now();
+    const path = saveSettings("user", { enabled: false }, undefined, join(freshDir, "nested", "pi-summerize.json"));
+    const elapsed = Date.now() - start;
+    assert.ok(existsSync(path), "save must create the missing parent dir and file");
+    assert.equal(JSON.parse(readFileSync(path, "utf8")).enabled, false);
+    assert.ok(elapsed < 1000, `save took ${elapsed}ms — ENOENT misread as lock contention (2s retry)`);
+  } finally {
+    rmSync(freshDir, { recursive: true, force: true });
+  }
+});
+
+await test("astra r2: in-flight dialog is invalidated at the session boundary", async () => {
+  const user = useIsolatedUserFile();
+  const pi = makePi();
+  entryModule.default(pi);
+  let releaseSelect;
+  const notifications = [];
+  const ctx = makeCtx({ branch: [] }, { cwd: tmpdir(), ui: {
+    widgets: {}, notifications,
+    setWidget() {}, notify(m, l) { notifications.push({ msg: m, level: l }); },
+    select: (t) => t.includes("Companion") ? new Promise((r) => { releaseSelect = r; }) : Promise.resolve("this session only"),
+    input: async () => "",
+  }});
+  const dialogPromise = pi.commands["commentary"].handler("", ctx);
+  assert.ok(await waitFor(() => typeof releaseSelect === "function", 500), "dialog must be awaiting the enabled pick");
+  // Session boundary while the dialog is still waiting on user input
+  await pi.handlers["session_start"]({}, makeCtx({ branch: [] }, { cwd: tmpdir() }));
+  releaseSelect("on");
+  await dialogPromise;
+  assert.ok(!notifications.some((n) => n.msg.includes("saved") || n.msg.includes("applied") || n.msg.includes("reset")), JSON.stringify(notifications));
+  assert.ok(!notifications.some((n) => n.msg.includes("error")), JSON.stringify(notifications));
+  assert.ok(!existsSync(user), "stale dialog must not write settings");
 });
 
 console.log(`\nALL tests passed (${passed} total)`);
