@@ -2,13 +2,39 @@
 // ctx.ui.setWidget so the pi-tui Text component wraps the paragraph to the
 // terminal width (no manual width math here).
 
-import { Text } from "@earendil-works/pi-tui";
+import { Container, Text } from "@earendil-works/pi-tui";
 
 export const WIDGET_KEY = "pi-commentary";
 
-/** Widget factory for a commentary paragraph. Dim reads as commentary, not chat. */
+const BANNER_WIDTH = 56;
+
+/**
+ * Accent banner line: separates commentary from the (plain-colored) insights
+ * widget above it and gives the paragraph its own visual header.
+ */
+export function banner(theme: any): string {
+  const label = "◆ commentary ";
+  const rule = "─".repeat(Math.max(10, BANNER_WIDTH - label.length));
+  return theme.fg("accent", label) + theme.fg("dim", rule);
+}
+
+/** Plain-text banner for RPC widgets (no ANSI available there). */
+export function plainBanner(width = BANNER_WIDTH): string {
+  const label = "◆ commentary ";
+  return label + "─".repeat(Math.max(10, width - label.length));
+}
+
+/**
+ * Widget factory for a commentary paragraph: accent banner + dim body.
+ * Dim reads as commentary, not chat; accent banner reads as a distinct layer.
+ */
 export function commentaryWidget(paragraph: string): (tui: any, theme: any) => any {
-  return (_tui: any, theme: any) => new Text(theme.fg("dim", paragraph), 0, 0);
+  return (_tui: any, theme: any) => {
+    const container = new Container();
+    container.addChild(new Text(banner(theme), 0, 0));
+    container.addChild(new Text(theme.fg("dim", paragraph), 0, 0));
+    return container;
+  };
 }
 
 /** Deterministic fallback sentence used when the model call fails. */

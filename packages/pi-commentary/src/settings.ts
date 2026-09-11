@@ -9,7 +9,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import type { SummerizeConfig } from "./config.js";
+import type { CommentaryConfig } from "./config.js";
 
 // Env override exists for tests and sandboxed environments; production uses
 // the standard path under the pi agent dir.
@@ -17,8 +17,8 @@ export const USER_SETTINGS_PATH =
   process.env.PI_COMMENTARY_USER_SETTINGS ?? join(homedir(), ".pi", "agent", "pi-commentary.json");
 export const PROJECT_SETTINGS_NAME = "pi-commentary.json";
 
-/** Keys allowed in settings files, with their SummerizeConfig mapping. */
-const FILE_KEYS: Record<string, keyof SummerizeConfig> = {
+/** Keys allowed in settings files, with their CommentaryConfig field mapping. */
+const FILE_KEYS: Record<string, keyof CommentaryConfig> = {
   enabled: "enabled",
   model: "model",
   minIntervalSeconds: "minIntervalMs",
@@ -42,19 +42,19 @@ const BOUNDS: Record<string, [number, number]> = {
 };
 
 export interface LoadedSettings {
-  overrides: Partial<SummerizeConfig>;
+  overrides: Partial<CommentaryConfig>;
   sources: string[]; // human-readable provenance, e.g. "user:/home/x/.pi/agent/pi-commentary.json"
   problems: string[]; // validation failures (reported via notify, never thrown)
 }
 
 /** Validate dialog-collected values through the SAME rules as files. */
-export function validateSettingsObject(obj: Record<string, unknown>): { overrides: Partial<SummerizeConfig>; problems: string[] } {
+export function validateSettingsObject(obj: Record<string, unknown>): { overrides: Partial<CommentaryConfig>; problems: string[] } {
   const problems: string[] = [];
   const overrides = validate(obj, "dialog", problems);
   return { overrides: overrides ?? {}, problems };
 }
 
-function validate(obj: Record<string, unknown>, path: string, problems: string[]): Partial<SummerizeConfig> | null {
+function validate(obj: Record<string, unknown>, path: string, problems: string[]): Partial<CommentaryConfig> | null {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
     if (!Object.hasOwn(FILE_KEYS, key)) {
@@ -101,7 +101,7 @@ function validate(obj: Record<string, unknown>, path: string, problems: string[]
     }
     out[target] = normalized;
   }
-  return Object.keys(out).length > 0 ? (out as Partial<SummerizeConfig>) : null;
+  return Object.keys(out).length > 0 ? (out as Partial<CommentaryConfig>) : null;
 }
 
 function readSettingsFile(path: string): { obj: Record<string, unknown> | null; error?: string } {
@@ -141,7 +141,7 @@ export function loadFileSettings(projectDir?: string, userPathOverride?: string)
 }
 
 /** Apply layered file settings over an env-derived base config (in place). */
-export function applyFileSettings(config: SummerizeConfig, loaded: LoadedSettings): void {
+export function applyFileSettings(config: CommentaryConfig, loaded: LoadedSettings): void {
   Object.assign(config, loaded.overrides);
 }
 

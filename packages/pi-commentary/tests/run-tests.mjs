@@ -52,7 +52,7 @@ const {
   modelLabel,
   COMMENTARY_INSTRUCTIONS,
 } = await jiti.import("../src/commentator.ts");
-const { fallbackLine, WIDGET_KEY } = await jiti.import("../src/render.ts");
+const { fallbackLine, banner, plainBanner, WIDGET_KEY } = await jiti.import("../src/render.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -252,6 +252,18 @@ test("fallbackLine summarizes counts and flags failures", () => {
     "Since last commentary: 1 tool call, 1 edit, 1 failing call — some calls failed; the agent may retry."
   );
   assert.equal(fallbackLine(EMPTY_COUNTS), "Since last commentary: no activity.");
+});
+
+test("banner separates commentary with accent label and dim rule", () => {
+  const theme = { fg: (color, s) => `[${color}]${s}` };
+  const b = banner(theme);
+  assert.ok(b.startsWith("[accent]◆ commentary "), `banner label must be accent: ${b}`);
+  assert.ok(b.includes("[dim]─"), `rule must be dim: ${b}`);
+  assert.ok(!b.includes("[default]"), `no unthemed segments: ${b}`);
+  const plain = plainBanner();
+  assert.ok(plain.startsWith("◆ commentary ") && !plain.includes("["), `RPC banner is plain text: ${plain}`);
+  const visible = (s) => s.replace(/\[[a-z]+\]/g, "");
+  assert.equal(visible(b).length, plain.length, "TUI and RPC banners must align (same visible width)");
 });
 
 test("WIDGET_KEY is namespaced", () => {
@@ -551,6 +563,21 @@ await wiringTest("wiring: same-length branch replacement drops the stale paragra
   release();
   await new Promise((r) => setTimeout(r, 30));
   assert.deepEqual(Object.keys(ctx.ui.widgets), [], "equal-length navigation must drop, not render");
+  await pi.handlers["session_shutdown"]({}, ctx);
+});
+
+await wiringTest("wiring: widget renders above the editor (default placement, below insights)", async () => {
+  stubState.calls = []; stubState.text = "placed paragraph";
+  const pi = makePi();
+  entryModule.default(pi);
+  const holder = { branch: makeBranch() };
+  const ctx = makeCtx(holder);
+  await pi.handlers["turn_end"]({}, ctx);
+  await pi.handlers["agent_settled"]({}, ctx);
+  assert.ok(await waitFor(() => Object.keys(ctx.ui.widgets).length === 1), "widget must render");
+  const widget = ctx.ui.widgets["pi-commentary"];
+  assert.ok(widget, "widget key must be pi-commentary");
+  assert.equal(widget.opts?.placement, undefined, "placement must default to aboveEditor — no belowEditor option may be passed");
   await pi.handlers["session_shutdown"]({}, ctx);
 });
 
