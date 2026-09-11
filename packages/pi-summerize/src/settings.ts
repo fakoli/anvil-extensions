@@ -2,13 +2,13 @@
 //
 // Resolution order (later wins): defaults → env (PI_SUMMERIZE_*) → user file
 // (~/.pi/agent/pi-summerize.json) → project file (.pi/pi-summerize.json) →
-// session (in-memory, /summerize dialog). Files carry the SAME shape as the
-// env vars but snake_case keys; unknown keys are rejected on read so typos
+// session (in-memory, /commentary dialog). Files carry the SAME shape as the
+// env vars but camelCase keys; unknown keys are rejected on read so typos
 // fail loudly instead of silently disabling a setting.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { SummerizeConfig } from "./config.js";
 
 // Env override exists for tests and sandboxed environments; production uses
@@ -75,7 +75,10 @@ function validate(obj: Record<string, unknown>, path: string, problems: string[]
         problems.push(`${path}: "model" must be a non-empty string ("default" or "provider/model-id")`);
         continue;
       }
-      if (value !== "default" && !/^[a-zA-Z0-9_.:-]+\/[a-zA-Z0-9_.:-]+$/.test(value)) {
+      // provider/id — the id may itself contain slashes (nested registry ids
+      // like openrouter/anthropic/claude-3-haiku); resolveModel splits at the
+      // FIRST slash, so validation must accept everything it resolves
+      if (value !== "default" && !/^[a-zA-Z0-9_.:-]+(\/[a-zA-Z0-9_.:-]+)+$/.test(value)) {
         problems.push(`${path}: "model" must be "default" or "provider/model-id"`);
         continue;
       }
@@ -150,8 +153,9 @@ const LOCK_RETRY_MS = 20;
 function withSettingsLock<T>(path: string, fn: () => T): T {
   // parent MUST exist before the lock: a fresh settings directory otherwise
   // yields ENOENT on the lock mkdir, which a naive catch misreads as
-  // contention and retries for the full timeout (astra round-2 repro)
-  mkdirSync(path.slice(0, path.lastIndexOf("/")), { recursive: true });
+  // contention and retries for the full timeout (astra round-2 repro).
+  // dirname — not string slicing — so relative paths resolve to "."
+  mkdirSync(dirname(path), { recursive: true });
   const lockDir = `${path}.lock`;
   const deadline = Date.now() + LOCK_TIMEOUT_MS;
   for (;;) {
