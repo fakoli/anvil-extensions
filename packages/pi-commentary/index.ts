@@ -7,11 +7,11 @@
 // injects LLM-visible context, never writes memory. In print/JSON mode it is
 // silent (no model calls, no output, no notify).
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { readConfig, type SummerizeConfig } from "./src/config.js";
+import { readConfig, type CommentaryConfig } from "./src/config.js";
 import { loadFileSettings, applyFileSettings, saveSettings, clearSettings, validateSettingsObject, USER_SETTINGS_PATH } from "./src/settings.js";
 import { collectTurns, countActivity, renderObservation } from "./src/collect.js";
 import { resolveModel, runCommentary, modelLabel, COMMENTARY_INSTRUCTIONS } from "./src/commentator.js";
-import { WIDGET_KEY, commentaryWidget, wrapPlain, fallbackLine } from "./src/render.js";
+import { WIDGET_KEY, commentaryWidget, wrapPlain, fallbackLine, plainBanner } from "./src/render.js";
 
 interface BranchMark {
   length: number;
@@ -56,13 +56,13 @@ interface State {
   degradedNotified: boolean;
   warnedModel: boolean;
   /** /commentary dialog, session scope: applied over files, cleared at session_start. */
-  sessionOverrides: Partial<SummerizeConfig>;
+  sessionOverrides: Partial<CommentaryConfig>;
   /** Bumped at session boundaries; an in-flight dialog aborts when it changes. */
   dialogGeneration: number;
 }
 
 export default function (pi: ExtensionAPI): void {
-  const config: SummerizeConfig = readConfig();
+  const config: CommentaryConfig = readConfig();
   // Layered file settings (user/project) win over env; session overrides land
   // via the /commentary dialog and persist per its scope choice.
   applyFileSettings(config, loadFileSettings());
@@ -88,9 +88,9 @@ export default function (pi: ExtensionAPI): void {
     try {
       if (ctx.mode === "rpc") {
         // RPC setWidget only forwards string arrays; component factories are ignored.
-        ctx.ui.setWidget(WIDGET_KEY, wrapPlain(paragraph), { placement: "belowEditor" });
+        ctx.ui.setWidget(WIDGET_KEY, [plainBanner(), ...wrapPlain(paragraph)]);
       } else {
-        ctx.ui.setWidget(WIDGET_KEY, commentaryWidget(paragraph), { placement: "belowEditor" });
+        ctx.ui.setWidget(WIDGET_KEY, commentaryWidget(paragraph));
       }
       state.lastText = paragraph;
     } catch {
