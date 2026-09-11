@@ -24,8 +24,8 @@ on what just happened and renders it as a dim widget **below the editor**.
 
 - **Trigger** — `turn_end` counts turns; `agent_settled` (fully idle) evaluates:
   at least one completed turn since the last commentary, the minimum interval
-  elapsed, and real tool activity in the branch (a forced `/commentary` bypasses
-  all three).
+  elapsed, and real tool activity in the branch (a forced `/commentary now`
+  bypasses all three).
 - **Observation** — the last ~8 conversation turns are collected from the
   session branch (text trimmed, per-entry and total char-capped) plus activity
   counts (tool calls / edits / failing calls) over **only the entries newer
@@ -69,7 +69,8 @@ on what just happened and renders it as a dim widget **below the editor**.
 the registry), minimum interval, and persistence scope (user file,
 session-only, or reset). Esc abandons without changes.
 `/commentary now` — compose commentary now (bypasses throttle and gate).
-`/commentary on|off` — session-local control (a new session starts on).
+`/commentary on|off` — session-local control (a new session starts on, unless
+a persisted file keeps it off).
 `/commentary status` — model, last attempt vs last emission, last failure,
 current paragraph.
 

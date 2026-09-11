@@ -714,18 +714,21 @@ await test("astra r1: session_start reloads files via ctx.cwd and clears session
   const proj = join(tmpdir(), `pi-summerize-lifetime-${process.pid}`);
   mkdirSync(join(proj, ".pi"), { recursive: true });
   writeFileSync(join(proj, ".pi", "pi-summerize.json"), JSON.stringify({ enabled: false, model: "proj/model" }));
-  const pi = makePi();
-  entryModule.default(pi);
-  const { ctx: ctx1, notifications } = dialogCtx("on", "this session only", "test/other", "");
-  await pi.commands["commentary"].handler("", ctx1);
-  assert.ok(notifications.some((n) => n.msg.includes("session-only")));
-  const ctx2 = makeCtx({ branch: [] }, { cwd: proj });
-  await pi.handlers["session_start"]({}, ctx2);
-  await pi.commands["commentary"].handler("status", ctx2);
-  const status = ctx2.ui.notifications.map((n) => n.msg).join("\n");
-  assert.ok(status.includes("proj/model"), status);
-  assert.ok(status.includes("off"), status);
-  rmSync(proj, { recursive: true, force: true });
+  try {
+    const pi = makePi();
+    entryModule.default(pi);
+    const { ctx: ctx1, notifications } = dialogCtx("on", "this session only", "test/other", "");
+    await pi.commands["commentary"].handler("", ctx1);
+    assert.ok(notifications.some((n) => n.msg.includes("session-only")));
+    const ctx2 = makeCtx({ branch: [] }, { cwd: proj });
+    await pi.handlers["session_start"]({}, ctx2);
+    await pi.commands["commentary"].handler("status", ctx2);
+    const status = ctx2.ui.notifications.map((n) => n.msg).join("\n");
+    assert.ok(status.includes("proj/model"), status);
+    assert.ok(status.includes("off"), status);
+  } finally {
+    rmSync(proj, { recursive: true, force: true });
+  }
 });
 
 await test("astra r2: 30s throttles a successor episode; 0s removes an EXISTING throttle", async () => {
@@ -782,7 +785,8 @@ await test("astra r2: reset with OPPOSITE dialog choice reconciles to effective 
     // Stale-choice disagreement: dialog picks "off" + reset while the effective
     // config is on. The pick must NOT disable commentary — post-reset effective
     // state wins, and generation actually resumes (not just the notification).
-    process.env.PI_SUMMERIZE_MIN_INTERVAL_SECONDS = "0"; // let a fresh episode pass the interval check
+    // (The suite baseline already runs with a 0s interval, so a fresh episode
+    // passes the interval check after reset without env manipulation.)
     const { ctx, notifications } = dialogCtx("off", "reset saved settings");
     await pi.commands["commentary"].handler("", ctx);
     assert.ok(notifications.some((n) => n.msg.includes("commentary is on")), JSON.stringify(notifications));
@@ -791,7 +795,6 @@ await test("astra r2: reset with OPPOSITE dialog choice reconciles to effective 
     await pi.handlers["agent_settled"]({}, ctxB);
     assert.ok(await waitFor(() => stubState.calls.length === 3, 300), "reset must actually re-enable generation despite the opposite dialog choice");
   } finally {
-    delete process.env.PI_SUMMERIZE_MIN_INTERVAL_SECONDS;
     await pi.handlers["session_shutdown"]({}, makeCtx({ branch: [] }));
   }
 });
@@ -846,6 +849,18 @@ await test("astra r2: save creates missing settings parent dir without 2s conten
   } finally {
     rmSync(freshDir, { recursive: true, force: true });
   }
+  // a BARE RELATIVE filename resolves its parent to "." (dirname, not string slicing)
+  const bareDir = join(tmpdir(), `pi-summerize-bare-${process.pid}`);
+  mkdirSync(bareDir, { recursive: true });
+  const oldCwd = process.cwd();
+  process.chdir(bareDir);
+  try {
+    const p2 = saveSettings("user", { enabled: true }, undefined, "bare.json");
+    assert.ok(existsSync(join(bareDir, "bare.json")), "relative path must land in cwd");
+  } finally {
+    process.chdir(oldCwd);
+    rmSync(bareDir, { recursive: true, force: true });
+  }
 });
 
 await test("astra r2: in-flight dialog is invalidated at the session boundary", async () => {
@@ -869,6 +884,58 @@ await test("astra r2: in-flight dialog is invalidated at the session boundary", 
   assert.ok(!notifications.some((n) => n.msg.includes("saved") || n.msg.includes("applied") || n.msg.includes("reset")), JSON.stringify(notifications));
   assert.ok(!notifications.some((n) => n.msg.includes("error")), JSON.stringify(notifications));
   assert.ok(!existsSync(user), "stale dialog must not write settings");
+});
+
+await test("astra r3: dialog dies on shutdown and swallows a rejected stale pick", async () => {
+  const user = useIsolatedUserFile();
+  const pi = makePi();
+  entryModule.default(pi);
+  // (a) late resolution AFTER session_shutdown commits nothing
+  let releaseA;
+  const notifsA = [];
+  const ctxA = makeCtx({ branch: [] }, { cwd: tmpdir(), ui: {
+    widgets: {}, notifications: notifsA,
+    setWidget() {}, notify(m, l) { notifsA.push({ msg: m, level: l }); },
+    select: (t) => t.includes("Companion") ? new Promise((r) => { releaseA = r; }) : Promise.resolve("this session only"),
+    input: async () => "",
+  }});
+  const pA = pi.commands["commentary"].handler("", ctxA);
+  assert.ok(await waitFor(() => typeof releaseA === "function", 500), "dialog must await the enabled pick");
+  await pi.handlers["session_shutdown"]({}, makeCtx({ branch: [] }, { cwd: tmpdir() }));
+  releaseA("on");
+  await pA;
+  assert.ok(notifsA.length === 0, `stale dialog after shutdown must be silent: ${JSON.stringify(notifsA)}`);
+  assert.ok(!existsSync(user), "stale dialog must not write settings after shutdown");
+  // (b) a REJECTED pick after a session boundary is swallowed silently
+  let rejectB;
+  const notifsB = [];
+  const ctxB = makeCtx({ branch: [] }, { cwd: tmpdir(), ui: {
+    widgets: {}, notifications: notifsB,
+    setWidget() {}, notify(m, l) { notifsB.push({ msg: m, level: l }); },
+    select: (t) => t.includes("Companion") ? new Promise((_, rj) => { rejectB = rj; }) : Promise.resolve("this session only"),
+    input: async () => "",
+  }});
+  const pB = pi.commands["commentary"].handler("", ctxB);
+  assert.ok(await waitFor(() => typeof rejectB === "function", 500), "dialog must await the enabled pick");
+  await pi.handlers["session_start"]({}, makeCtx({ branch: [] }, { cwd: tmpdir() }));
+  rejectB(new Error("old dialog closed"));
+  await pB;
+  assert.ok(notifsB.length === 0, `rejected stale dialog must not notify: ${JSON.stringify(notifsB)}`);
+});
+
+await test("astra r3: nested registry model ids validate; empty segments still rejected", async () => {
+  const { validateSettingsObject } = await jiti.import("../src/settings.ts");
+  assert.equal(validateSettingsObject({ model: "openrouter/anthropic/claude-3-haiku" }).problems.length, 0, "nested ids must pass file validation");
+  assert.ok(validateSettingsObject({ model: "a//b" }).problems.length > 0, "empty segment must be rejected");
+  assert.ok(validateSettingsObject({ model: "/x" }).problems.length > 0, "missing provider must be rejected");
+  const user = useIsolatedUserFile();
+  writeFileSync(user, JSON.stringify({ model: "openrouter/anthropic/claude-3-haiku" }));
+  const pi = makePi();
+  entryModule.default(pi);
+  const { ctx, notifications } = dialogCtx("on", "this session only", "openrouter/anthropic/claude-3-haiku", "");
+  await pi.commands["commentary"].handler("", ctx);
+  assert.ok(notifications.some((n) => n.msg.includes("session-only")), `dialog must accept a nested registry id: ${JSON.stringify(notifications)}`);
+  rmSync(user, { force: true });
 });
 
 console.log(`\nALL tests passed (${passed} total)`);

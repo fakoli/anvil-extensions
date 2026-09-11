@@ -262,6 +262,7 @@ export default function (pi: ExtensionAPI): void {
   pi.on("session_shutdown", async () => {
     try {
       invalidateActive(false);
+      state.dialogGeneration += 1; // an in-flight dialog must not commit into a dead session
     } catch {
       // best effort
     }
@@ -281,9 +282,11 @@ export default function (pi: ExtensionAPI): void {
     }
   }
 
-  /** Model rule shared by the dialog and file loading: "default" or provider/id. */
+  /** Model rule shared by the dialog and file loading: "default" or provider/id.
+   * The id may itself contain slashes (nested registry ids); resolveModel
+   * splits at the FIRST slash, so validation must accept everything it resolves. */
   function validModelSpec(value: string): boolean {
-    return value === "default" || /^[a-zA-Z0-9_.:-]+\/[a-zA-Z0-9_.:-]+$/.test(value);
+    return value === "default" || /^[a-zA-Z0-9_.:-]+(\/[a-zA-Z0-9_.:-]+)+$/.test(value);
   }
 
   /** Reconcile the session's enabled state with the EFFECTIVE config after any commit. */
@@ -390,8 +393,14 @@ export default function (pi: ExtensionAPI): void {
         }
       }
     } catch (error) {
-      // dialog failures must never fail the command turn
-      ctx.ui.notify(`pi-summerize: settings dialog error (${error instanceof Error ? error.message : String(error)})`, "warning");
+      if (stale()) return; // session boundary while awaiting: nothing left to report
+      try {
+        // dialog failures must never fail the command turn (best effort —
+        // the context itself may already be gone)
+        ctx.ui.notify(`pi-summerize: settings dialog error (${error instanceof Error ? error.message : String(error)})`, "warning");
+      } catch {
+        // best effort
+      }
     }
   }
 
