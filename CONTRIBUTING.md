@@ -16,6 +16,7 @@ Thanks for your interest. This bundle is maintained as a single auditable unit, 
 5. **Lockfile with dependencies.** Dependency changes commit their `package-lock.json` update in the same change. The lockfile is the integrity anchor for every host.
 6. **Identity hygiene.** Commit with a noreply email (`git config user.email "you@users.noreply.github.com"`) and your handle as the name. History is identity-scrubbed before every release; the cleanest diff is the one that never needs scrubbing.
 7. **Secrets never enter the tree.** No `.env` files, tokens, or capability URLs — runtime configuration references secrets by environment variable name only.
+8. **Extension license boundary.** MIT extensions/plugins are eligible for reviewed forks. Apache-2.0 extensions/plugins stay official and unmodified outside this bundle, installed directly in Pi or as external tools. Track their exact versions, locks, installation, selection, and rollback in `fakoli/ai-infra`. Do not fork, patch, or vendor their code here. This is an operator maintenance policy; see `AGENTS.md`.
 
 ## Tag scheme
 
