@@ -2,17 +2,20 @@
 // against anvil's own fail-closed validator (scripts/pi-sandbox-config.mjs).
 //
 // Discovery order for packaging/pi/sandbox/allowlist.json:
-//   ANVIL_SANDBOX_ALLOWLIST (explicit file) > ANVIL_ROOT (repo root) >
-//   walk up from cwd looking for packaging/pi/sandbox/allowlist.json (≤ 8 levels)
-//   > null (degrade: profiles unknown, free-text profile allowed with warning;
-//   every saved config is still schema-validated locally and cross-checked when
-//   the validator is found).
+//   ANVIL_SANDBOX_ALLOWLIST (explicit file) > ANVIL_CHECKOUT (anvil repo root) >
+//   walk up from cwd looking for packaging/pi/sandbox/allowlist.json (≤ 8 levels) >
+//   ~/code/anvil > null (degrade: profiles unknown, free-text profile allowed
+//   with warning; every saved config is still schema-validated locally and
+//   cross-checked when the validator is found).
+// NOTE: ANVIL_ROOT is deliberately NOT used — it means the anvil *state* root
+// to the anvil CLI (anvil_status etc.); overloading it here would misresolve.
 //
 // Subprocess hygiene mirrors the sandbox scripts themselves: injection-vector
 // env vars are stripped before node starts, timeout via execFile, output capped.
 
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
+import { homedir } from "node:os";
 import { join as join$, resolve as pathResolve } from "node:path";
 
 export class AnvilError extends Error {}
@@ -44,15 +47,15 @@ function isFile(p: string): boolean {
 export function findSandboxPolicy(cwd: string): SandboxPolicy | null {
   const explicit = process.env.ANVIL_SANDBOX_ALLOWLIST;
   if (explicit && isFile(explicit)) {
-    const repoRoot = process.env.ANVIL_ROOT && isFile(process.env.ANVIL_ROOT + "/scripts/pi-sandbox-config.mjs")
-      ? pathResolve(process.env.ANVIL_ROOT)
+    const checkout = process.env.ANVIL_CHECKOUT && isFile(process.env.ANVIL_CHECKOUT + "/scripts/pi-sandbox-config.mjs")
+      ? pathResolve(process.env.ANVIL_CHECKOUT)
       : pathResolve(explicit, "../../.."); // allowlist lives at <root>/packaging/pi/sandbox/
-    return buildPolicy(explicit, repoRoot);
+    return buildPolicy(explicit, repoRootOf(explicit, checkout));
   }
-  const anvilRoot = process.env.ANVIL_ROOT;
-  if (anvilRoot) {
-    const al = pathResolve(anvilRoot, "packaging", "pi", "sandbox", "allowlist.json");
-    if (isFile(al)) return buildPolicy(al, pathResolve(anvilRoot));
+  const checkoutEnv = process.env.ANVIL_CHECKOUT;
+  if (checkoutEnv) {
+    const al = pathResolve(checkoutEnv, "packaging", "pi", "sandbox", "allowlist.json");
+    if (isFile(al)) return buildPolicy(al, pathResolve(checkoutEnv));
   }
   let dir = pathResolve(cwd);
   for (let i = 0; i < WALK_UP_LIMIT; i++) {
@@ -62,7 +65,20 @@ export function findSandboxPolicy(cwd: string): SandboxPolicy | null {
     if (parent === dir) break;
     dir = parent;
   }
+  const defaultCheckout = join$(getHomeDir(), "code", "anvil");
+  const alDefault = join$(defaultCheckout, "packaging", "pi", "sandbox", "allowlist.json");
+  if (isFile(alDefault)) return buildPolicy(alDefault, defaultCheckout);
   return null;
+}
+
+function getHomeDir(): string {
+  return process.env.HOME || homedir();
+}
+
+function repoRootOf(allowlistPath: string, fallback: string): string {
+  // <root>/packaging/pi/sandbox/allowlist.json → repo root is three up
+  const guess = pathResolve(allowlistPath, "../../..");
+  return isFile(join$(guess, "scripts", "pi-sandbox-config.mjs")) ? guess : fallback;
 }
 
 function buildPolicy(allowlistPath: string, repoRoot: string): SandboxPolicy {

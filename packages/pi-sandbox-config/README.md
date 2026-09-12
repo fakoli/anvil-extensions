@@ -38,8 +38,10 @@ attestation line to stderr on every launch; `max_containers` is enforced there.
 
 ## Policy discovery
 
-`ANVIL_SANDBOX_ALLOWLIST` (explicit file) > `ANVIL_ROOT` (repo root) > walk-up
-from the session cwd for `packaging/pi/sandbox/allowlist.json` (≤ 8 levels).
+`ANVIL_SANDBOX_ALLOWLIST` (explicit file) > `ANVIL_CHECKOUT` (anvil repo root) >
+walk-up from the session cwd for `packaging/pi/sandbox/allowlist.json` (≤ 8 levels) >
+`~/code/anvil`. `ANVIL_ROOT` is deliberately not used — it means the anvil *state*
+root to the anvil CLI.
 Without the policy surface, profile names are free-text and every saved config
 is still schema-validated locally; the validator cross-check activates as soon
 as the surface is found.
