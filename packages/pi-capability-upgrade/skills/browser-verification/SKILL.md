@@ -5,9 +5,12 @@ description: Verify a candidate-owned local web flow with the pinned browser CLI
 
 # Browser verification
 
-Use the package-local pinned CLI only. Start a candidate-owned development
-server on `127.0.0.1`, use a unique session name and an isolated profile under
-the candidate state directory, and record its process id. Do not attach to an
+Set `PLAYWRIGHT_CLI_BIN` to the reviewed external browser CLI executable before
+running this workflow. The candidate package does not bundle a browser CLI; the
+private `anvil-playwright` wrapper is suitable when it is explicitly selected
+through that variable. Start a candidate-owned development server on
+`127.0.0.1`, use a unique session name and an isolated profile under the
+candidate state directory, and record its process id. Do not attach to an
 existing browser, use a persistent personal profile, real account, or a
 production endpoint.
 

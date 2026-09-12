@@ -1,22 +1,27 @@
 #!/usr/bin/env node
-// Opt-in local fixture for the package-pinned @playwright/cli binary.
+// Opt-in local fixture for an explicitly selected external @playwright/cli binary.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { accessSync, constants, mkdtempSync, rmSync } from "node:fs";
 import http from "node:http";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 
-const here = dirname(fileURLToPath(import.meta.url));
-const bundle = join(here, "..", "..", "..");
-const cli = join(bundle, "node_modules", "@playwright", "cli", "playwright-cli.js");
+const cli = process.env.PLAYWRIGHT_CLI_BIN;
+if (!cli) {
+  throw new Error("PLAYWRIGHT_CLI_BIN must name the reviewed external browser CLI executable");
+}
+try {
+  accessSync(cli, constants.X_OK);
+} catch {
+  throw new Error(`PLAYWRIGHT_CLI_BIN is not an executable file: ${cli}`);
+}
 const state = mkdtempSync(join(tmpdir(), "pi-capability-browser-"));
 const session = `candidate-fixture-${process.pid}`;
 
 function run(args) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [cli, `-s=${session}`, ...args], { cwd: state, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(cli, [`-s=${session}`, ...args], { cwd: state, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = ""; let stderr = "";
     child.stdout.on("data", (chunk) => { stdout += chunk; });
     child.stderr.on("data", (chunk) => { stderr += chunk; });
@@ -44,7 +49,7 @@ try {
   assert.match(await run(["console", "error"]), /candidate-fixture-console-marker/);
   await run(["goto", `http://127.0.0.1:${port}/api/fail`]);
   assert.match(await run(["requests"]), /503/);
-  console.log("Pinned browser CLI fixture passed");
+  console.log("External browser CLI fixture passed");
 } finally {
   await run(["close"]).catch(() => undefined);
   await new Promise((resolve) => server.close(resolve));

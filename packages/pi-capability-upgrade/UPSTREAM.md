@@ -30,7 +30,9 @@ Source: `fakoli/fakoli-plugins` commit
   and host discovery are never consulted.
 - `@playwright/cli@0.1.19`, Apache-2.0,
   `sha512-eGXIsYa5D+dC6wHGf+9uEislhPGip1djK+yiNAD7BVsXN3WzzR1J4ClFAhYhyu7wSEFqhcPrqXAYeBJF1dKJ7A==`.
-  It is a local CLI dependency for the browser skill and is not an MCP server.
+  It is an external private browser tool with its own exact lockfile, not a
+  bundled package dependency or MCP server. Browser verification requires an
+  explicit `PLAYWRIGHT_CLI_BIN` executable selection.
 
 ## Evaluated, not enabled
 
