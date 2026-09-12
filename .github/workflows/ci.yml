@@ -23,6 +23,11 @@ jobs:
       - name: Install (workspaces, lockfile-pinned)
         run: npm ci --no-audit --no-fund
 
+      - name: Install pi bundle for test-time module aliases
+        run: |
+          npm install --no-save @earendil-works/pi-coding-agent@0.85.1 --no-audit --no-fund
+          echo "PI_INSTALL_DIR=$PWD/node_modules/@earendil-works/pi-coding-agent" >> "$GITHUB_ENV"
+
       - name: Offline test suites
         run: |
           set -e

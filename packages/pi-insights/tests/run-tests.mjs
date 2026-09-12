@@ -1,7 +1,25 @@
 // pi-insights — logic tests. Plain node + jiti (no bun dependency on this host).
 // Run: node tests/run-tests.mjs
 import assert from "node:assert/strict";
-import { createJiti } from "/data/apps/devtools/node-24.20.0/lib/node_modules/@earendil-works/pi-coding-agent/node_modules/jiti/lib/jiti.mjs";
+import { createRequire } from "node:module";
+import { join, dirname } from "node:path";
+
+const PI_INSTALL_DIR = process.env.PI_INSTALL_DIR
+  ?? (() => {
+    try {
+      return dirname(createRequire(import.meta.url).resolve("@earendil-works/pi-coding-agent/package.json"));
+    } catch {
+      return undefined;
+    }
+  })()
+  ?? "/data/apps/devtools/node-24.20.0/lib/node_modules/@earendil-works/pi-coding-agent";
+
+let createJiti;
+try {
+  ({ createJiti } = await import("jiti"));
+} catch {
+  ({ createJiti } = await import(`${PI_INSTALL_DIR}/node_modules/jiti/lib/jiti.mjs`));
+}
 import { pathToFileURL } from "node:url";
 
 import { fileURLToPath } from "node:url";
