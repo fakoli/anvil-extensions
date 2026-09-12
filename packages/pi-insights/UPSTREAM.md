@@ -7,3 +7,5 @@
 - Design constraints honored: observational only — never mutates tool results,
   never injects LLM-context messages, never writes memory, never summarizes
   tool output (pi-condense's domain), never reads pruned content.
+- 2026-09-12: original UI-only tool elapsed/silence status, with lifecycle cleanup;
+  no additional dependencies, model calls, or persisted tool contents.
