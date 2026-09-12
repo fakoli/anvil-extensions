@@ -19,7 +19,15 @@ Thanks for your interest. This bundle is maintained as a single auditable unit, 
 
 ## Tag scheme
 
-Releases are tags named `anvil-vMAJOR.MINOR.PATCH`, cut on `main` after CI is green. Tags are immutable (repository rulesets protect them). If you need a hotfix, it lands on `main` via PR and ships as the next patch tag.
+Releases are tags named `anvil-vMAJOR.MINOR.PATCH`, cut on `main` **only after CI is green** on the exact commit being tagged. Tags are immutable (repository rulesets protect them). Use the release script — it enforces the order:
+
+```bash
+scripts/release.sh anvil-v0.7.0
+```
+
+It runs the clean-room gate (`scripts/release-verify.sh`: scratch clone, `npm ci` against the committed lockfile, workspace resolution, static checks for hardcoded paths and identity strings, full test matrix), pushes `main`, **waits for a green CI run on that commit**, and only then creates and pushes the tag and re-pins the local install. A tag that would ship red is never created in the first place.
+
+The test matrix lives in `scripts/test-matrix.txt` — the single source of truth shared by CI and the release gate. Add a package's workspace name there when it gains a test suite; vendored packages that ship no tests stay out, with a comment explaining why. If you need a hotfix, it lands on `main` via PR and ships as the next patch tag.
 
 ## What makes a good PR here
 

@@ -2,7 +2,6 @@
 // Run: node tests/run-tests.mjs
 // No network: Gemini calls use a stubbed fetch; sharp exercises real bytes.
 import assert from "node:assert/strict";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, mkdtempSync, statSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -10,14 +9,12 @@ import { join, dirname } from "node:path";
 
 const PI_INSTALL_DIR = process.env.PI_INSTALL_DIR
   ?? (() => {
-    try {
-      // Any host where the pi bundle is resolvable from node_modules.
-      return dirname(createRequire(import.meta.url).resolve("@earendil-works/pi-coding-agent/package.json"));
-    } catch {
-      return undefined;
-    }
-  })()
-  ?? "/data/apps/devtools/node-24.20.0/lib/node_modules/@earendil-works/pi-coding-agent";
+    // pi-coding-agent is a root devDependency; its ESM "." export resolves,
+    // and the bundle dir (with nested jiti/pi-tui/typebox) sits above it.
+    let dir = dirname(fileURLToPath(import.meta.resolve("@earendil-works/pi-coding-agent")));
+    while (!existsSync(join(dir, "package.json"))) dir = dirname(dir);
+    return dir;
+  })();
 
 let createJiti;
 try {

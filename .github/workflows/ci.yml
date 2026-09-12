@@ -23,21 +23,13 @@ jobs:
       - name: Install (workspaces, lockfile-pinned)
         run: npm ci --no-audit --no-fund
 
-      - name: Install pi bundle for test-time module aliases
-        run: |
-          mkdir -p "$HOME/pi-bundle"
-          cd "$HOME/pi-bundle"
-          npm init -y >/dev/null
-          npm install @earendil-works/pi-coding-agent@0.85.1 --no-audit --no-fund
-          echo "PI_INSTALL_DIR=$HOME/pi-bundle/node_modules/@earendil-works/pi-coding-agent" >> "$GITHUB_ENV"
-
       - name: Offline test suites
         run: |
           set -e
-          for ws in pi-commentary pi-condense "@schovest/pi-hermes-memory" pi-insights \
-                    pi-nano-banana "@gotgenes/pi-permission-system" pi-sandbox-config \
-                    pi-subagents pi-tool-repair pi-voice-clone; do
+          # Single source of truth with scripts/release-verify.sh
+          while IFS= read -r ws; do
+            [ -z "$ws" ] && continue
             echo "::group::tests: $ws"
             npm test --workspace "$ws"
             echo "::endgroup::"
-          done
+          done < scripts/test-matrix.txt

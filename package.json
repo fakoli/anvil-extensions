@@ -30,5 +30,8 @@
     ]
   },
   "description": "Anvil Extensions: an opinionated, pinned bundle of pi coding-agent extensions (context management, memory, subagent orchestration, image generation, and more).",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.85.1"
+  }
 }
