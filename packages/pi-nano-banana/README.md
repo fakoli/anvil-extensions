@@ -21,7 +21,7 @@ the root manifest (`pi.extensions`) when the repo is installed as a git-pinned
 pi package:
 
 ```
-pi install git:github.com/fakoli/pi-extensions@<tag>
+pi install git:github.com/fakoli/anvil-extensions@<tag>
 ```
 
 Then bump the pin in `~/.pi/agent/settings.json` (`packages` list).
