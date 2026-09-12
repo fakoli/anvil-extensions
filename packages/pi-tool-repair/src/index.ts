@@ -150,55 +150,53 @@ const GRAMMAR_TOKEN_LEAKS = [
   { tag: "</arg_value>", at: "end" as const },
 ];
 
+/** Remove only known grammar sentinels; tool payload whitespace is data. */
+function stripExplicitGrammarMarkers(value: string): string {
+  let result = value;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const { tag, at } of GRAMMAR_TOKEN_LEAKS) {
+      if (at === "start" && result.startsWith(tag)) {
+        result = result.slice(tag.length);
+        changed = true;
+      } else if (at === "end" && result.endsWith(tag)) {
+        result = result.slice(0, -tag.length);
+        changed = true;
+      }
+    }
+  }
+  return result;
+}
+
 export function stripGrammarTokenLeaksInPlace(obj: Record<string, unknown>): boolean {
   let changed = false;
   for (const key of Object.keys(obj)) {
     const value = obj[key];
-    let newKey = key;
-    for (const { tag, at } of GRAMMAR_TOKEN_LEAKS) {
-      if (at === "start" && newKey.startsWith(tag)) {
-        newKey = newKey.slice(tag.length);
-      } else if (at === "end" && newKey.endsWith(tag)) {
-        newKey = newKey.slice(0, -tag.length);
-      }
-    }
-    newKey = newKey.trim();
+    const newKey = stripExplicitGrammarMarkers(key);
 
-    if (newKey !== key) {
+    // Never overwrite a pre-existing, non-leaked key: repair must not discard
+    // user input merely because a malformed key normalizes to the same name.
+    const targetKey = newKey !== key && newKey in obj ? key : newKey;
+    if (newKey !== key && targetKey === newKey) {
       obj[newKey] = value;
       delete obj[key];
       changed = true;
     }
 
     if (typeof value === "string") {
-      let s = value;
-      for (const { tag, at } of GRAMMAR_TOKEN_LEAKS) {
-        if (at === "start" && s.startsWith(tag)) {
-          s = s.slice(tag.length);
-        } else if (at === "end" && s.endsWith(tag)) {
-          s = s.slice(0, -tag.length);
-        }
-      }
-      const trimmed = s.trim();
-      if (trimmed !== value) {
-        obj[newKey] = trimmed;
+      const stripped = stripExplicitGrammarMarkers(value);
+      if (stripped !== value) {
+        obj[targetKey] = stripped;
         changed = true;
       }
     } else if (Array.isArray(value)) {
       for (let i = 0; i < value.length; i++) {
         const item = value[i];
         if (typeof item === "string") {
-          let s = item;
-          for (const { tag, at } of GRAMMAR_TOKEN_LEAKS) {
-            if (at === "start" && s.startsWith(tag)) {
-              s = s.slice(tag.length);
-            } else if (at === "end" && s.endsWith(tag)) {
-              s = s.slice(0, -tag.length);
-            }
-          }
-          const trimmed = s.trim();
-          if (trimmed !== item) {
-            value[i] = trimmed;
+          const stripped = stripExplicitGrammarMarkers(item);
+          if (stripped !== item) {
+            value[i] = stripped;
             changed = true;
           }
         } else if (item && typeof item === "object") {
