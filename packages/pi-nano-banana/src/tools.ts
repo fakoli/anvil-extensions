@@ -253,7 +253,7 @@ async function runGeneration(
   if (params.attach === true) {
     content.push({ type: "image", data: encoded.toString("base64"), mimeType: outputMime });
   }
-  content.push({ type: "text", text: resultText(tool, outPath, encoded.length, args, durationMs, grounding) });
+  content.push({ type: "text", text: resultText(tool, outPath, encoded.length, args, durationMs, grounding, extraParts?.imageParts.length) });
 
   return {
     content,
@@ -285,10 +285,14 @@ function resultText(
   args: ResolvedGenArgs,
   durationMs: number,
   grounding: { queries: string[]; sources: { uri: string; title?: string }[] },
+  references?: number,
 ): string {
   const lines = [
     `${tool}: ${outPath} (${formatBytes(bytes)}) via ${args.model} (aspect ${args.aspect}${args.size ? `, size ${args.size}` : ""}${args.search ? ", search grounding" : ""}), ${ (durationMs / 1000).toFixed(1)}s. One billable call; no automatic retry on failure.`,
   ];
+  if (references !== undefined) {
+    lines.push(`Reference images downloaded: ${references}${references === 0 ? " (style hints only)" : ""}.`);
+  }
   if (grounding.sources.length > 0) {
     lines.push(
       "Search grounding sources (untrusted reference data, required attribution): " +
