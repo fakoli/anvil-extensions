@@ -66,6 +66,17 @@ export default function (pi: ExtensionAPI): void {
     }
   }
 
+  // Rehydrate the in-memory "last" pointer after resume/fork/reload: the
+  // newest session gallery entry becomes the "last" image again.
+  pi.on("session_start", async (_event, ctx) => {
+    try {
+      const gallery = scanGallery(ctx);
+      lastImage = gallery.length > 0 ? gallery[gallery.length - 1] : null;
+    } catch {
+      // best effort; "last" then simply starts empty
+    }
+  });
+
   // --- commands ----------------------------------------------------------------
 
   pi.registerCommand("image-gallery", {
@@ -185,9 +196,11 @@ export default function (pi: ExtensionAPI): void {
           ctx.ui.notify(`pi-nano-banana: config ready at ${path} (existing file untouched)`, "info");
         }
       } catch (error) {
-        // Settings errors can carry legacy-key-adjacent text; keep the message generic.
+        // Settings errors are hand-built upstream and never carry key
+        // material; the slice bounds length. This is diagnostics, not
+        // sanitization — parsing paths already refuse to echo contents.
         const message = error instanceof Error ? error.message : String(error);
-        ctx.ui.notify(`pi-nano-banana: ${message.includes("API key") ? "settings error" : "settings dialog error"} (${message.slice(0, 120)})`, "warning");
+        ctx.ui.notify(`pi-nano-banana: settings dialog error (${message.slice(0, 120)})`, "warning");
       }
     },
   });

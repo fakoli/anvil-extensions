@@ -489,6 +489,28 @@ test("defaultOptimizeOut", () => {
   assert.equal(optimizeMod.defaultOptimizeOut("photo"), "photo-optimized.png");
 });
 
+await atest("atomicWriteText: bare relative filename lands in cwd (no mangled dir)", async () => {
+  freshSandbox();
+  const path = "relative-config.json";
+  configMod.atomicWriteText("{}\n", path);
+  assert.ok(existsSync(join(sandbox, "cwd", "relative-config.json")));
+  const entries = readdirSync(join(sandbox, "cwd"));
+  assert.ok(!entries.includes("r"), "no single-character dir from the old slice bug");
+  rmSync(join(sandbox, "cwd", "relative-config.json"));
+});
+
+await atest("optimize: EXIF orientation 6 swaps measured axes", async () => {
+  freshSandbox();
+  const sharp = imageIo.getSharp();
+  const src = join(sandbox, "cwd", "rotated.jpg");
+  await sharp({ create: { width: 40, height: 20, channels: 3, background: "blue" } }).jpeg().withMetadata({ orientation: 6 }).toFile(src);
+  const dst = join(sandbox, "cwd", "rotated-optimized.png");
+  await optimizeMod.optimize(src, dst, null, 15, false);
+  const meta = await sharp(dst).metadata();
+  assert.equal(meta.width, 15, `displayed width capped: got ${meta.width}x${meta.height}`);
+  assert.equal(meta.height, 30, "height follows the swapped aspect (20x40 displayed → 15x30)");
+});
+
 // ===========================================================================
 // tools wiring (fake ctx, stubbed fetch)
 // ===========================================================================
@@ -617,11 +639,50 @@ await atest("image_remix: fetches page, untrusted-framed prompt, downloads refs"
   assert.ok(existsSync(join(sandbox, "cwd", "remix.png")));
   const remixPart = capturedBody.contents[0].parts[0];
   assert.ok(remixPart.text.includes("untrusted style-reference data"));
-  assert.ok(remixPart.text.includes("https://site.example/ref.png"));
+  assert.ok(!remixPart.text.includes("https://site.example/ref.png"), "reference URLs ride as image parts, not prompt text (parity with the original's hints.pop)");
+  assert.ok(remixPart.text.includes("\"title\":\"T\""));
   assert.ok(remixPart.text.includes("User request:\nan invitation"));
   assert.equal(capturedBody.contents[0].parts[1].inlineData.mimeType, "image/png");
   assert.equal(result.details.references, 1);
   await assert.rejects(() => remixTool.execute("r2", { url: "https://user:pw@site.example/", prompt: "x" }, undefined, undefined, ctx), /without embedded credentials/);
+});
+
+await atest("image_remix: non-2xx page fails before the billable call", async () => {
+  freshSandbox();
+  process.env.GEMINI_API_KEY = "k";
+  let geminiHit = false;
+  const impl = async (url) => {
+    if (String(url).includes("generativelanguage")) { geminiHit = true; return { ok: true, status: 200, headers: new Headers(), body: ReadableStreamFrom([new TextEncoder().encode("{}")]), arrayBuffer: async () => new ArrayBuffer(0) }; }
+    return { ok: false, status: 404, headers: new Headers(), body: ReadableStreamFrom([new TextEncoder().encode("<html>error page</html>")]), arrayBuffer: async () => new ArrayBuffer(0) };
+  };
+  const deps = makeDeps({ fetchImpl: impl });
+  const [, , remixTool] = toolsMod.createImageTools(deps);
+  await assert.rejects(
+    () => remixTool.execute("r3", { url: "https://dead.example/", prompt: "x", out: join(sandbox, "cwd", "nope.png") }, undefined, undefined, makeCtx(join(sandbox, "cwd"))),
+    /HTTP 404/,
+  );
+  assert.equal(geminiHit, false, "no billable call after a dead page");
+});
+
+await atest("validate-first ordering: missing key reported before reference reads (edit)", async () => {
+  freshSandbox();
+  delete process.env.GEMINI_API_KEY;
+  const deps = makeDeps();
+  const [, editTool] = toolsMod.createImageTools(deps);
+  const missingSource = join(sandbox, "cwd", "does-not-exist.png");
+  await assert.rejects(
+    () => editTool.execute("v1", { prompt: "x", source: missingSource }, undefined, undefined, makeCtx(join(sandbox, "cwd"))),
+    /Missing GEMINI_API_KEY/,
+  );
+  // incompatible pair (pro + 512) fails before reading the (valid) source too
+  process.env.GEMINI_API_KEY = "k";
+  const sharp = imageIo.getSharp();
+  const src = join(sandbox, "cwd", "ok.png");
+  await sharp({ create: { width: 2, height: 2, channels: 3, background: "red" } }).png().toFile(src);
+  await assert.rejects(
+    () => editTool.execute("v2", { prompt: "x", source: src, size: "512" }, undefined, undefined, makeCtx(join(sandbox, "cwd"))),
+    /require the flash model/,
+  );
 });
 
 await atest("image_optimize: preset path with real sharp; 'last' source", async () => {
@@ -647,10 +708,11 @@ await atest("index: registers 4 tools + 2 commands; gallery entries; /image-gall
   process.env.GEMINI_API_KEY = "k";
   const entryModule = await jiti.import("../index.ts");
   entryModule.__setFetchImpl(geminiOkFetch(await tinyPng()));
-  const registered = { tools: [], commands: {}, entries: [] };
+  const registered = { tools: [], commands: {}, entries: [], handlers: {} };
   const fakePi = {
     registerTool: (t) => registered.tools.push(t),
     registerCommand: (name, def) => { registered.commands[name] = def; },
+    on: (name, fn) => { registered.handlers[name] = fn; },
     appendEntry: (type, data) => registered.entries.push({ type, data }),
   };
   entryModule.default(fakePi);
@@ -675,10 +737,11 @@ await atest("session overrides from /image-config session scope apply to tool ca
   process.env.GEMINI_API_KEY = "k";
   const entryModule = await jiti.import("../index.ts");
   entryModule.__setFetchImpl(geminiOkFetch(await tinyPng()));
-  const registered = { tools: [], commands: {}, entries: [] };
+  const registered = { tools: [], commands: {}, entries: [], handlers: {} };
   const fakePi = {
     registerTool: (t) => registered.tools.push(t),
     registerCommand: (name, def) => { registered.commands[name] = def; },
+    on: (name, fn) => { registered.handlers[name] = fn; },
     appendEntry: (type, data) => registered.entries.push({ type, data }),
   };
   entryModule.default(fakePi);

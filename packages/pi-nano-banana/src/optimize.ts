@@ -3,7 +3,7 @@
 // same halving-ish 0.8 shrink step, same 64-iteration bound).
 
 import { readFileSync } from "node:fs";
-import { basename } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { atomicWrite, encodeImage, decodeImage, sniffImage, validateOutputPath } from "./image-io.js";
 import { roundHalfEven } from "./models.js";
 
@@ -57,8 +57,12 @@ export async function optimize(
   await sniffImage(data); // static PNG/JPEG/WebP only — animation is rejected
   const original = decodeImage(data);
   const meta = await original.metadata();
-  const originalWidth = meta.width ?? 0;
-  const originalHeight = meta.height ?? 0;
+  // EXIF orientation 5–8 swaps the stored axes; measure DISPLAYED dimensions
+  // (parity: ImageOps.exif_transpose runs before measuring in the original).
+  const orientation = meta.orientation ?? 1;
+  const swapAxes = orientation >= 5 && orientation <= 8;
+  const originalWidth = (swapAxes ? meta.height : meta.width) ?? 0;
+  const originalHeight = (swapAxes ? meta.width : meta.height) ?? 0;
   if (!originalWidth || !originalHeight) {
     throw new Error("Input must be a static PNG, JPEG, or WebP image");
   }
@@ -90,7 +94,5 @@ export function defaultOptimizeOut(srcPath: string): string {
   const base = basename(srcPath);
   const dot = base.lastIndexOf(".");
   const stem = dot < 0 ? base : base.slice(0, dot);
-  const slash = srcPath.lastIndexOf("/");
-  const dir = slash < 0 ? "" : srcPath.slice(0, slash + 1);
-  return `${dir}${stem}-optimized.png`;
+  return join(dirname(srcPath), `${stem}-optimized.png`);
 }

@@ -36,12 +36,11 @@ export function parseDotenv(content: string): Record<string, string> {
         }
       }
       if (quote === '"') {
-        value = value
-          .replace(/\\r/g, "\r")
-          .replace(/\\n/g, "\n")
-          .replace(/\\t/g, "\t")
-          .replace(/\\"/g, '"')
-          .replace(/\\\\/g, "\\");
+        // Single-pass escape handling (python-dotenv parity): scan left to
+        // right so "a\\nb" stays backslash+n while "a\nb" gains a newline.
+        value = value.replace(/\\(.)/gs, (_match, c: string) =>
+          c === "n" ? "\n" : c === "t" ? "\t" : c === "r" ? "\r" : c,
+        );
       }
     } else {
       // Unquoted: strip a trailing comment after whitespace.
