@@ -34,7 +34,7 @@
     ]
   },
   "dependencies": {
-    "sharp": "^0.34.5"
+    "sharp": "0.35.4"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",

@@ -36,3 +36,5 @@ Preserved from the original, non-negotiable:
 - HTTP status errors omit response bodies (may echo prompt or secrets)
 
 Registry-integrity hashes: N/A — original package.
+- 2026-09-12: pin sharp 0.35.4 to include the libvips/libheif security fixes
+  (GHSA-f88m-g3jw-g9cj and GHSA-rgj7-g3m4-5g8c). Image behavior is unchanged.
