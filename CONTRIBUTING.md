@@ -16,6 +16,7 @@ Thanks for your interest. This bundle is maintained as a single auditable unit, 
 5. **Lockfile with dependencies.** Dependency changes commit their `package-lock.json` update in the same change. The lockfile is the integrity anchor for every host.
 6. **Identity hygiene.** Commit with a noreply email (`git config user.email "you@users.noreply.github.com"`) and your handle as the name. History is identity-scrubbed before every release; the cleanest diff is the one that never needs scrubbing.
 7. **Secrets never enter the tree.** No `.env` files, tokens, or capability URLs — runtime configuration references secrets by environment variable name only.
+8. **Extension license boundary.** MIT extensions/plugins are eligible for reviewed forks. Apache-2.0 extensions/plugins stay official and unmodified outside this bundle, installed directly in Pi or as external tools. Track their exact versions, locks, installation, selection, and rollback in `fakoli/ai-infra`. Do not fork, patch, or vendor their code here. This is an operator maintenance policy; see `AGENTS.md`.
 
 ## Tag scheme
 
@@ -25,7 +26,7 @@ Releases are tags named `anvil-vMAJOR.MINOR.PATCH`, cut on `main` **only after C
 scripts/release.sh anvil-v0.7.0
 ```
 
-It runs the clean-room gate (`scripts/release-verify.sh`: scratch clone, `npm ci` against the committed lockfile, workspace resolution, static checks for hardcoded paths and identity strings, full test matrix), pushes `main`, **waits for a green CI run on that commit**, and only then creates and pushes the tag and re-pins the local install. A tag that would ship red is never created in the first place.
+Merge the reviewed PR first and run from a clean checkout at the resulting `origin/main` commit. The script runs the clean-room gate (`scripts/release-verify.sh`: scratch archive, `npm ci` against the committed lockfile including Pi, workspace resolution, static checks, full test matrix), **waits for a green CI run on that exact commit**, and then creates and pushes a new immutable tag. It preserves the local Pi installation unless `INSTALL_LOCAL=1` explicitly requests a re-pin. Publication does not activate a candidate on any host.
 
 The test matrix lives in `scripts/test-matrix.txt` — the single source of truth shared by CI and the release gate. Add a package's workspace name there when it gains a test suite; vendored packages that ship no tests stay out, with a comment explaining why. If you need a hotfix, it lands on `main` via PR and ships as the next patch tag.
 

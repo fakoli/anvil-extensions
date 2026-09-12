@@ -36,6 +36,7 @@ Verbatim vendoring is deliberate: updates to these packages are explicit diffs w
 - **pi-commentary** — original; the idle-commentary widget with silence-on-quiet/failure semantics and supersession restore.
 - **pi-sandbox-config** — original; fail-closed run-config editing cross-checked against the platform validator.
 - **pi-voice-clone** — original bridge to a privately-owned style plugin; the repo ships the bridge, not the private corpus.
+- **pi-capability-upgrade** — original receipt, documentation guard, and MCP-policy code, plus concise adapted workflow material from the public Fakoli plugin repository. Its `UPSTREAM.md` records the exact source revision and external package integrities.
 
 ## Adapted port: pi-nano-banana
 

@@ -10,11 +10,10 @@ set -euo pipefail
 
 # Self-sufficient PATH: gh (~/.local/bin) and bun (~/.bun/bin) are not on
 # a non-interactive shell's default PATH.
-export PATH="$HOME/.local/bin:$HOME/.bun/bin:$PATH"
+export PATH="$PATH:$HOME/.local/bin:$HOME/.bun/bin"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MATRIX="$REPO_ROOT/scripts/test-matrix.txt"
-BUNDLE_VERSION="${BUNDLE_VERSION:-0.85.1}"
 SCRATCH="${TMPDIR:-/tmp}/anvil-extensions-verify.$$"
 HOSTP_A=""; HOSTP_B=""; IDENT_A=""; IDENT_B=""; IDENT_C=""; FAILED=0
 
@@ -86,12 +85,11 @@ done
 
 echo
 echo "== pi bundle for module aliases =="
-mkdir -p "$SCRATCH/../anvil-verify-bundle"
-(cd "$SCRATCH/../anvil-verify-bundle"
-  [ -f package.json ] || npm init -y >/dev/null 2>&1
-  npm install "@earendil-works/pi-coding-agent@$BUNDLE_VERSION" --no-audit --no-fund >/dev/null 2>&1)
-export PI_INSTALL_DIR="$SCRATCH/../anvil-verify-bundle/node_modules/@earendil-works/pi-coding-agent"
-ok "bundle $BUNDLE_VERSION at $PI_INSTALL_DIR"
+export PI_INSTALL_DIR="$SCRATCH/node_modules/@earendil-works/pi-coding-agent"
+if [ ! -f "$PI_INSTALL_DIR/package.json" ]; then
+  echo "Pinned Pi development dependency is missing." >&2; exit 1
+fi
+ok "Pi runtime resolved from this archive's committed dependency lock"
 
 echo
 echo "== test matrix =="

@@ -1,0 +1,37 @@
+{
+  "name": "pi-capability-upgrade",
+  "version": "0.1.0",
+  "description": "Explicit, candidate-only workflow, documentation, browser, and read-only operations resources for Pi.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "files": [
+    "index.ts",
+    "src/**/*.ts",
+    "scripts/*",
+    "skills/**/*.md",
+    "config/*.json",
+    "config/*.yml",
+    "tests/*.mjs",
+    "tests/*.py",
+    "UPSTREAM.md",
+    "README.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "scripts": {
+    "test": "node tests/run-tests.mjs"
+  }
+}
