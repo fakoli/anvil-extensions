@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "description": "Example only. It is not discovered or loaded by the candidate adapter.",
+  "rules": [
+    {
+      "server": "serving",
+      "operations": ["status", "readiness", "capacity", "logs"],
+      "requiredScope": "ops-readonly"
+    }
+  ]
+}

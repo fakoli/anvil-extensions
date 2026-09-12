@@ -12,3 +12,4 @@ pi-insights
 pi-nano-banana
 pi-sandbox-config
 pi-voice-clone
+pi-capability-upgrade

@@ -19,11 +19,13 @@
       "./packages/pi-voice-clone/index.ts",
       "./packages/pi-sandbox-config/index.ts",
       "./packages/pi-hermes-memory/src/index.ts",
-      "./packages/pi-nano-banana/index.ts"
+      "./packages/pi-nano-banana/index.ts",
+      "./packages/pi-capability-upgrade/index.ts"
     ],
     "skills": [
       "./packages/pi-subagents/skills",
-      "./packages/pi-nano-banana/skills"
+      "./packages/pi-nano-banana/skills",
+      "./packages/pi-capability-upgrade/skills"
     ],
     "prompts": [
       "./packages/pi-subagents/prompts"
@@ -31,6 +33,11 @@
   },
   "description": "Anvil Extensions: an opinionated, pinned bundle of pi coding-agent extensions (context management, memory, subagent orchestration, image generation, and more).",
   "license": "MIT",
+  "dependencies": {
+    "@playwright/cli": "0.1.19",
+    "@upstash/context7-pi": "0.1.2",
+    "pi-mcp-adapter": "2.33.0"
+  },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "0.85.1"
   }

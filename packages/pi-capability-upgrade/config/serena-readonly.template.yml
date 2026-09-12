@@ -1,0 +1,17 @@
+# Install this as $SERENA_HOME/serena_config.yml in a candidate-owned directory.
+# Replace __CANDIDATE_STATE_DIRECTORY__ exactly once with an absolute directory
+# outside both worktrees. The Pi extension does not load this file or start Serena.
+language_backend: LSP
+web_dashboard: false
+web_dashboard_open_on_launch: false
+gui_log_window: false
+base_modes: []
+default_modes: []
+fixed_tools:
+  - get_symbols_overview
+  - find_symbol
+  - find_referencing_symbols
+  - find_implementations
+  - find_declaration
+project_serena_folder_location: "__CANDIDATE_STATE_DIRECTORY__/serena-project-cache/$projectFolderName"
+projects: []
