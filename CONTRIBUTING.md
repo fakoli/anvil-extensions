@@ -26,7 +26,7 @@ Releases are tags named `anvil-vMAJOR.MINOR.PATCH`, cut on `main` **only after C
 scripts/release.sh anvil-v0.7.0
 ```
 
-It runs the clean-room gate (`scripts/release-verify.sh`: scratch clone, `npm ci` against the committed lockfile, workspace resolution, static checks for hardcoded paths and identity strings, full test matrix), pushes `main`, **waits for a green CI run on that commit**, and only then creates and pushes the tag and re-pins the local install. A tag that would ship red is never created in the first place.
+Merge the reviewed PR first and run from a clean checkout at the resulting `origin/main` commit. The script runs the clean-room gate (`scripts/release-verify.sh`: scratch archive, `npm ci` against the committed lockfile including Pi, workspace resolution, static checks, full test matrix), **waits for a green CI run on that exact commit**, and then creates and pushes a new immutable tag. It preserves the local Pi installation unless `INSTALL_LOCAL=1` explicitly requests a re-pin. Publication does not activate a candidate on any host.
 
 The test matrix lives in `scripts/test-matrix.txt` — the single source of truth shared by CI and the release gate. Add a package's workspace name there when it gains a test suite; vendored packages that ship no tests stay out, with a comment explaining why. If you need a hotfix, it lands on `main` via PR and ships as the next patch tag.
 
