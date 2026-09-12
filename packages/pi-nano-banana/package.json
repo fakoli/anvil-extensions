@@ -1,0 +1,47 @@
+{
+  "name": "pi-nano-banana",
+  "version": "0.1.0",
+  "description": "Pi coding-agent extension for Google Gemini image generation: generate, edit, webpage-remix, and optimize images with Nano Banana Pro/Flash models as native LLM-callable tools.",
+  "author": "Fakoli",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-coding-agent",
+    "image-generation",
+    "gemini",
+    "nano-banana",
+    "tools"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "files": [
+    "index.ts",
+    "src/**/*.ts",
+    "skills/**/*.md",
+    "tests/*.mjs",
+    "README.md",
+    "config/config.example.json"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "dependencies": {
+    "sharp": "^0.34.5"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "scripts": {
+    "test": "node tests/run-tests.mjs"
+  }
+}
