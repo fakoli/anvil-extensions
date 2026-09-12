@@ -1030,6 +1030,26 @@ export default function (pi: ExtensionAPI) {
     );
   });
 
+  // Built-in compaction serializes its preparation directly, without emitting
+  // the normal context event. Reuse persisted summaries for both requests;
+  // leave session entries, cut points, file operations, and retained tail intact.
+  pi.on("session_before_compact", async (event) => {
+    if (!currentConfig.value.enabled || event.signal.aborted) return;
+    const preparation = event.preparation;
+    const [history, prefix] = [preparation.messagesToSummarize, preparation.turnPrefixMessages].map(
+      (messages) => pruneMessages(
+        messages,
+        indexer,
+        currentConfig.value.chainCompression,
+        currentConfig.value.purgeErrors,
+        currentConfig.value,
+        currentConfig.value.recoveryGraceTurns,
+      ).messages,
+    );
+    preparation.messagesToSummarize = history;
+    preparation.turnPrefixMessages = prefix;
+  });
+
   // ── context: prune summarized tool results from next LLM call ─────────────
   pi.on("context", async (event, ctx) => {
     if (!currentConfig.value.enabled) return undefined;
