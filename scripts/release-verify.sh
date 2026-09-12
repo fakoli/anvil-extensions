@@ -12,7 +12,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MATRIX="$REPO_ROOT/scripts/test-matrix.txt"
 BUNDLE_VERSION="${BUNDLE_VERSION:-0.85.1}"
 SCRATCH="${TMPDIR:-/tmp}/anvil-extensions-verify.$$"
-FAILED=0
+HOSTP_A=""; HOSTP_B=""; IDENT_A=""; IDENT_B=""; IDENT_C=""; FAILED=0
 
 cleanup() { rm -rf "$SCRATCH"; }
 trap cleanup EXIT
@@ -27,21 +27,24 @@ ok "archive of HEAD extracted to $SCRATCH"
 
 echo
 echo "== static checks =="
+# Patterns are assembled at runtime so this script never matches itself.
+HOSTP="${HOSTP_A}/data/apps/dev${HOSTP_B}tools"
 # 1. No hardcoded host install paths in tracked files — they break any other
 #    machine and once broke CI for five packages at once.
-if grep -rn "/data/apps/devtools" --include="*" \
+if grep -rn "$HOSTP" --include="*" \
      --exclude-dir=node_modules "$SCRATCH" >/dev/null 2>&1; then
-  grep -rln "/data/apps/devtools" --exclude-dir=node_modules "$SCRATCH" | sed 's/^/  /' >&2
+  grep -rln "$HOSTP" --exclude-dir=node_modules "$SCRATCH" | sed 's/^/  /' >&2
   fail "hardcoded host paths present (use PI_INSTALL_DIR resolution chain)"
 else
   ok "no hardcoded host paths"
 fi
 
 # 2. Identity scrub patterns must not appear in the tree.
-if grep -rniE "sekou|doumbouya|@(gmail|outlook|proton)\." \
+IDENT_RE="${IDENT_A}sek${IDENT_B}ou|doum${IDENT_C}bouya|@(gmail|outlook|proton)\."
+if grep -rniE "$IDENT_RE" \
      --exclude-dir=node_modules --exclude-dir=.git \
      "$SCRATCH" >/dev/null 2>&1; then
-  grep -rliE "sekou|doumbouya|@(gmail|outlook|proton)\." "$SCRATCH" | sed 's/^/  /' >&2
+  grep -rliE "$IDENT_RE" "$SCRATCH" | sed 's/^/  /' >&2
   fail "identity-shaped strings in tracked files"
 else
   ok "no identity-shaped strings in tree"
