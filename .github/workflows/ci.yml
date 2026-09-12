@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install (workspaces, lockfile-pinned)
+        run: npm ci --no-audit --no-fund
+
+      - name: Offline test suites
+        run: |
+          set -e
+          for ws in pi-commentary pi-condense pi-hermes-memory pi-insights \
+                    pi-nano-banana pi-permission-system pi-sandbox-config \
+                    pi-subagents pi-tool-repair pi-voice-clone; do
+            echo "::group::tests: $ws"
+            npm test --workspace "$ws"
+            echo "::endgroup::"
+          done
