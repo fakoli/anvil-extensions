@@ -15,3 +15,4 @@ UPSTREAM.md; npm tarball imports must re-verify file-by-file on every bump.
 | pi-tool-repair | npm:pi-tool-repair | v0.1.8 verbatim (2026-09-09) | MIT |
 | pi-permission-system | npm:@gotgenes/pi-permission-system | v23.0.1 verbatim (2026-09-09) | MIT |
 | pi-hermes-memory | npm:@schovest/pi-hermes-memory@0.2.2 | v0.2.3 — patched fork (PR #1 fixes; NOT verbatim) (2026-09-09) | MIT |
+| pi-nano-banana | original (this repo); TS port of fakoli/fakoli-plugins nano-banana-pro v1.4.0 | v0.1.0 (2026-09-12) | MIT |
