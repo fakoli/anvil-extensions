@@ -8,6 +8,10 @@
 # automatically. Exits non-zero on any failure — never tag on red.
 set -euo pipefail
 
+# Self-sufficient PATH: gh (~/.local/bin) and bun (~/.bun/bin) are not on
+# a non-interactive shell's default PATH.
+export PATH="$HOME/.local/bin:$HOME/.bun/bin:$PATH"
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MATRIX="$REPO_ROOT/scripts/test-matrix.txt"
 BUNDLE_VERSION="${BUNDLE_VERSION:-0.85.1}"

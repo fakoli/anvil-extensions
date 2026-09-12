@@ -6,6 +6,10 @@
 # Env:   SKIP_VERIFY=1 — skip the clean-room gate (never in CI-backed repos)
 set -euo pipefail
 
+# Self-sufficient PATH: gh (~/.local/bin) and bun (~/.bun/bin) are not on
+# a non-interactive shell's default PATH.
+export PATH="$HOME/.local/bin:$HOME/.bun/bin:$PATH"
+
 TAG="${1:?usage: release.sh anvil-vX.Y.Z [commit-ish]}"
 REF="${2:-HEAD}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
