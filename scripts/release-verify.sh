@@ -70,6 +70,12 @@ else
   fail "npm ci failed — lockfile out of sync with manifests?"
 fi
 
+if npm audit --audit-level=high; then
+  ok "dependency security audit"
+else
+  fail "dependency security audit failed"
+fi
+
 for ws in $(sed 's/#.*//' "$MATRIX" | grep -v '^$'); do
   if [ -e "node_modules/$ws" ]; then
     ok "workspace resolved: $ws"

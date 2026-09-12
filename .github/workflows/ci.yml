@@ -23,6 +23,9 @@ jobs:
       - name: Install (workspaces, lockfile-pinned)
         run: npm ci --no-audit --no-fund
 
+      - name: Dependency security gate
+        run: npm audit --audit-level=high
+
       - name: Offline test suites
         run: |
           set -e
