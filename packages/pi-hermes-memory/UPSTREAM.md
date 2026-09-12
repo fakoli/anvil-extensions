@@ -23,3 +23,6 @@
 - 2026-09-12: local watchdog fix keeps forced process-group termination armed
   after the direct child exits; regression covers both parent signal behaviors
   and distinguishes terminated Linux zombies from live descendants.
+
+- 2026-09-12: development-only Pi SDK dependencies aligned to 0.85.1;
+  this manifest maintenance does not modify runtime source.
