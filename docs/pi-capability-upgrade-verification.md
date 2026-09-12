@@ -12,12 +12,12 @@ real subprocess gates and rejects failed/cancelled gates, edits made during a
 gate, external policy changes, policy symlinks outside the repository, and
 wrong task/claim/baseline bindings. It covers untracked content, mode changes,
 renames, deletions, and malformed or tampered receipts. It also checks
-documentation query sanitization and direct/proxy MCP denial decisions. It
+optional official Context7 registration and direct/proxy MCP denial decisions. It
 also rejects a gate list that differs from the externally approved argv list,
 oversize gate output, and a timed-out gate plus its spawned child process.
 
 The offline suite does not prove an upstream documentation response. On
-2026-09-12, a sanitized local native-tool probe resolved public `zod@3.24.1`
+2026-09-12, a public-package native-tool probe resolved public `zod@3.24.1`
 and queried `/colinhacks/zod` without credentials. Context7 advertised nearby
 versions rather than confirming `3.24.1`; its answer must therefore be treated
 as version evidence only when it explicitly establishes the requested version.
@@ -33,10 +33,10 @@ It builds two temporary Git worktrees, checks TypeScript and Python references,
 then checks changed and deleted references plus rejected external activation.
 
 Run the browser fixture against a candidate-owned loopback page with the
-package-pinned CLI:
+separately installed pinned CLI:
 
 ```bash
-node packages/pi-capability-upgrade/tests/browser-cli-integration.mjs
+PLAYWRIGHT_CLI_BIN=/path/to/pinned/playwright-cli node packages/pi-capability-upgrade/tests/browser-cli-integration.mjs
 ```
 
 It asserts role-based approval, a visible 503 network failure, and a console

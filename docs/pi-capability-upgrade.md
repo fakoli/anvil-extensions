@@ -9,11 +9,13 @@ authorized.
 
 | Composition | Select | Intent |
 | --- | --- | --- |
-| `coding` | existing core resources plus `pi-capability-upgrade/index.ts` and the workflow skills | scoped coding, deterministic verification, guarded public documentation |
-| `browser` | `coding` plus the browser-verification skill and the package-local pinned browser CLI | candidate-owned loopback browser checks |
+| `coding` | existing core resources, native Anvil tools, and workflow skills | scoped coding and deterministic verification |
+| `browser` | `coding` plus the browser-verification skill and a separately installed pinned browser CLI | candidate-owned loopback browser checks |
 | `ops-readonly` | the capability extension and only `ops-readonly` | no server by default; a separately reviewed explicit allowlist is required |
 
-The `pi-capability-upgrade` extension creates an isolated MCP adapter with an
+The default coding composition does not load the MCP foundation while no
+server is admitted. This keeps its unused proxy tool out of startup context.
+The separately selectable `pi-capability-upgrade` extension creates an isolated MCP adapter with an
 empty server map. It sets host configuration discovery off, disables scripting
 and sampling, disables direct tools/resources, and uses a 30-second request
 limit. It cannot import a project, shared, or host MCP configuration. Adding a
@@ -44,15 +46,28 @@ approval event has no verified caller composition, so it cannot enforce that
 the restricted server appears only in `coding`. No Serena server entry ships
 until that invocation-boundary gap is fixed.
 
-The native documentation tools require `libraryName`, `version`, and a bounded
-public question. They reject private-looking material and tell the service to
-state when version-specific evidence is unavailable. They start without a key;
-rate limits or authentication failures remain ordinary tool errors.
+Context7 is optional and uses the unmodified MIT-licensed official
+`@upstash/context7-pi@0.1.2` entrypoint at
+`node_modules/@upstash/context7-pi/extensions/context7.ts`. Add that explicit
+Pi resource only for a documentation session. It is absent from both the
+normal bundle activation and the default candidate composition. Do not also
+register Context7 MCP. The custom documentation wrapper was removed at the
+operator's request.
 
-The browser CLI version is pinned in the root lockfile. Run it only through
-the browser workflow: a named candidate session, loopback target, isolated
-profile, mocked inputs, assertions, and candidate-only cleanup. Do not install
-its upstream skill into global agent settings.
+Before querying, inspect the repository manifest/lockfile and supply only the
+public package name/version and an API question. Do not send private source,
+credentials or topology. Report unavailable version-specific evidence instead
+of substituting current documentation. The official plugin owns its network
+behavior; the candidate does not claim custom privacy filtering, cancellation
+or response-size enforcement around it.
+
+The Apache-2.0 Playwright CLI is installed separately from this MIT extension
+bundle, at an operator-selected exact version with its own lockfile. The MIT
+browser skill calls the explicit `PLAYWRIGHT_CLI_BIN` executable. It does not
+vendor Apache-2.0 extension/plugin code or add the CLI as a bundle dependency.
+Use a named candidate session, loopback target, isolated profile, mocked inputs,
+assertions, and candidate-only cleanup. Do not install its upstream skill into
+global agent settings.
 
 ## State and verification
 

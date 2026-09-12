@@ -13,7 +13,6 @@ const pkg = join(root, "packages", "pi-capability-upgrade");
 const jiti = createJiti(join(pkg, "index.ts"), { moduleCache: false, interopDefault: true });
 const receipt = await jiti.import(join(pkg, "src", "receipt.ts"));
 const policy = await jiti.import(join(pkg, "src", "mcp-policy.ts"));
-const docs = await jiti.import(join(pkg, "src", "docs-guard.ts"));
 
 let passed = 0;
 const failures = [];
@@ -214,13 +213,19 @@ await test("MCP output is bounded and the default adapter configuration is isola
   assert.match(source, /mcpServers: \{\}/);
 });
 
-await test("documentation guard refuses private-looking questions and accepts bounded public version requests", () => {
-  assert.equal(docs.isSafeDocumentationQuestion("How does package 1.2.3 configure retries?"), true);
-  assert.equal(docs.isSafeDocumentationQuestion("token=abc"), false);
-  assert.equal(docs.isSafeDocumentationQuestion("https://private.ts.net/v1"), false);
+await test("official MIT Context7 remains an optional native selection", async () => {
+  const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+  assert.ok(manifest.pi.extensions.every((path) => !path.includes("context7") && !path.includes("pi-capability-upgrade")));
+  const upstream = JSON.parse(readFileSync(join(root, "node_modules/@upstash/context7-pi/package.json"), "utf8"));
+  assert.equal(upstream.version, "0.1.2");
+  assert.equal(upstream.license, "MIT");
+  const native = (await jiti.import(join(root, "node_modules/@upstash/context7-pi/extensions/context7.ts"))).default;
+  const tools = [];
+  native({ registerTool(tool) { tools.push(tool.name); } });
+  assert.deepEqual(tools, ["resolve-library-id", "query-docs"]);
 });
 
-await test("candidate extension loads the pinned native documentation and isolated adapter resources once", async () => {
+await test("candidate extension loads isolated adapter resources without documentation tools", async () => {
   const extension = (await jiti.import(join(pkg, "index.ts"))).default;
   const tools = []; const flags = []; const commands = []; const listeners = [];
   const pi = {
@@ -235,15 +240,10 @@ await test("candidate extension loads the pinned native documentation and isolat
   };
   extension(pi);
   assert.equal(new Set(tools.map((tool) => tool.name)).size, tools.length);
-  assert.ok(tools.some((tool) => tool.name === "resolve-library-id"));
-  assert.ok(tools.some((tool) => tool.name === "query-docs"));
+  assert.ok(!tools.some((tool) => tool.name === "resolve-library-id"));
+  assert.ok(!tools.some((tool) => tool.name === "query-docs"));
   assert.ok(tools.some((tool) => tool.name === "mcp"));
   assert.ok(flags.some(([name]) => name === "mcp-config"));
-  const queryDocs = tools.find((tool) => tool.name === "query-docs");
-  await assert.rejects(
-    queryDocs.execute("test", { libraryId: "/owner/package", version: "1.2.3", query: "token=private" }),
-    /bounded public package question/,
-  );
   const approval = listeners.find(([event]) => event === "pi-mcp-adapter:tool-approval-request")?.[1];
   let fakeServerExecutions = 0;
   for (const origin of ["direct", "proxy"]) {
@@ -307,13 +307,8 @@ await test("gate router preserves unusual filenames as data and rejects bad refs
 });
 
 await test("State proof workflow checks content, policy, argv, and process bounds", () => {
-  const result = spawnSync("python3", [join(pkg, "tests", "test_state_proof_workflow.py")], { encoding: "utf8", timeout: 30_000 });
+  const result = spawnSync("python3", ["-B", join(pkg, "tests", "test_state_proof_workflow.py")], { encoding: "utf8", timeout: 30_000 });
   assert.equal(result.status, 0, result.stderr);
-});
-
-await test("Context7 uses bounded isolated public documentation requests", () => {
-  const result = spawnSync(process.execPath, [join(pkg, "tests", "docs-boundary.test.mjs")], { encoding: "utf8", timeout: 45_000 });
-  assert.equal(result.status, 0, result.stderr || result.stdout);
 });
 
 if (failures.length) {

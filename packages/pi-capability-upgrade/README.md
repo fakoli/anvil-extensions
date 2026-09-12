@@ -10,8 +10,7 @@ It contains:
 - a local gate runner that fingerprints the full intended Git surface and a
   caller-supplied externally trusted policy before and after the complete gate set, without
   mutating the real Git index;
-- a guarded native documentation lookup that requires a package version and
-  refuses private-looking query material;
+- an optional, unmodified official MIT Context7 plugin, selected separately;
 - an isolated MCP adapter factory with no configured servers, no discovery,
   no scripting, and no sampling; and
 - a browser-verification skill for a pinned local CLI.
@@ -34,3 +33,8 @@ self-attestations, and direct State calls bypass the local freshness guard.
 Use the selectable compositions in `docs/pi-capability-upgrade.md`; do not
 enable an example operational server by copying it into a shared or project
 MCP discovery file.
+
+Only MIT-licensed extension/plugin source is admitted to this bundle. The
+Apache-2.0 Playwright CLI is an external, separately installed tool; it is not
+vendored or distributed as a bundle dependency. Private skill bodies remain in
+private configuration. Transitive libraries retain their own license notices.

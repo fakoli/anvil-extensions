@@ -2,7 +2,7 @@
 
 ## Original code
 
-`src/receipt.ts`, `src/mcp-policy.ts`, `src/docs-guard.ts`, and `index.ts` are
+`src/receipt.ts`, `src/mcp-policy.ts`, and `index.ts` are
 original code in this bundle. They implement portable candidate feedback and
 do not claim to replace the State acceptance boundary.
 
@@ -23,7 +23,8 @@ Source: `fakoli/fakoli-plugins` commit
 
 - `@upstash/context7-pi@0.1.2`, MIT,
   `sha512-uxYqDF/A32nuKJBeUCWuBQqLmRJJ3eUI6zsM7TPEds7KUK/a/PdicEZRC2ja/b1Zl1uhjbyLWmQynQC4cID+Zg==`.
-  Its exported native tool definitions are called only through `docs-guard`.
+  Its official `extensions/context7.ts` entrypoint is an optional explicit
+  selection. No custom documentation wrapper or Context7 MCP server is installed.
 - `pi-mcp-adapter@2.33.0`, MIT,
   `sha512-W1wFtd8NOz9+yAZZEoyEDfz4YMUxHSitPejZo4Yvol1YXQGeYiCfoFqd2k6GulP6k+w/p+L3NU2IcA/nlTkFEQ==`.
   It is instantiated with an isolated empty configuration; unreviewed files

@@ -4,7 +4,9 @@
   "description": "Explicit, candidate-only workflow, documentation, browser, and read-only operations resources for Pi.",
   "license": "MIT",
   "type": "module",
-  "engines": { "node": ">=22.19.0" },
+  "engines": {
+    "node": ">=22.19.0"
+  },
   "files": [
     "index.ts",
     "src/**/*.ts",
@@ -18,12 +20,18 @@
     "README.md"
   ],
   "pi": {
-    "extensions": ["./index.ts"],
-    "skills": ["./skills"]
+    "extensions": [
+      "./index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
     "typebox": "*"
   },
-  "scripts": { "test": "node tests/run-tests.mjs" }
+  "scripts": {
+    "test": "node tests/run-tests.mjs"
+  }
 }
