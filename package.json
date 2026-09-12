@@ -18,10 +18,12 @@
       "./packages/pi-commentary/index.ts",
       "./packages/pi-voice-clone/index.ts",
       "./packages/pi-sandbox-config/index.ts",
-      "./packages/pi-hermes-memory/src/index.ts"
+      "./packages/pi-hermes-memory/src/index.ts",
+      "./packages/pi-nano-banana/index.ts"
     ],
     "skills": [
-      "./packages/pi-subagents/skills"
+      "./packages/pi-subagents/skills",
+      "./packages/pi-nano-banana/skills"
     ],
     "prompts": [
       "./packages/pi-subagents/prompts"
