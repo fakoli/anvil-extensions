@@ -243,7 +243,7 @@ await test("effectiveConfig: invalid trusted doc ignored (defaults)", () => {
 await test("findSandboxPolicy: explicit allowlist env", () => {
   const root = makeFakeRepo();
   process.env.ANVIL_SANDBOX_ALLOWLIST = join(root, "packaging", "pi", "sandbox", "allowlist.json");
-  delete process.env.ANVIL_ROOT;
+  delete process.env.ANVIL_CHECKOUT;
   try {
     const p = findSandboxPolicy("/tmp");
     assert.ok(p);
@@ -255,21 +255,21 @@ await test("findSandboxPolicy: explicit allowlist env", () => {
   }
 });
 
-await test("findSandboxPolicy: ANVIL_ROOT env", () => {
+await test("findSandboxPolicy: ANVIL_CHECKOUT env", () => {
   const root = makeFakeRepo();
-  process.env.ANVIL_ROOT = root;
+  process.env.ANVIL_CHECKOUT = root;
   delete process.env.ANVIL_SANDBOX_ALLOWLIST;
   try {
     assert.ok(findSandboxPolicy("/tmp"));
   } finally {
-    delete process.env.ANVIL_ROOT;
+    delete process.env.ANVIL_CHECKOUT;
     rmSync(root, { recursive: true, force: true });
   }
 });
 
 await test("findSandboxPolicy: walk-up discovery from nested cwd", () => {
   const root = makeFakeRepo();
-  delete process.env.ANVIL_ROOT;
+  delete process.env.ANVIL_CHECKOUT;
   delete process.env.ANVIL_SANDBOX_ALLOWLIST;
   try {
     const deep = join(root, "a", "b", "c");
@@ -283,12 +283,16 @@ await test("findSandboxPolicy: walk-up discovery from nested cwd", () => {
 });
 
 await test("findSandboxPolicy: nothing found → null", () => {
-  delete process.env.ANVIL_ROOT;
+  delete process.env.ANVIL_CHECKOUT;
   delete process.env.ANVIL_SANDBOX_ALLOWLIST;
   const isolated = tmpdirCase("psc-isolated-");
+  const prevHome = process.env.HOME;
+  process.env.HOME = isolated; // defeat the ~/code/anvil default fallback
   try {
     assert.equal(findSandboxPolicy(isolated), null);
   } finally {
+    if (prevHome === undefined) delete process.env.HOME;
+    else process.env.HOME = prevHome;
     rmSync(isolated, { recursive: true, force: true });
   }
 });
