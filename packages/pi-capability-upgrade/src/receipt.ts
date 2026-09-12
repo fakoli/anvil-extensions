@@ -7,6 +7,8 @@ import { spawn, spawnSync } from "node:child_process";
 export type GateResult = {
   command: string;
   args: string[];
+  cwd: string;
+  timeoutMs: number;
   exitCode: number;
   startedAt: string;
   finishedAt: string;
@@ -29,6 +31,7 @@ export type VerificationReceipt = {
   contentIdentity: string;
   policyIdentity: string;
   gateIdentity: string;
+  gateResultsIdentity: string;
   gates: GateResult[];
   createdAt: string;
 };
@@ -134,7 +137,7 @@ function normalizedGate(gate: GateSpec, root: string): Required<GateSpec> {
   if (!Array.isArray(args) || args.some((arg) => typeof arg !== "string" || arg.length > 4096)) {
     throw new Error("gate arguments must be bounded strings");
   }
-  const cwd = resolve(root, gate.cwd ?? root);
+  const cwd = realpathSync(resolve(root, gate.cwd ?? root));
   const rootRelative = relative(root, cwd);
   if (rootRelative === ".." || rootRelative.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) || isAbsolute(rootRelative)) {
     throw new Error("gate working directory escapes the repository");
@@ -164,6 +167,7 @@ function makeReceipt(input: Omit<VerificationReceipt, "version" | "repository" |
     contentIdentity: input.contentIdentity,
     policyIdentity: input.policyIdentity,
     gateIdentity: input.gateIdentity,
+    gateResultsIdentity: input.gateResultsIdentity,
     gates: input.gates,
     createdAt: new Date().toISOString(),
   };
@@ -229,6 +233,8 @@ async function runGate(gate: Required<GateSpec>, signal?: AbortSignal): Promise<
       resolveGate({
         command: gate.command,
         args: gate.args,
+        cwd: gate.cwd,
+        timeoutMs: gate.timeoutMs,
         exitCode: code ?? 128,
         startedAt,
         finishedAt: new Date().toISOString(),
@@ -287,7 +293,7 @@ export async function runVerifiedGates(input: RunVerifiedGatesInput): Promise<Ve
     throw new Error("policy changed during verification");
   }
 
-  return makeReceipt({ root, taskId: input.taskId, claimId: input.claimId, ...before, gateIdentity: approvedGateIdentity, gates });
+  return makeReceipt({ root, taskId: input.taskId, claimId: input.claimId, ...before, gateIdentity: approvedGateIdentity, gateResultsIdentity: sha256(JSON.stringify(gates)), gates });
 }
 
 /** Validates a receipt against the caller's expected task, claim, baseline and independently pinned policy. */
@@ -300,18 +306,19 @@ export function validateReceipt(receipt: unknown, input: ValidateReceiptInput): 
     if (candidate.version !== "verification-receipt/v2" || !Array.isArray(candidate.gates) || candidate.gates.length === 0) {
       return { ok: false, reason: "unsupported or malformed receipt" };
     }
-    for (const field of ["taskId", "claimId", "baseline", "contentIdentity", "policyIdentity", "gateIdentity", "repository", "createdAt"] as const) {
+    for (const field of ["taskId", "claimId", "baseline", "contentIdentity", "policyIdentity", "gateIdentity", "gateResultsIdentity", "repository", "createdAt"] as const) {
       if (typeof candidate[field] !== "string") {
         return { ok: false, reason: `receipt ${field} is malformed` };
       }
     }
-    if (candidate.gates.some((gate) => !gate || typeof gate.command !== "string" || !Array.isArray(gate.args) || typeof gate.exitCode !== "number" || gate.exitCode !== 0 || typeof gate.outputIdentity !== "string" || !SHA256.test(gate.outputIdentity))) {
+    if (candidate.gates.some((gate) => !gate || typeof gate.command !== "string" || !Array.isArray(gate.args) || typeof gate.cwd !== "string" || !Number.isInteger(gate.timeoutMs) || typeof gate.exitCode !== "number" || gate.exitCode !== 0 || typeof gate.startedAt !== "string" || typeof gate.finishedAt !== "string" || Date.parse(gate.startedAt) > Date.parse(gate.finishedAt) || typeof gate.outputIdentity !== "string" || !SHA256.test(gate.outputIdentity))) {
       return { ok: false, reason: "receipt gates are malformed or unsuccessful" };
     }
     requireIdentifier(input.taskId, "taskId");
     requireIdentifier(input.claimId, "claimId");
     requireIdentity(input.trustedPolicyIdentity, "trustedPolicyIdentity");
     const approvedGateIdentity = gateIdentity(input.root, input.approvedGates);
+    const approvedGates = input.approvedGates.map((gate) => normalizedGate(gate, repositoryRoot(input.root)));
     if (candidate.taskId !== input.taskId || candidate.claimId !== input.claimId || candidate.baseline !== input.baseline) {
       return { ok: false, reason: "receipt task, claim, or baseline does not match the expected verification" };
     }
@@ -320,6 +327,15 @@ export function validateReceipt(receipt: unknown, input: ValidateReceiptInput): 
     }
     if (candidate.gateIdentity !== approvedGateIdentity) {
       return { ok: false, reason: "receipt gates do not match the approved gate policy" };
+    }
+    if (candidate.repository !== basename(repositoryRoot(input.root)) || candidate.gates.length !== approvedGates.length || candidate.gates.some((gate, index) => {
+      const approved = approvedGates[index];
+      return gate.command !== approved.command || gate.cwd !== approved.cwd || gate.timeoutMs !== approved.timeoutMs || JSON.stringify(gate.args) !== JSON.stringify(approved.args);
+    })) {
+      return { ok: false, reason: "receipt gate results do not match the approved gate specification" };
+    }
+    if (candidate.gateResultsIdentity !== sha256(JSON.stringify(candidate.gates))) {
+      return { ok: false, reason: "receipt gate results were modified" };
     }
     if (baselineIdentity(input.root) !== input.baseline) {
       return { ok: false, reason: "repository baseline changed" };

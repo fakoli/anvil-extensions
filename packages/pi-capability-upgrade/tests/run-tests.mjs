@@ -149,6 +149,29 @@ await test("receipt binds argv to approved gates and bounds timeout, child cance
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+await test("receipt validation binds every result field and rejects symlinked gate directories", async () => {
+  const { dir } = tempRepo();
+  const outside = mkdtempSync(join(tmpdir(), "pi-capability-gate-outside-"));
+  try {
+    const policyPath = ".claude/gate-router.local.md";
+    const trustedPolicyIdentity = receipt.policyIdentity(dir, policyPath);
+    const gates = [{ command: process.execPath, args: ["-e", ""], timeoutMs: 500 }];
+    const created = await receipt.runVerifiedGates({ root: dir, taskId: "T100", claimId: "C100", policyPath, trustedPolicyIdentity, gates, ...approved(gates) });
+    const validation = { root: dir, taskId: "T100", claimId: "C100", baseline: created.baseline, policyPath, trustedPolicyIdentity, ...approved(gates) };
+    for (const replacement of [
+      { command: "other" }, { args: ["other"] }, { cwd: join(dir, ".claude") }, { timeoutMs: 1 },
+      { exitCode: 1 }, { startedAt: "not-a-date" }, { finishedAt: "not-a-date" }, { outputIdentity: "0".repeat(64) },
+    ]) {
+      const tampered = { ...created, gates: [{ ...created.gates[0], ...replacement }] };
+      assert.equal(receipt.validateReceipt(tampered, validation).ok, false);
+    }
+    symlinkSync(outside, join(dir, "linked-outside"));
+    const escaped = [{ command: process.execPath, args: ["-e", "require('node:fs').writeFileSync('outside.txt','bad')"], cwd: "linked-outside" }];
+    assert.throws(() => receipt.gateIdentity(dir, escaped), /escapes/);
+    assert.equal(existsSync(join(outside, "outside.txt")), false);
+  } finally { rmSync(dir, { recursive: true, force: true }); rmSync(outside, { recursive: true, force: true }); }
+});
+
 await test("MCP policy gives direct and proxy calls identical allow decisions", () => {
   const rules = [{ server: "serving", operations: ["status"], requiredScope: "ops-readonly" }];
   for (const source of ["direct", "proxy"]) {
@@ -271,6 +294,11 @@ await test("gate router preserves unusual filenames as data and rejects bad refs
     const badBase = spawnSync("python3", [script, dir, "--base", "--bad", "--json"], { encoding: "utf8" });
     assert.equal(badBase.status, 2);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+await test("State proof workflow checks content, policy, argv, and process bounds", () => {
+  const result = spawnSync("python3", [join(pkg, "tests", "test_state_proof_workflow.py")], { encoding: "utf8", timeout: 30_000 });
+  assert.equal(result.status, 0, result.stderr);
 });
 
 if (failures.length) {
