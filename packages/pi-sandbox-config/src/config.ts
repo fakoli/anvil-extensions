@@ -19,7 +19,10 @@ export const MAX_CONTAINERS_MIN = 1;
 export const MAX_CONTAINERS_MAX = 256;
 export const NETWORK_VALUES = ["none"] as const; // "inference" reserved upstream
 export const CAPS_PRESETS = ["all-dropped", "docker-default"] as const;
-export const IMAGE_RE = /^[a-zA-Z0-9][a-zA-Z0-9._/-]*@sha256:[a-f0-9]{64}$/;
+// Docker reference grammar, digest REQUIRED (mirrors anvil's
+// scripts/pi-sandbox-config.mjs): [host[:port]/]name[...][:tag]@sha256:<64hex>
+export const IMAGE_RE =
+  /^(?:[a-zA-Z0-9][a-zA-Z0-9.-]*(?::[0-9]+)?\/)?[a-zA-Z0-9][a-zA-Z0-9._-]*(?:\/[a-zA-Z0-9._-]+)*(?::[a-zA-Z0-9._-]+)?@sha256:[a-f0-9]{64}$/;
 export const CONFIG_KEYS = ["image", "network", "caps", "max_containers"] as const;
 export const PROJECT_ALLOWED_KEYS = ["max_containers"] as const;
 const CONFIG_READ_CAP_BYTES = 64 * 1024;
