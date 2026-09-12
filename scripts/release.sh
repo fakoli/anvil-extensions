@@ -28,26 +28,30 @@ git push origin "$COMMIT:main"
 echo
 echo "== wait for CI green on $COMMIT (tags are immutable; never tag red) =="
 sleep 10   # let the run register
-for _ in $(seq 1 30); do
-  STATUS="$(gh run list --repo fakoli/anvil-extensions --commit "$COMMIT" \
-    --json status,conclusion -q '.[0] | .status + "/" + (.conclusion // "-")' 2>/dev/null || echo "unknown")"
-  case "$STATUS" in
-    "completed/success")
-      echo "✓ CI green on $COMMIT"
-      break
-      ;;
-    "completed/"*)
-      echo "✗ CI FAILED ($STATUS) on $COMMIT — fix, commit, retag attempt aborted." >&2
-      exit 1
-      ;;
-    *)
-      printf "."; sleep 15
-      ;;
-  esac
+for _ in $(seq 1 40); do
+  # Poll by branch (SHA indexing lags on the API), then verify the headSha.
+  R="$(gh run list --repo fakoli/anvil-extensions --branch main --limit 1 \
+      --json headSha,status,conclusion \
+      -q 'if .[0] == null then "" else (.[0].headSha // "") + " " + (.[0].status // "") + " " + (.[0].conclusion // "") end' 2>/dev/null || true)"
+  RUN_SHA="${R%% *}"
+  RUN_REST="${R#* }"
+  if [ "$RUN_SHA" = "$COMMIT" ]; then
+    case "$RUN_REST" in
+      "completed success")
+        echo "✓ CI green on $COMMIT"
+        break
+        ;;
+      completed*)
+        echo "✗ CI FAILED ($RUN_REST) on $COMMIT — fix, commit, release aborted." >&2
+        exit 1
+        ;;
+    esac
+  fi
+  printf "."; sleep 15
 done
 
-if [ "${STATUS:-}" != "completed/success" ]; then
-  echo "✗ CI did not reach green in time ($STATUS) — tag not created." >&2
+if [ "${RUN_REST:-}" != "completed success" ]; then
+  echo "✗ CI did not reach green in time — tag not created." >&2
   exit 1
 fi
 
