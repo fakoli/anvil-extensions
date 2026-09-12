@@ -17,6 +17,7 @@
       "./packages/pi-tool-repair/tool-repair.ts",
       "./packages/pi-commentary/index.ts",
       "./packages/pi-voice-clone/index.ts",
+      "./packages/pi-sandbox-config/index.ts",
       "./packages/pi-hermes-memory/src/index.ts"
     ],
     "skills": [

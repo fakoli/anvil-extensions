@@ -1,0 +1,37 @@
+{
+  "name": "pi-sandbox-config",
+  "version": "0.1.0",
+  "description": "Pi coding-agent extension configuring the anvil pi sandbox: fail-closed run-config editing (caps/image/max containers), cross-checked against anvil's own validator, plus read-only launch prechecks and a /sandbox dialog flow.",
+  "author": "Fakoli",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-coding-agent",
+    "sandbox",
+    "docker",
+    "anvil"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "files": [
+    "index.ts",
+    "src/**/*.ts",
+    "tests/*.mjs",
+    "README.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "scripts": {
+    "test": "node tests/run-tests.mjs"
+  }
+}
