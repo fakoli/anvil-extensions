@@ -8,7 +8,7 @@ It contains:
 
 - workflow skills and the deterministic changed-path router;
 - a local gate runner that fingerprints the full intended Git surface and a
-  caller-supplied externally trusted policy before and after each gate, without
+  caller-supplied externally trusted policy before and after the complete gate set, without
   mutating the real Git index;
 - a guarded native documentation lookup that requires a package version and
   refuses private-looking query material;
@@ -25,8 +25,11 @@ The local receipt is feedback for the existing State workflow. It is not an
 acceptance record. Its caller must explicitly supply the expected task, claim,
 baseline, policy SHA-256, and exact approved gate argv list from an
 independently approved record outside the checkout. State remains authoritative
-for claims, evidence, and human
-acceptance until it has a native receipt attachment contract.
+for claims, evidence, and human acceptance. The separate
+`state-proof-workflow.py` records actual task-declared command proofs and
+checks their content/policy freshness before optional State submission; it
+never approves a task. These unsigned artifacts remain claim-owner
+self-attestations, and direct State calls bypass the local freshness guard.
 
 Use the selectable compositions in `docs/pi-capability-upgrade.md`; do not
 enable an example operational server by copying it into a shared or project

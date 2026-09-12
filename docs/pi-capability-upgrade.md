@@ -60,7 +60,7 @@ The native State integration remains the only task/claim/evidence/acceptance
 authority. `runVerifiedGates` snapshots the Git baseline, full candidate
 content (with a temporary index and forced mode tracking), and policy bytes
 before it starts a declared non-shell gate. It repeats all three snapshots
-after every successful gate. A failed or cancelled gate, policy symlink outside
+after the complete successful gate set. A failed or cancelled gate, policy symlink outside
 the repository, or any change during the window produces no receipt.
 
 The caller supplies `taskId`, `claimId`, baseline commit, a SHA-256 policy
@@ -76,21 +76,36 @@ process-group termination on cancellation. Git filters from the explicitly
 trusted checkout may run while a temporary index is populated; use this only
 for a reviewed checkout.
 
-`verification-receipt/v2` is not the native State
-`claim-command-proof/v1` artifact and cannot be passed to
-`anvil submit --command-proof-file`. No bridge from this advisory receipt to
-State command proofs or State freshness exists in this package. The native
-proof verifier remains a separate boundary for commands that State itself
-defines and captures.
+`verification-receipt/v2` is not the native State command-proof artifact and
+cannot be passed to `anvil submit --command-proof-file`.
 
-For a task whose State metadata declares command proofs, the opt-in
-`scripts/state-proof-workflow.py` reads only explicit `anvil status --json` and
-`anvil show TASK --json` metadata, accepts an external approved-gates JSON file,
-and writes canonical proof artifacts without submitting them. It requires the
-approved argv list to exactly equal the task's passing command-proof
-requirements, captures bounded output bytes, and re-reads task/claim metadata
-before writing. Its caller must provide the State layout explicitly. Submission
-and State approval remain separate human-controlled steps.
+The separate opt-in `scripts/state-proof-workflow.py` supports tasks whose
+State metadata already declares command proofs. Run it with the pinned Anvil
+Python environment, an explicit Anvil CLI/project/task/actor/layout, an
+external approved-gates JSON file, and an external output directory. The policy
+has a `gates` array containing `argv` arrays and optional `timeout_seconds`
+(1–300). Each argv must match exactly one task-declared passing command; every
+required command must be covered once. It never interprets argv as shell text.
+
+The workflow reads `anvil status --json` and `anvil show TASK --json`, executes
+the declared checks with bounded output and deadlines, and emits canonical
+command proofs plus an external verification manifest. It fingerprints the
+full Git candidate without changing the real index, and compares content,
+policy, task and claim before and after verification. Failed checks produce no
+manifest. Output artifacts remain private and are limited to 128 KiB per gate.
+
+A second invocation with the same arguments plus `--submit-existing` checks
+those identities and every proof hash again, then calls the existing State
+submit CLI. It never calls `apply` or supplies approval. The State CLI verifies
+claim attribution and the canonical proofs. Changed paths with commas are
+refused because of the existing CLI's single-value compatibility splitting.
+
+These unsigned artifacts are claim-owner self-attestations. The local guard
+refuses stale submission through this workflow; it is not an authoritative
+freshness rule for unrestricted direct State calls, nor an atomic transaction
+with concurrent filesystem writers. Human acceptance remains separate. In a
+disposable project, actual pytest output was submitted successfully and the
+task reached `needs_review`; content, policy and proof changes were refused.
 
 ## Operations and observability
 

@@ -46,9 +46,25 @@ The default Serena probe exposed mutation and memory tools and auto-created
 state. A second probe pinned `701e7c843f46c6a649203a488cece1bf19f1df90`, used
 an isolated `SERENA_HOME`, fixed the tool set to five semantic reads, and
 returned `get_symbols_overview` responses for one TypeScript and one Python
-worktree. It is qualified only as a standalone temporary-home configuration;
+worktree. It is qualified only as a standalone configuration with candidate-owned external state;
 the adapter cannot presently bind it to a verified caller composition.
 
 Grafana remains disabled because no declared read-only endpoint, credential
 reference, or data-source restriction exists. Any future integration must
 retain explicit policy and bounded-output requirements.
+
+The State workflow tests cover exact argv matching, failed gates, bounded output
+and deadlines, external content/mode/untracked changes, preserved Git index,
+and stale policy/proof refusal. A disposable State CLI round trip on 2026-09-12
+ran three independent pytest assertions and submitted one canonical command
+proof. External content, policy and artifact edits were refused before submit;
+the fresh task ended in `needs_review`, with no acceptance approval.
+
+The live synthetic Pi comparison used the same model, inference settings,
+scoped filesystem tools and enabled repair in both arms. The reviewed baseline
+passed 1/3 tasks. Both text-edit tasks failed their trailing-newline oracle.
+The cause was unconditional string trimming in `stripGrammarTokenLeaksInPlace`.
+The candidate preserves whitespace while stripping explicit grammar markers;
+its focused four-case regression and all 3/3 live smoke tasks passed. Original
+failures remain in private evidence. This small fixture suite demonstrates the
+specific repair correction, not general coding quality or statistical superiority.
