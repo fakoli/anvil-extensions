@@ -43,13 +43,12 @@ function suffixOf(path: string): string {
   return dot < 0 ? "" : base.slice(dot);
 }
 
-let sharpModule: typeof import("sharp") | null = null;
+let sharpModulePromise: Promise<typeof import("sharp")> | null = null;
 
 /**
- * Locate sharp explicitly from this file upward when the host resolver does
- * not walk up to the install root's node_modules (jiti under the pi Bun
- * binary reports "Cannot find package 'sharp'" even though plain node
- * resolves it from the same directory).
+ * Locate sharp explicitly from this file upward when even dynamic import
+ * cannot resolve it (requires the package entry file directly; by-name CJS
+ * require of subdir-main packages is broken in pi's embedded Bun resolver).
  */
 function requireSharpExplicit(): typeof import("sharp") | null {
   let dir = dirname(fileURLToPath(import.meta.url));
@@ -59,7 +58,14 @@ function requireSharpExplicit(): typeof import("sharp") | null {
       try {
         const require = createRequire(join(dir, "package.json"));
         return require(candidate) as typeof import("sharp");
-      } catch { /* keep climbing */ }
+      } catch {
+        try {
+          // main is lib/index.js for sharp 0.34.x; absolute-file require
+          // gets further than package-dir require under broken resolvers.
+          const require2 = createRequire(join(dir, "package.json"));
+          return require2(join(candidate, "lib", "index.js")) as typeof import("sharp");
+        } catch { /* keep climbing */ }
+      }
     }
     const parent = dirname(dir);
     if (parent === dir) break;
@@ -68,26 +74,30 @@ function requireSharpExplicit(): typeof import("sharp") | null {
   return null;
 }
 
-/** Lazily load sharp so config/dry paths never pay the native-module cost. */
-export function getSharp(): typeof import("sharp") {
-  if (!sharpModule) {
-    let primaryError: unknown;
-    try {
-      const require = createRequire(import.meta.url);
-      sharpModule = require("sharp") as typeof import("sharp");
-    } catch (error) {
-      primaryError = error;
-    }
-    if (!sharpModule) {
-      sharpModule = requireSharpExplicit();
-    }
-    if (!sharpModule) {
+/**
+ * Lazily load sharp so config/dry paths never pay the native-module cost.
+ * Dynamic import is the primary path: pi's embedded Bun resolver fails on
+ * CJS by-name requires of packages whose `main` points into a subdirectory
+ * (sharp's main is lib/index.js), but its ESM import() resolves them fine.
+ */
+export function getSharp(): Promise<typeof import("sharp")> {
+  if (!sharpModulePromise) {
+    sharpModulePromise = (async () => {
+      let primaryError: unknown;
+      try {
+        const mod = await import("sharp");
+        return ((mod as { default?: typeof import("sharp") }).default ?? mod) as typeof import("sharp");
+      } catch (error) {
+        primaryError = error;
+      }
+      const explicit = requireSharpExplicit();
+      if (explicit) return explicit;
       throw new Error(
         `sharp is unavailable (${primaryError instanceof Error ? primaryError.message : String(primaryError)}); image processing requires the sharp dependency`,
       );
-    }
+    })();
   }
-  return sharpModule;
+  return sharpModulePromise;
 }
 
 export interface Sniffed {
@@ -101,7 +111,7 @@ export interface Sniffed {
  * inputs. Mirrors image_mime().
  */
 export async function sniffImage(data: Buffer): Promise<Sniffed> {
-  const sharp = getSharp();
+  const sharp = await getSharp();
   let meta: import("sharp").Metadata;
   try {
     meta = await sharp(data).metadata();
@@ -143,8 +153,8 @@ export async function fileToInlinePartPayload(path: string): Promise<{ mimeType:
  * Decode returned image bytes with EXIF auto-orientation applied (parity:
  * ImageOps.exif_transpose), rejecting animation.
  */
-export function decodeImage(data: Buffer): Sharp {
-  const sharp = getSharp();
+export async function decodeImage(data: Buffer): Promise<Sharp> {
+  const sharp = await getSharp();
   return sharp(data).rotate(); // .rotate() with no args applies EXIF orientation
 }
 
@@ -172,7 +182,7 @@ export async function encodeImage(image: Sharp, suffix: string): Promise<Buffer>
  * (with EXIF orientation), then encode by extension.
  */
 export async function encodeBytes(data: Buffer, suffix: string): Promise<Buffer> {
-  return encodeImage(decodeImage(data), suffix);
+  return encodeImage(await decodeImage(data), suffix);
 }
 
 /**

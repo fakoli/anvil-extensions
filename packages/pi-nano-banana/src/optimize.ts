@@ -55,7 +55,7 @@ export async function optimize(
   const data = readFileSync(srcPath);
   const originalBytes = data.length;
   await sniffImage(data); // static PNG/JPEG/WebP only — animation is rejected
-  const original = decodeImage(data);
+  const original = await decodeImage(data);
   const meta = await original.metadata();
   // EXIF orientation 5–8 swaps the stored axes; measure DISPLAYED dimensions
   // (parity: ImageOps.exif_transpose runs before measuring in the original).

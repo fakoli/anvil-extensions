@@ -249,7 +249,7 @@ test("saveUserSettings merges, drops empties, never stores credentials", () => {
 
 await atest("sniffImage: static formats pass; HTML masquerade rejected", async () => {
   freshSandbox();
-  const sharp = imageIo.getSharp();
+  const sharp = await imageIo.getSharp();
   const png = await sharp({ create: { width: 4, height: 4, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } } }).png().toBuffer();
   const jpeg = await sharp(png).flatten({ background: "#fff" }).jpeg().toBuffer();
   const webp = await sharp(png).webp().toBuffer();
@@ -270,9 +270,9 @@ await atest("fileToInlinePartPayload: 12 MiB cap enforced before sniffing", asyn
 
 await atest("encodeImage: JPEG flattens transparency onto white", async () => {
   freshSandbox();
-  const sharp = imageIo.getSharp();
+  const sharp = await imageIo.getSharp();
   const transparentPng = await sharp({ create: { width: 8, height: 8, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 0 } } }).png().toBuffer();
-  const jpegBytes = await imageIo.encodeImage(imageIo.decodeImage(transparentPng), ".jpg");
+  const jpegBytes = await imageIo.encodeImage(await imageIo.decodeImage(transparentPng), ".jpg");
   const raw = await sharp(jpegBytes).raw().toBuffer();
   const center = (4 * 8 + 4) * 3;
   assert.ok(raw[center] > 250 && raw[center + 1] > 250 && raw[center + 2] > 250, `center pixel should be white-ish: ${raw[center]},${raw[center + 1]},${raw[center + 2]}`);
@@ -414,7 +414,7 @@ test("remix prompt frames page data as untrusted reference", () => {
 
 await atest("downloadImagesAsParts: skips broken refs, honors caps and dedupe", async () => {
   freshSandbox();
-  const sharp = imageIo.getSharp();
+  const sharp = await imageIo.getSharp();
   const png = await sharp({ create: { width: 2, height: 2, channels: 3, background: "blue" } }).png().toBuffer();
   const served = new Map([
     ["https://x/good1.png", png],
@@ -462,7 +462,7 @@ test("parseSize", () => {
 
 await atest("optimize: shrinks to fit, caps width, fails without writing when unreachable", async () => {
   freshSandbox();
-  const sharp = imageIo.getSharp();
+  const sharp = await imageIo.getSharp();
   const noise = Buffer.alloc(2000 * 600 * 3);
   for (let i = 0; i < noise.length; i++) noise[i] = Math.floor(Math.random() * 256);
   const src = join(sandbox, "cwd", "noisy.png");
@@ -501,7 +501,7 @@ await atest("atomicWriteText: bare relative filename lands in cwd (no mangled di
 
 await atest("optimize: EXIF orientation 6 swaps measured axes", async () => {
   freshSandbox();
-  const sharp = imageIo.getSharp();
+  const sharp = await imageIo.getSharp();
   const src = join(sandbox, "cwd", "rotated.jpg");
   await sharp({ create: { width: 40, height: 20, channels: 3, background: "blue" } }).jpeg().withMetadata({ orientation: 6 }).toFile(src);
   const dst = join(sandbox, "cwd", "rotated-optimized.png");
@@ -533,7 +533,7 @@ function makeDeps(overrides = {}) {
 let tinyPngCache = null;
 async function tinyPng() {
   if (!tinyPngCache) {
-    tinyPngCache = await imageIo.getSharp()({ create: { width: 2, height: 2, channels: 3, background: "red" } }).png().toBuffer();
+    tinyPngCache = await (await imageIo.getSharp())({ create: { width: 2, height: 2, channels: 3, background: "red" } }).png().toBuffer();
   }
   return tinyPngCache;
 }
@@ -592,7 +592,7 @@ await atest("image_generate: default output dir; overwrite guard; missing key", 
 await atest("image_edit: source uploaded as inline part; 'last' reference; errors", async () => {
   freshSandbox();
   process.env.GEMINI_API_KEY = "k";
-  const sharp = imageIo.getSharp();
+  const sharp = await imageIo.getSharp();
   const src = join(sandbox, "cwd", "src.png");
   await sharp({ create: { width: 4, height: 4, channels: 3, background: "red" } }).png().toFile(src);
   let capturedParts;
@@ -618,7 +618,7 @@ await atest("image_edit: source uploaded as inline part; 'last' reference; error
 await atest("image_remix: fetches page, untrusted-framed prompt, downloads refs", async () => {
   freshSandbox();
   process.env.GEMINI_API_KEY = "k";
-  const sharp = imageIo.getSharp();
+  const sharp = await imageIo.getSharp();
   const png = await sharp({ create: { width: 2, height: 2, channels: 3, background: "green" } }).png().toBuffer();
   const html = '<html><head><title>T</title><meta property="og:image" content="/ref.png"><style>body{color:#123456}</style></head></html>';
   let capturedBody;
@@ -676,7 +676,7 @@ await atest("validate-first ordering: missing key reported before reference read
   );
   // incompatible pair (pro + 512) fails before reading the (valid) source too
   process.env.GEMINI_API_KEY = "k";
-  const sharp = imageIo.getSharp();
+  const sharp = await imageIo.getSharp();
   const src = join(sandbox, "cwd", "ok.png");
   await sharp({ create: { width: 2, height: 2, channels: 3, background: "red" } }).png().toFile(src);
   await assert.rejects(
@@ -687,7 +687,7 @@ await atest("validate-first ordering: missing key reported before reference read
 
 await atest("image_optimize: preset path with real sharp; 'last' source", async () => {
   freshSandbox();
-  const sharp = imageIo.getSharp();
+  const sharp = await imageIo.getSharp();
   const noise = Buffer.alloc(1600 * 400 * 3);
   for (let i = 0; i < noise.length; i++) noise[i] = Math.floor(Math.random() * 256);
   const src = join(sandbox, "cwd", "shot.png");

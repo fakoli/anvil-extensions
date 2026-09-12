@@ -242,7 +242,7 @@ async function runGeneration(
   const imageBytes = Buffer.from(response.imageBase64, "base64");
   const suffix = outPath.slice(outPath.lastIndexOf(".")).toLowerCase();
   validateOutputPath(outPath, params.overwrite === true);
-  const encoded = await encodeImage(decodeImage(imageBytes), suffix);
+  const encoded = await encodeImage(await decodeImage(imageBytes), suffix);
   atomicWrite(encoded, outPath, params.overwrite === true);
 
   const grounding = summarizeGrounding(response.grounding);
