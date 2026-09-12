@@ -5,7 +5,8 @@
 
 import { createRequire } from "node:module";
 import { existsSync, linkSync, mkdirSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
-import { basename, dirname } from "node:path";
+import { basename, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Sharp } from "sharp";
 
 export const OUTPUT_FORMATS: Record<string, "png" | "jpeg" | "webp"> = {
@@ -44,15 +45,45 @@ function suffixOf(path: string): string {
 
 let sharpModule: typeof import("sharp") | null = null;
 
+/**
+ * Locate sharp explicitly from this file upward when the host resolver does
+ * not walk up to the install root's node_modules (jiti under the pi Bun
+ * binary reports "Cannot find package 'sharp'" even though plain node
+ * resolves it from the same directory).
+ */
+function requireSharpExplicit(): typeof import("sharp") | null {
+  let dir = dirname(fileURLToPath(import.meta.url));
+  for (let hops = 0; hops < 6; hops += 1) {
+    const candidate = join(dir, "node_modules", "sharp");
+    if (existsSync(candidate)) {
+      try {
+        const require = createRequire(join(dir, "package.json"));
+        return require(candidate) as typeof import("sharp");
+      } catch { /* keep climbing */ }
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
 /** Lazily load sharp so config/dry paths never pay the native-module cost. */
 export function getSharp(): typeof import("sharp") {
   if (!sharpModule) {
+    let primaryError: unknown;
     try {
       const require = createRequire(import.meta.url);
       sharpModule = require("sharp") as typeof import("sharp");
     } catch (error) {
+      primaryError = error;
+    }
+    if (!sharpModule) {
+      sharpModule = requireSharpExplicit();
+    }
+    if (!sharpModule) {
       throw new Error(
-        `sharp is unavailable (${error instanceof Error ? error.message : String(error)}); image processing requires the sharp dependency`,
+        `sharp is unavailable (${primaryError instanceof Error ? primaryError.message : String(primaryError)}); image processing requires the sharp dependency`,
       );
     }
   }
