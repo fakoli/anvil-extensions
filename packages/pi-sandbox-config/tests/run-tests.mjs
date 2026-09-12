@@ -131,6 +131,21 @@ await test("image must be digest-pinned (bad forms refused)", () => {
   }
 });
 
+await test("image: private-registry + tag+digest forms accepted (greptile P2 mirror)", () => {
+  const d = DIGEST;
+  for (const ref of [
+    "localhost:5000/anvil@" + d,
+    "registry.example:5000/team/anvil:stable@" + d,
+    "registry.example:5000/team/deep/anvil@" + d,
+    DIGEST_IMAGE,
+  ]) {
+    assert.equal(validateConfigDoc({ image: ref }, "user").ok, true, ref);
+  }
+  for (const bad of ["--privileged", "a b@sha256:" + d, "host:/img@sha256:" + d, "anvil:latest@sha256:"]) {
+    assert.equal(validateConfigDoc({ image: bad }, "user").ok, false, bad);
+  }
+});
+
 await test("network: only none; inference reserved", () => {
   assert.equal(validateConfigDoc({ network: "none" }, "user").ok, true);
   const r = validateConfigDoc({ network: "inference" }, "user");
