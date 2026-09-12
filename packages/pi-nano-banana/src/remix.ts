@@ -227,16 +227,24 @@ async function fetchValidated(url: string, init: RequestInit & { fetchImpl: Fetc
       current = validateUrl(new URL(location, current).href);
       continue;
     }
+    // Non-2xx/3xx pages must fail before any billable call: an error page's
+    // HTML must never become style-reference data. Status only, no body echo.
+    if (!response.ok) {
+      try { await response.arrayBuffer(); } catch { /* ignore */ }
+      throw new Error(`HTTP ${response.status} fetching ${new URL(current).hostname}`);
+    }
     return response;
   }
   throw new Error("Too many redirects");
 }
 
 /** Bounded download: cap bytes while streaming, 20 s timeout. */
-async function httpGetBytes(url: string, maxBytes: number, fetchImpl: FetchImpl): Promise<{ data: Buffer; headers: Headers }> {
+async function httpGetBytes(url: string, maxBytes: number, fetchImpl: FetchImpl, signal?: AbortSignal): Promise<{ data: Buffer; headers: Headers }> {
+  const timeoutSignal = AbortSignal.timeout(REF_DOWNLOAD_TIMEOUT_MS);
+  const combined = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
   const response = await fetchValidated(url, {
     headers: { "User-Agent": USER_AGENT },
-    signal: AbortSignal.timeout(REF_DOWNLOAD_TIMEOUT_MS),
+    signal: combined,
     fetchImpl,
   });
   const reader = response.body?.getReader();
@@ -258,8 +266,8 @@ async function httpGetBytes(url: string, maxBytes: number, fetchImpl: FetchImpl)
   return { data: Buffer.concat(chunks), headers: response.headers };
 }
 
-export async function httpGetText(url: string, fetchImpl: FetchImpl = fetch): Promise<string> {
-  const { data } = await httpGetBytes(url, MAX_PAGE_BYTES, fetchImpl);
+export async function httpGetText(url: string, fetchImpl: FetchImpl = fetch, signal?: AbortSignal): Promise<string> {
+  const { data } = await httpGetBytes(url, MAX_PAGE_BYTES, fetchImpl, signal);
   return data.toString("utf8");
 }
 
@@ -274,16 +282,18 @@ export async function downloadImagesAsParts(
   maxBytes: number,
   fetchImpl: FetchImpl = fetch,
   onProgress?: (downloaded: number, attempts: number) => void,
+  signal?: AbortSignal,
 ): Promise<{ mimeType: string; base64: string }[]> {
   const parts: { mimeType: string; base64: string }[] = [];
   const candidates = [...new Set(urls)].slice(0, Math.min(12, maxImages * 3));
   let attempts = 0;
   for (const url of candidates) {
+    if (signal?.aborted) break;
     if (parts.length >= maxImages) break;
     attempts += 1;
     onProgress?.(parts.length, attempts);
     try {
-      const { data } = await httpGetBytes(url, maxBytes, fetchImpl);
+      const { data } = await httpGetBytes(url, maxBytes, fetchImpl, signal);
       const { mime } = await sniffImage(data);
       parts.push({ mimeType: mime, base64: data.toString("base64") });
     } catch {

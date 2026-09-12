@@ -107,7 +107,16 @@ export async function callGemini(
       `Gemini API HTTP ${response.status}. Check access/model for 400/403/404 or quota for 429. No automatic retry was made.`,
     );
   }
-  const raw = await readBodyCapped(response, MAX_RESPONSE_BYTES);
+  let raw: Buffer;
+  try {
+    raw = await readBodyCapped(response, MAX_RESPONSE_BYTES);
+  } catch (error) {
+    if (options.signal?.aborted) throw error; // user cancellation: rethrow as-is
+    if (error instanceof Error && error.message.includes("64 MiB")) throw error;
+    // Body stalled/timed out after headers: parity with the original's
+    // completion-unknown semantics for mid-read failures.
+    throw timeoutError("Gemini request failed or timed out. Completion is unknown; no automatic retry was made.");
+  }
   let result: unknown;
   try {
     result = JSON.parse(raw.toString("utf8"));

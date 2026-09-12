@@ -37,6 +37,7 @@ import {
   downloadImagesAsParts,
   extractPageHints,
   httpGetText,
+  validateUrl,
 } from "./remix.js";
 import { defaultOptimizeOut, optimize, parseSize, PRESETS } from "./optimize.js";
 
@@ -165,27 +166,48 @@ const TOOL_RESULT_IMAGE_MAX_SOURCES = 5;
 
 // --- generation core (shared by generate / edit / remix) ----------------------
 
-async function runGeneration(
+interface Preflight {
+  prompt: string;
+  settings: Settings;
+  args: ResolvedGenArgs;
+  outPath: string;
+  apiKey: string;
+}
+
+/**
+ * Validate everything that can fail cheaply BEFORE any reference work:
+ * parameter/model compatibility (buildRequest), output path, and API key.
+ * Parity with the CLI's validate-first ordering (and strictly better than
+ * paying a page fetch or reference downloads before discovering a missing
+ * key or an incompatible aspect/size/model pair).
+ */
+function preflight(
   deps: ImageToolDeps,
-  tool: string,
-  params: { prompt: string; model?: string; modelId?: string; aspect?: string; size?: string; search?: boolean; out?: string; overwrite?: boolean; attach?: boolean; timeoutSeconds?: number },
-  extraParts: { textPart: string; imageParts: { mimeType: string; base64: string }[] } | null,
-  signal: AbortSignal | undefined,
-  onUpdate: AgentToolUpdateCallback<ImageToolDetails> | undefined,
+  params: { prompt: string; model?: string; modelId?: string; aspect?: string; size?: string; search?: boolean; out?: string; overwrite?: boolean; timeoutSeconds?: number },
   ctx: ExtensionContext,
-): Promise<ImageToolResult> {
+): Preflight {
   const prompt = requirePrompt(params.prompt);
   const settings = loadSettings(undefined, deps.getSessionOverrides());
   const args = resolveGenArgs(params, settings);
-
-  // Validate parameters before reading references, creating directories, or
-  // contacting Gemini (parity with the CLI's validate-first ordering).
   buildRequest([], args.aspect, args.size, args.search, args.model);
   const outPath = params.out
     ? resolvePath(params.out, ctx.cwd)
     : resolvePath(defaultOutPath(settings), ctx.cwd);
   validateOutputPath(outPath, params.overwrite === true);
   const apiKey = requireApiKey();
+  return { prompt, settings, args, outPath, apiKey };
+}
+
+async function runGeneration(
+  deps: ImageToolDeps,
+  tool: string,
+  params: { prompt: string; overwrite?: boolean; attach?: boolean },
+  extraParts: { textPart: string; imageParts: { mimeType: string; base64: string }[]; inputPath?: string } | null,
+  pre: Preflight,
+  signal: AbortSignal | undefined,
+  onUpdate: AgentToolUpdateCallback<ImageToolDetails> | undefined,
+): Promise<ImageToolResult> {
+  const { prompt, args, outPath, apiKey } = pre;
 
   const requestParts = extraParts === null
     ? [{ text: prompt }]
@@ -203,7 +225,7 @@ async function runGeneration(
     size: args.size,
     search: args.search,
     promptChars: prompt.length,
-    inputPath: extraParts && extraParts.imageParts.length > 0 ? (params as { source?: string }).source : undefined,
+    inputPath: extraParts?.inputPath,
   });
 
   const response = await callGemini(apiKey, requestParts, args.aspect, args.size, args.search, args.model, {
@@ -310,36 +332,45 @@ export function createImageTools(deps: ImageToolDeps): ToolDefinition<any, Image
       ctx: ExtensionContext,
     ): Promise<ImageToolResult> => {
       try {
+        // Validate parameters, output path, and key BEFORE any reference work
+        // (no page fetch, no reference downloads, no source read on a request
+        // that is going to fail anyway).
+        const pre = preflight(deps, params, ctx);
         if (extraPartsBuilder === "none") {
-          return await runGeneration(deps, tool, params, null, signal, onUpdate, ctx);
+          return await runGeneration(deps, tool, params, null, pre, signal, onUpdate);
         }
-        const prompt = requirePrompt(params.prompt);
-        const settings = loadSettings(undefined, deps.getSessionOverrides());
         if (extraPartsBuilder === "edit") {
           const sourcePath = resolveEditSource(params.source, deps, ctx);
-          onUpdate?.({ tool, inputPath: sourcePath, promptChars: prompt.length });
+          onUpdate?.({ tool, inputPath: sourcePath, promptChars: pre.prompt.length });
           const payload = await fileToInlinePartPayload(sourcePath);
-          return await runGeneration(deps, tool, params, { textPart: prompt, imageParts: [payload] }, signal, onUpdate, ctx);
+          return await runGeneration(deps, tool, params, { textPart: pre.prompt, imageParts: [payload], inputPath: sourcePath }, pre, signal, onUpdate);
         }
         // remix
         const url = typeof params.url === "string" ? params.url.trim() : "";
         if (!url) throw new Error("url is required");
-        const maxImagesRaw = params.maxImages ?? settings.max_remix_images ?? DEFAULTS.max_remix_images;
+        validateUrl(url);
+        const maxImagesRaw = params.maxImages ?? pre.settings.max_remix_images ?? DEFAULTS.max_remix_images;
         const maxImages = boundedInt(maxImagesRaw, 0, 4, "maxImages");
         const maxBytes = params.maxBytes === undefined ? 4_000_000 : boundedInt(params.maxBytes, 1, 12_000_000, "maxBytes");
-        onUpdate?.({ tool, promptChars: prompt.length });
-        const pageHtml = await httpGetText(url, deps.fetchImpl);
+        onUpdate?.({ tool, promptChars: pre.prompt.length });
+        const pageHtml = await httpGetText(url, deps.fetchImpl, signal);
         const hints = extractPageHints(pageHtml, url);
-        const refUrls = [...hints.image_urls, ...hints.icon_urls.slice(0, 1)];
-        const remixPrompt = buildRemixPrompt(hints, prompt);
+        // Reference URLs ride to Gemini as image parts, not prompt text
+        // (parity with the original's hints.pop()).
+        const { image_urls, icon_urls, ...hintsWithoutImages } = hints;
+        void image_urls;
+        void icon_urls;
+        const refUrls = [...image_urls, ...icon_urls.slice(0, 1)];
+        const remixPrompt = buildRemixPrompt(hintsWithoutImages, pre.prompt);
         const refs = await downloadImagesAsParts(
           refUrls,
           maxImages,
           maxBytes,
           deps.fetchImpl,
-          (downloaded) => onUpdate?.({ tool, promptChars: prompt.length, references: downloaded }),
+          (downloaded) => onUpdate?.({ tool, promptChars: pre.prompt.length, references: downloaded }),
+          signal,
         );
-        return await runGeneration(deps, tool, params, { textPart: remixPrompt, imageParts: refs }, signal, onUpdate, ctx);
+        return await runGeneration(deps, tool, params, { textPart: remixPrompt, imageParts: refs }, pre, signal, onUpdate);
       } catch (error) {
         throw error instanceof Error ? error : new Error(String(error));
       }

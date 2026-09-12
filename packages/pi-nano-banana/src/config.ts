@@ -16,7 +16,7 @@ import {
   openSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { parseDotenv } from "./dotenv.js";
 import { DEFAULTS } from "./models.js";
 
@@ -197,9 +197,9 @@ export function resetUserSettings(path = configPath()): boolean {
 
 /** Atomic publish: temp file in the target dir, then rename/link. 0600. */
 export function atomicWriteText(content: string, path: string): void {
-  const dir = path.slice(0, Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\") + 1) || 1);
+  const dir = dirname(path);
   mkdirSync(dir, { recursive: true });
-  const temp = join(dir, `.${path.slice(path.lastIndexOf("/") + 1) || path}-${process.pid}-${Math.random().toString(36).slice(2)}.tmp`);
+  const temp = join(dir, `.${basename(path)}-${process.pid}-${Math.random().toString(36).slice(2)}.tmp`);
   try {
     const fd = openSync(temp, "w", 0o600);
     try {
