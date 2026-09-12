@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -50,6 +51,7 @@ function tempRepo() {
 }
 
 function approved(gates) { return { approvedGates: gates }; }
+function gateResultsIdentity(gates) { return createHash("sha256").update(JSON.stringify(gates)).digest("hex"); }
 
 await test("receipt runs gates over a stable snapshot without mutating the real index", async () => {
   const { dir, git } = tempRepo();
@@ -165,6 +167,14 @@ await test("receipt validation binds every result field and rejects symlinked ga
       const tampered = { ...created, gates: [{ ...created.gates[0], ...replacement }] };
       assert.equal(receipt.validateReceipt(tampered, validation).ok, false);
     }
+    for (const replacement of [{ startedAt: "not-a-date" }, { finishedAt: "2026-09-12T00:00:00Z" }]) {
+      const gatesWithBadDate = [{ ...created.gates[0], ...replacement }];
+      const tampered = { ...created, gates: gatesWithBadDate, gateResultsIdentity: gateResultsIdentity(gatesWithBadDate) };
+      assert.match(receipt.validateReceipt(tampered, validation).reason, /malformed/);
+    }
+    assert.match(receipt.validateReceipt({ ...created, createdAt: "not-a-date" }, validation).reason, /malformed/);
+    const tooEarly = { ...created, createdAt: new Date(Date.parse(created.gates[0].startedAt) - 1).toISOString() };
+    assert.match(receipt.validateReceipt(tooEarly, validation).reason, /malformed/);
     symlinkSync(outside, join(dir, "linked-outside"));
     const escaped = [{ command: process.execPath, args: ["-e", "require('node:fs').writeFileSync('outside.txt','bad')"], cwd: "linked-outside" }];
     assert.throws(() => receipt.gateIdentity(dir, escaped), /escapes/);
@@ -299,6 +309,11 @@ await test("gate router preserves unusual filenames as data and rejects bad refs
 await test("State proof workflow checks content, policy, argv, and process bounds", () => {
   const result = spawnSync("python3", [join(pkg, "tests", "test_state_proof_workflow.py")], { encoding: "utf8", timeout: 30_000 });
   assert.equal(result.status, 0, result.stderr);
+});
+
+await test("Context7 uses bounded isolated public documentation requests", () => {
+  const result = spawnSync(process.execPath, [join(pkg, "tests", "docs-boundary.test.mjs")], { encoding: "utf8", timeout: 45_000 });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
 });
 
 if (failures.length) {

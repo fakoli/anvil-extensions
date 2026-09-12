@@ -78,6 +78,13 @@ function requireIdentity(value: string, name: string): void {
   }
 }
 
+function canonicalInstant(value: unknown): number | undefined {
+  if (typeof value !== "string") return undefined;
+  const milliseconds = Date.parse(value);
+  if (!Number.isFinite(milliseconds) || new Date(milliseconds).toISOString() !== value) return undefined;
+  return milliseconds;
+}
+
 function git(root: string, args: string[], env: NodeJS.ProcessEnv = process.env): string {
   // Force mode tracking: repository-local core.filemode may be false, but a mode
   // change is content for a verification receipt. The checkout is an explicit,
@@ -311,7 +318,12 @@ export function validateReceipt(receipt: unknown, input: ValidateReceiptInput): 
         return { ok: false, reason: `receipt ${field} is malformed` };
       }
     }
-    if (candidate.gates.some((gate) => !gate || typeof gate.command !== "string" || !Array.isArray(gate.args) || typeof gate.cwd !== "string" || !Number.isInteger(gate.timeoutMs) || typeof gate.exitCode !== "number" || gate.exitCode !== 0 || typeof gate.startedAt !== "string" || typeof gate.finishedAt !== "string" || Date.parse(gate.startedAt) > Date.parse(gate.finishedAt) || typeof gate.outputIdentity !== "string" || !SHA256.test(gate.outputIdentity))) {
+    const createdAt = canonicalInstant(candidate.createdAt);
+    if (createdAt === undefined || candidate.gates.some((gate) => {
+      const startedAt = gate && canonicalInstant(gate.startedAt);
+      const finishedAt = gate && canonicalInstant(gate.finishedAt);
+      return !gate || typeof gate.command !== "string" || !Array.isArray(gate.args) || typeof gate.cwd !== "string" || !Number.isInteger(gate.timeoutMs) || typeof gate.exitCode !== "number" || gate.exitCode !== 0 || startedAt === undefined || finishedAt === undefined || startedAt > finishedAt || finishedAt > createdAt || typeof gate.outputIdentity !== "string" || !SHA256.test(gate.outputIdentity);
+    })) {
       return { ok: false, reason: "receipt gates are malformed or unsuccessful" };
     }
     requireIdentifier(input.taskId, "taskId");
