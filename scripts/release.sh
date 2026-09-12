@@ -28,7 +28,7 @@ git push origin "$COMMIT:main"
 echo
 echo "== wait for CI green on $COMMIT (tags are immutable; never tag red) =="
 sleep 10   # let the run register
-for _ in $(seq 1 60); do
+for _ in $(seq 1 30); do
   STATUS="$(gh run list --repo fakoli/anvil-extensions --commit "$COMMIT" \
     --json status,conclusion -q '.[0] | .status + "/" + (.conclusion // "-")' 2>/dev/null || echo "unknown")"
   case "$STATUS" in
@@ -41,7 +41,7 @@ for _ in $(seq 1 60); do
       exit 1
       ;;
     *)
-      printf "."; sleep 20
+      printf "."; sleep 15
       ;;
   esac
 done

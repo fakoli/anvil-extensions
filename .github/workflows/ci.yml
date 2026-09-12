@@ -32,4 +32,4 @@ jobs:
             echo "::group::tests: $ws"
             npm test --workspace "$ws"
             echo "::endgroup::"
-          done < scripts/test-matrix.txt
+          done < <(sed 's/#.*//' scripts/test-matrix.txt)
