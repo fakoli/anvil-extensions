@@ -19,3 +19,7 @@
   `npm install-scripts approve` per pi's supply-chain gate).
 - License: MIT. Fork maintainer: Fakoli.
 - Upstream tarball integrity (pin): sha512-GJSeu3mPiCKJhYRUKjPPMS9xICUZdxlERY2ch7yVTI4yd6v14Sh23fHDcHfiQOuN++YhVpl5JrFttLvfX6QEpA==
+
+- 2026-09-12: local watchdog fix keeps forced process-group termination armed
+  after the direct child exits; regression covers both parent signal behaviors
+  and distinguishes terminated Linux zombies from live descendants.
