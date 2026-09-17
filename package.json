@@ -19,11 +19,13 @@
       "./packages/pi-voice-clone/index.ts",
       "./packages/pi-sandbox-config/index.ts",
       "./packages/pi-hermes-memory/src/index.ts",
-      "./packages/pi-nano-banana/index.ts"
+      "./packages/pi-nano-banana/index.ts",
+      "./packages/pi-brag/index.ts"
     ],
     "skills": [
       "./packages/pi-subagents/skills",
-      "./packages/pi-nano-banana/skills"
+      "./packages/pi-nano-banana/skills",
+      "./packages/pi-brag/skills"
     ],
     "prompts": [
       "./packages/pi-subagents/prompts"

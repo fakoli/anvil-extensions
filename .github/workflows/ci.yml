@@ -26,7 +26,7 @@ jobs:
       - name: Offline test suites
         run: |
           set -e
-          for ws in pi-commentary pi-condense pi-hermes-memory pi-insights \
+          for ws in pi-brag pi-commentary pi-condense pi-hermes-memory pi-insights \
                     pi-nano-banana pi-permission-system pi-sandbox-config \
                     pi-subagents pi-tool-repair pi-voice-clone; do
             echo "::group::tests: $ws"

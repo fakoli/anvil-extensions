@@ -47,6 +47,14 @@ Ported from a private plugin (v1.4.0, same author, MIT) into a native pi extensi
 - **Same non-negotiables, reimplemented:** one billable call per request; no automatic retries; atomic no-clobber publication; key-hygiene (credentials never echoed, never stored in config); 12 MiB / 20 MB / 64 MiB caps; remix page data treated strictly as untrusted reference.
 - **A sharp lesson worth its own note:** pi's embedded Bun runtime resolves CJS by-name requires only for packages whose `main` points at the package root; any subdirectory main (sharp's `lib/index.js`) fails from *any* anchor. Native dependencies in pi extensions must load through dynamic `import()` — this cost a debugging session and a few probes to pin down, so it is documented here for the next person.
 
+## Adapted port: pi-brag
+
+Ported from [latent-spaces/brag](https://github.com/latent-spaces/brag) v0.2.2 (MIT) — a Claude Code plugin whose substance is an agent skill — into a pi extension package. The creative workflow (four steps, tones, audio guidance) is upstream's, carried over nearly verbatim; the host glue is new:
+
+- **Commands + tools instead of a plugin command.** `/brag` parses flags and hands the agent a structured kickoff prompt; `/brag-doctor` gives an instant environment check; `brag_doctor`/`brag_render`/`brag_poster`/`brag_fetch_assets` cover the fiddly parts (long renders with streamed progress and timeouts, poster extract + frame-0 bake, one-time asset download).
+- **Assets not vendored.** Upstream bundles ~16.5 MB of music/SFX inside the skill; the port ships an empty assets dir plus a fetch tool, and the skill degrades gracefully to a silent video. The cue-analysis Python script (184 KB) is vendored, since the skill's audio path references it directly.
+- **Paths generalized.** Upstream hardcodes `~/.claude/skills/brag/assets/`; the port resolves the asset root from the package location at runtime.
+
 ## Why vendoring at all
 
 Three reasons: hosts must be able to install without trusting a registry at load time; we patch what we need without waiting on upstream release cycles; and the git history of every vendored change is reviewable. The cost — re-syncing upstream improvements manually — is accepted and tracked in each `UPSTREAM.md`.
