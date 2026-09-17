@@ -5,10 +5,15 @@
 
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
-import { existsSync, mkdirSync, writeFileSync, rmSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
+import { execFile as execFileCb } from "node:child_process";
+import { promisify } from "node:util";
+import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
+
+const execFileP = promisify(execFileCb);
 
 const PI_INSTALL_DIR = process.env.PI_INSTALL_DIR
   ?? (() => {
@@ -70,6 +75,16 @@ function plantTree(base, entries) {
 await atest("flags: tokenize respects quotes", async () => {
   assert.deepEqual(flags.tokenize('a "b c" \'d e\' f'), ["a", "b c", "d e", "f"]);
   assert.deepEqual(flags.tokenize(""), []);
+});
+
+await atest("flags: contractions do not open quoted spans", async () => {
+  // An apostrophe inside a word is a literal character, not a quote opener.
+  assert.deepEqual(flags.tokenize("make it feel like it's alive --no-music"), ["make", "it", "feel", "like", "it's", "alive", "--no-music"]);
+  const opts = flags.parseBragInvocation("make it feel like it's alive --no-music");
+  assert.equal(opts.music, false);
+  assert.equal(opts.direction, "make it feel like it's alive");
+  // A quote that opens a token still spans whitespace; unmatched keeps the rest.
+  assert.deepEqual(flags.tokenize("'hello world"), ["hello world"]);
 });
 
 await atest("flags: empty invocation -> defaults", async () => {
@@ -163,24 +178,28 @@ await atest("paths: package layout resolves inside the package", async () => {
   assert.ok(paths.DEFAULT_ASSETS_DIR.endsWith(join("skills", "brag", "assets")));
 });
 
-await atest("paths: inventoryAssets counts planted tree", async () => {
+await atest("paths: inventoryAssets counts planted tree (upstream layout)", async () => {
   const base = mkdtempSync(join(tmpdir(), "brag-inv-"));
   try {
     plantTree(base, {
       "music/a.mp3": "a",
       "music/b.mp3": "b",
+      "music/README.md": "readme",
+      "music/cues/a.music-cues.json": "{}",
+      "music/cues/a.music-cues.md": "cues",
+      "music/cues/b.music-cues.json": "{}",
       "sfx/interface/x.ogg": "x",
       "sfx/keyboard/y.ogg": "y",
-      "cues/a.music-cues.json": "{}",
-      "sfx-analysis.md": "analysis",
+      "sfx/sfx-analysis.md": "analysis",
     });
     mkdirSync(join(base, "sfx", "empty"), { recursive: true }); // truly empty dir -> excluded
     const inv = paths.inventoryAssets(base);
     assert.equal(inv.present, true);
+    // README.md is not a track; only audio extensions count.
     assert.deepEqual(inv.music, ["a.mp3", "b.mp3"]);
     assert.deepEqual(inv.sfxDirs, ["interface", "keyboard"]);
     assert.equal(inv.sfxFiles, 2);
-    assert.deepEqual(inv.cues, ["a.music-cues.json"]);
+    assert.deepEqual(inv.cues, ["a.music-cues.json", "b.music-cues.json"]);
     assert.equal(inv.hasSfxAnalysis, true);
   } finally {
     rmSync(base, { recursive: true, force: true });
@@ -254,6 +273,32 @@ await atest("doctor: missing ffmpeg carries install hint", async () => {
   assert.equal(report.ok, false);
 });
 
+await atest("doctor: nonzero-exit ffmpeg/ffprobe is not healthy", async () => {
+  const brokenFfmpeg = await doctor.runDoctor({
+    exec: async (cmd) => (cmd === "ffmpeg" ? { code: 1, stdout: "", stderr: "segmentation fault" } : { code: 0, stdout: "", stderr: "" }),
+    home: tmpdir(),
+    cwd: tmpdir(),
+    assetsDir: join(tmpdir(), "brag-no-assets"),
+    nodeVersion: "v24.20.0",
+    skipEngineProbe: true,
+  });
+  const ffmpeg = brokenFfmpeg.checks.find((c) => c.name === "ffmpeg");
+  assert.equal(ffmpeg.ok, false);
+  assert.ok(ffmpeg.detail.includes("broken"));
+
+  const brokenProbe = await doctor.runDoctor({
+    exec: async (cmd) => (cmd === "ffmpeg" ? { code: 0, stdout: "ffmpeg version 7.1\n", stderr: "" } : { code: 1, stdout: "", stderr: "ffprobe crashed" }),
+    home: tmpdir(),
+    cwd: tmpdir(),
+    assetsDir: join(tmpdir(), "brag-no-assets"),
+    nodeVersion: "v24.20.0",
+    skipEngineProbe: true,
+  });
+  const probe = brokenProbe.checks.find((c) => c.name === "ffmpeg");
+  assert.equal(probe.ok, false);
+  assert.ok(probe.detail.includes("ffprobe"));
+});
+
 await atest("doctor: old node fails the runtime check", async () => {
   const report = await doctor.runDoctor({
     exec: okExec,
@@ -295,8 +340,10 @@ await atest("doctor: formatReport renders FAIL lines and hints", async () => {
 // --- render ------------------------------------------------------------------
 
 class FakeChild extends EventEmitter {
-  constructor() {
+  constructor({ pid = 4242, neverClose = false } = {}) {
     super();
+    this.pid = pid;
+    this.neverClose = neverClose;
     this.stdout = new EventEmitter();
     this.stderr = new EventEmitter();
     this.exitCode = null;
@@ -305,6 +352,7 @@ class FakeChild extends EventEmitter {
   }
   kill(sig) {
     this.killCalls.push(sig ?? "SIGTERM");
+    if (this.neverClose) return; // emulate descendants holding the pipes
     // A real child dies shortly after SIGTERM; emulate that so runners resolve.
     setTimeout(() => this.close(null, sig ?? "SIGTERM"), 5);
   }
@@ -379,6 +427,49 @@ await atest("render: non-zero exit is a structured failure", async () => {
   assert.ok(result.stderrTail.includes("contrast failure"));
 });
 
+await atest("render: spawns detached on POSIX so kills reach the whole tree", async () => {
+  const child = new FakeChild();
+  const seen = [];
+  const spawnFn = (cmd, argv, opts) => {
+    seen.push({ cmd, argv, opts });
+    return child;
+  };
+  const promise = render.runHyperframes({ subcommand: "check", cwd: pkgRoot }, undefined, undefined, { spawnFn });
+  await new Promise((r) => setTimeout(r, 10));
+  child.close(0, null);
+  await promise;
+  assert.equal(seen[0].cmd, "npx");
+  if (process.platform !== "win32") assert.equal(seen[0].opts.detached, true);
+});
+
+await atest("render: settle guard finishes after kill even when close never fires", async () => {
+  // Descendants inheriting stdio keep 'close' pending forever after a kill;
+  // the runner must still settle instead of hanging the tool.
+  const child = new FakeChild({ pid: 2140000000, neverClose: true });
+  const promise = render.runHyperframes(
+    { subcommand: "check", cwd: pkgRoot, timeoutSeconds: 0.05 },
+    undefined,
+    undefined,
+    { spawnFn: () => child, settleGraceMs: 50 },
+  );
+  const result = await promise;
+  assert.equal(result.timedOut, true);
+  assert.equal(result.exitCode, null);
+  assert.equal(result.signal, "SIGKILL");
+  assert.ok(child.killCalls.includes("SIGTERM"));
+});
+
+await atest("render: appendBounded keeps only the tail within the cap", async () => {
+  const cap = 64 * 1024;
+  const kept = render.appendBounded("", "x".repeat(70_000));
+  assert.equal(kept.length, cap);
+  assert.ok(kept.endsWith("x".repeat(10)));
+  const both = render.appendBounded(render.appendBounded("", "a".repeat(60_000)), "b".repeat(10_000));
+  assert.equal(both.length, cap);
+  assert.ok(both.endsWith("b".repeat(10_000)));
+  assert.ok(render.appendBounded("short", " chunk").startsWith("short chunk"));
+});
+
 // --- poster ------------------------------------------------------------------
 
 await atest("poster: command builders match the upstream recipe", async () => {
@@ -448,25 +539,32 @@ await atest("poster: default poster path sits beside the video", async () => {
 // --- fetch-assets ------------------------------------------------------------
 
 function makeBody(text) {
-  const bytes = new TextEncoder().encode(text);
-  let sent = false;
-  return {
-    getReader() {
-      return {
-        read: async () => {
-          if (sent) return { done: true, value: undefined };
-          sent = true;
-          return { done: false, value: bytes };
-        },
-      };
+  const bytes = typeof text === "string" ? new TextEncoder().encode(text) : new Uint8Array(text);
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(bytes);
+      controller.close();
     },
-  };
+  });
 }
-const copyCalls = [];
+
+function makeErroringBody() {
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode("partial bytes"));
+      controller.error(new Error("connection reset mid-stream"));
+    },
+  });
+}
 
 await atest("fetch-assets: tarball url and extraction locator", async () => {
-  assert.equal(fetchAssetsMod.tarballUrl(), "https://codeload.github.com/latent-spaces/brag/tar.gz/refs/heads/main");
-  assert.equal(fetchAssetsMod.tarballUrl("v0.2.2"), "https://codeload.github.com/latent-spaces/brag/tar.gz/refs/heads/v0.2.2");
+  // Default ref is the pinned upstream commit; classic codeload form resolves
+  // branches, tags, and SHAs alike.
+  assert.equal(
+    fetchAssetsMod.tarballUrl(),
+    "https://codeload.github.com/latent-spaces/brag/tar.gz/1f8d9ade17d0ad4419cca9305fbc1398a4dd5b39",
+  );
+  assert.equal(fetchAssetsMod.tarballUrl("v0.2.2"), "https://codeload.github.com/latent-spaces/brag/tar.gz/v0.2.2");
 
   const root = mkdtempSync(join(tmpdir(), "brag-extract-"));
   try {
@@ -539,39 +637,91 @@ await atest("poster: extract that writes no file is an error", async () => {
   );
 });
 
+await atest("poster: abort before bake never renames", async () => {
+  const controller = new AbortController();
+  let renames = 0;
+  const run = async (args) => {
+    if (args.includes("-frames:v")) {
+      controller.abort(); // caller gave up after extraction
+      return { code: 0, stderr: "" };
+    }
+    return { code: 0, stderr: "" };
+  };
+  const err = await poster
+    .makePoster(
+      { video: "/tmp/fake/brag.mp4", timestamp: 3, signal: controller.signal },
+      { run, exists: (p) => !p.endsWith(".bake.mp4"), rename: () => { renames += 1; } },
+    )
+    .catch((e) => e);
+  assert.ok(err.message.includes("aborted"));
+  assert.equal(renames, 0);
+});
+
+await atest("poster: abort after bake completes never publishes", async () => {
+  const controller = new AbortController();
+  let renames = 0;
+  const unlinked = [];
+  const run = async (args) => {
+    if (args.includes("-filter_complex")) controller.abort(); // bake finished, caller gone
+    return { code: 0, stderr: "" };
+  };
+  const err = await poster
+    .makePoster(
+      { video: "/tmp/fake/brag.mp4", timestamp: 3, signal: controller.signal },
+      {
+        run,
+        exists: (p) => !p.endsWith(".bake.mp4"),
+        rename: () => {
+          renames += 1;
+        },
+        unlink: (p) => unlinked.push(p),
+      },
+    )
+    .catch((e) => e);
+  assert.ok(err.message.includes("aborted"));
+  assert.equal(renames, 0); // the video is never replaced after cancellation
+  assert.equal(unlinked.length, 1);
+  assert.ok(unlinked[0].endsWith(".bake.mp4"));
+});
+
 await atest("poster: summarizePoster covers baked/failed/skipped", async () => {
   assert.ok(poster.summarizePoster({ poster: "p.jpg", video: "v.mp4", baked: true }).includes("bake: done"));
   assert.ok(poster.summarizePoster({ poster: "p.jpg", video: "v.mp4", baked: false, bakeError: "boom" }).includes("boom"));
   assert.ok(poster.summarizePoster({ poster: "p.jpg", video: "v.mp4", baked: false }).includes("skipped"));
 });
 
-await atest("fetch-assets: tag refs fall back to refs/tags", async () => {
-  const urls = [];
-  const result = await fetchAssetsMod.fetchAssets(
-    { dest: join(tmpdir(), "brag-fetch-dest-unused"), ref: "v0.2.2" },
-    {
-      fetchImpl: async (url) => {
-        urls.push(String(url));
-        if (String(url).includes("refs/heads/")) return { ok: false, status: 404, body: null };
-        return { ok: true, status: 200, body: makeBody("tarball-bytes") };
+await atest("fetch-assets: real tar extraction into a dir that did not exist", async () => {
+  // End-to-end with the production extractor: tar -C fails unless the target
+  // directory exists, so this pins the mkdir fix (injected extractors hid it).
+  const scratch = mkdtempSync(join(tmpdir(), "brag-realtar-"));
+  try {
+    const payload = join(scratch, "payload");
+    plantTree(payload, {
+      "brag-1f8d9ad/skills/brag/assets/music/a.mp3": "a",
+      "brag-1f8d9ad/skills/brag/assets/music/cues/a.music-cues.json": "{}",
+      "brag-1f8d9ad/skills/brag/assets/sfx/ui/x.ogg": "x",
+      "brag-1f8d9ad/skills/brag/assets/sfx/sfx-analysis.md": "guide",
+    });
+    const tarball = join(scratch, "brag.tar.gz");
+    await execFileP("tar", ["-czf", tarball, "-C", payload, "brag-1f8d9ad"]);
+    const dest = join(scratch, "dest");
+    const result = await fetchAssetsMod.fetchAssets(
+      { dest, ref: "1f8d9ade17d0ad4419cca9305fbc1398a4dd5b39" },
+      {
+        fetchImpl: async (url) => {
+          assert.ok(String(url).endsWith("/tar.gz/1f8d9ade17d0ad4419cca9305fbc1398a4dd5b39"));
+          return { ok: true, status: 200, body: makeBody(readFileSync(tarball)) };
+        },
+        // extract + copy: production defaults on purpose
       },
-      extract: async (tarball, extractDir) => {
-        plantTree(extractDir, { "brag-v0.2.2/skills/brag/assets/music/t.mp3": "m" });
-        assert.ok(tarball.endsWith(".tar.gz"));
-      },
-      copy: (source, dest) => {
-        copyCalls.push([source, dest]);
-        plantTree(dest, { "music/t.mp3": "m" }); // emulate the real copy
-      },
-    },
-  );
-  assert.deepEqual(urls, [
-    "https://codeload.github.com/latent-spaces/brag/tar.gz/refs/heads/v0.2.2",
-    "https://codeload.github.com/latent-spaces/brag/tar.gz/refs/tags/v0.2.2",
-  ]);
-  assert.equal(copyCalls.length, 1);
-  assert.ok(copyCalls[0][0].includes(join("skills", "brag", "assets")));
-  assert.ok(result.summary.includes("1 music track(s)"));
+    );
+    assert.ok(result.summary.includes("1 music track(s)"));
+    assert.ok(existsSync(join(dest, "music", "a.mp3")));
+    assert.ok(existsSync(join(dest, "music", "cues", "a.music-cues.json")));
+    assert.ok(existsSync(join(dest, "sfx", "sfx-analysis.md")));
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
 });
 
 await atest("fetch-assets: read-only destination gets an actionable error", async () => {
@@ -594,7 +744,7 @@ await atest("fetch-assets: read-only destination gets an actionable error", asyn
   assert.ok(err.message.includes("pass dest"));
 });
 
-await atest("fetch-assets: non-404 download errors are not retried as tags", async () => {
+await atest("fetch-assets: non-404 download errors surface once (no retry)", async () => {
   let calls = 0;
   const err = await fetchAssetsMod
     .fetchAssets(
@@ -609,6 +759,36 @@ await atest("fetch-assets: non-404 download errors are not retried as tags", asy
     .catch((e) => e);
   assert.equal(calls, 1);
   assert.ok(err.message.includes("HTTP 503"));
+});
+
+await atest("fetch-assets: mid-stream download failure is a structured error", async () => {
+  const err = await fetchAssetsMod
+    .fetchAssets(
+      { dest: join(tmpdir(), "brag-dl-fail") },
+      { fetchImpl: async () => ({ ok: true, status: 200, body: makeErroringBody() }) },
+    )
+    .catch((e) => e);
+  assert.ok(err.message.includes("asset download failed"));
+  assert.ok(err.message.includes("connection reset"));
+});
+
+await atest("fetch-assets: aborted signal aborts the download", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  let fetched = 0;
+  const err = await fetchAssetsMod
+    .fetchAssets(
+      { dest: join(tmpdir(), "brag-dl-abort"), signal: controller.signal },
+      {
+        fetchImpl: async () => {
+          fetched += 1;
+          return { ok: true, status: 200, body: makeBody("never written") };
+        },
+      },
+    )
+    .catch((e) => e);
+  assert.equal(fetched, 1);
+  assert.ok(err.message.includes("aborted"));
 });
 
 // --- extension wiring --------------------------------------------------------
@@ -641,6 +821,23 @@ await atest("index: registers /brag, /brag-doctor and the four tools", async () 
   // While streaming, the message is queued as a follow-up.
   await commands.find((c) => c.name === "brag").def.handler("", { isIdle: () => false });
   assert.equal(sentViaPi[1].opts?.deliverAs, "followUp");
+});
+
+await atest("UPSTREAM: verbatim files match the recorded integrity hashes", async () => {
+  const text = readFileSync(join(pkgRoot, "UPSTREAM.md"), "utf8");
+  const block = text.split("```").find((s) => s.includes("  skills/brag/"));
+  assert.ok(block, "UPSTREAM.md is missing the integrity hash block");
+  const lines = block.trim().split("\n").filter((l) => l.trim());
+  assert.ok(lines.length >= 6, "expected at least six integrity lines");
+  for (const line of lines) {
+    const m = line.trim().match(/^([0-9a-f]{64})\s+(.+)$/);
+    assert.ok(m, `unparseable integrity line: ${line}`);
+    const [, hash, rel] = m;
+    const file = join(pkgRoot, rel);
+    assert.ok(existsSync(file), `missing verbatim file: ${rel}`);
+    const actual = createHash("sha256").update(readFileSync(file)).digest("hex");
+    assert.equal(actual, hash, `integrity mismatch for ${rel}`);
+  }
 });
 
 console.log(`\n${passed} tests passed${process.exitCode ? " (with failures above)" : ""}`);

@@ -62,5 +62,19 @@ Vendored verbatim from upstream (small, referenced directly by the skill's
 audio guidance): `skills/brag/scripts/` (`analyze_music_cues.py`,
 `pyproject.toml`, `uv.lock`).
 
-Registry-integrity hashes: N/A — source is a public GitHub repository, not an
-npm dependency; pinned by upstream commit above.
+## Import integrity
+
+Source is a public GitHub repository, not an npm dependency, so there is no
+registry integrity hash; the pin is upstream commit `1f8d9ade17d0ad4419cca9305fbc1398a4dd5b39`
+(v0.2.2). For the files imported verbatim, integrity is pinned by SHA-256
+(generated with `sha256sum` over the files as imported; `tests/run-tests.mjs`
+verifies the tree still matches):
+
+```
+f296266757dad8e5a0f7f42fb812277d724856215b4b3b5c4bb3c19e35c40e70  skills/brag/references/step-1-inspect.md
+f89e99efce1a5dccbdd38b92812437b885a7ec4aac81c4b00069b09fe1fb0072  skills/brag/references/step-2-plan.md
+e6ea8c6d3061a8734194cdad2c176b371f3ec41cb85c89306ac549baeebaa59e  skills/brag/references/tones.md
+1e5d719289536dd3e8555dda77da58ef89857487b94f8f5f1ba7812f15405deb  skills/brag/scripts/analyze_music_cues.py
+47c9a79037ac77732a45e2dc2daf79d286b6cb3b50650b5ed89a2bc093a84c76  skills/brag/scripts/pyproject.toml
+b00499c44800f15678e12eae49d1fd798bd3b23ea63e340cd6a42ea2adf0da87  skills/brag/scripts/uv.lock
+```

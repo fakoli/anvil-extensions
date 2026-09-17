@@ -86,14 +86,22 @@ async function checkFfmpeg(exec: ExecFn): Promise<CheckResult> {
       hint: "install ffmpeg (e.g. `sudo apt install ffmpeg`, `brew install ffmpeg`, or a static build on PATH)",
     };
   }
+  if (ffmpeg.code !== 0) {
+    return {
+      name: "ffmpeg",
+      ok: false,
+      detail: `ffmpeg present but broken (exit ${ffmpeg.code}): ${ffmpeg.stderr.slice(-200) || "no stderr"}`,
+      hint: "reinstall ffmpeg — a binary that cannot print its version will not render",
+    };
+  }
   const ffprobe = await exec("ffprobe", ["-version"], 10_000);
-  const probeOk = !ffprobe.error;
+  const probeOk = !ffprobe.error && ffprobe.code === 0;
   const versionLine = ffmpeg.stdout.split("\n")[0]?.trim() ?? "present";
   return {
     name: "ffmpeg",
     ok: probeOk,
-    detail: probeOk ? versionLine : "ffmpeg present but ffprobe missing",
-    hint: probeOk ? undefined : "install a full ffmpeg build that includes ffprobe",
+    detail: probeOk ? versionLine : "ffmpeg present but ffprobe missing or broken",
+    hint: probeOk ? undefined : "install a full ffmpeg build that includes a working ffprobe",
   };
 }
 
@@ -126,7 +134,7 @@ function checkAssets(assetsDir: string, inv: AssetInventory): CheckResult {
     return {
       name: "skill assets",
       ok: true,
-      detail: `${inv.music.length} music track(s), ${inv.sfxFiles} SFX in ${inv.sfxDirs.length} set(s), ${inv.cues.length} cue file(s)`,
+      detail: `${inv.music.length} music track(s), ${inv.sfxFiles} SFX in ${inv.sfxDirs.length} set(s), ${inv.cues.length} cue file(s) — ${inv.assetsDir}`,
     };
   }
   const missing: string[] = [];

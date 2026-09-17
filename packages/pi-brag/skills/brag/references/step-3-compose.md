@@ -176,7 +176,7 @@ This gives you two layers of musicality: the big moments land on the strongest h
 
 Do not force every tween onto a beat — readability and scene pacing come first. If snapping a tween to a beat hurts copy legibility or the product story, use the natural timing instead.
 
-If SFX are enabled, also pass `skills/brag/assets/sfx/sfx-analysis.md` as selection guidance. Prefer low high-frequency-risk files for repeated or polished moments. SFX on sequential events should fire at the same timestamp as the visual — the sound and motion land together.
+If SFX are enabled, also pass `<skill-assets>/sfx/sfx-analysis.md` as selection guidance. Prefer low high-frequency-risk files for repeated or polished moments. SFX on sequential events should fire at the same timestamp as the visual — the sound and motion land together.
 
 ---
 

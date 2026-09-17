@@ -220,8 +220,8 @@ export default function (pi: ExtensionAPI): void {
         }),
       ),
     }),
-    async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-      const result = await makePoster(params);
+    async execute(_toolCallId, params, signal, _onUpdate, _ctx) {
+      const result = await makePoster({ ...params, signal });
       return {
         content: [{ type: "text", text: summarizePoster(result) }],
         details: {
@@ -239,7 +239,9 @@ export default function (pi: ExtensionAPI): void {
     label: "Brag Fetch Assets",
     description: `Download the bundled brag music/SFX assets from the upstream repo (${tarballUrl()}) into the skill's assets directory. One-time setup; needs network. Without assets, plan videos with --no-music --no-sfx.`,
     parameters: Type.Object({
-      ref: Type.Optional(Type.String({ description: "Upstream git branch or tag to fetch from (default: main)." })),
+      ref: Type.Optional(
+        Type.String({ description: "Upstream git branch, tag, or commit SHA (default: the pinned upstream commit)." }),
+      ),
       dest: Type.Optional(
         Type.String({ description: "Destination assets dir (default: this package's skills/brag/assets)." }),
       ),

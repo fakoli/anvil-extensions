@@ -64,9 +64,16 @@ export function inventoryAssets(assetsDir: string = DEFAULT_ASSETS_DIR): AssetIn
   const present = existsSync(assetsDir);
   const musicDir = join(assetsDir, "music");
   const sfxDir = join(assetsDir, "sfx");
-  const cuesDir = join(assetsDir, "cues");
+  // Upstream layout: cue files live in music/cues/, the SFX selection guide
+  // in sfx/sfx-analysis.md.
+  const cuesDir = join(musicDir, "cues");
+  const AUDIO_EXTENSIONS = [".mp3", ".ogg", ".wav", ".flac", ".m4a", ".aac", ".opus"];
 
-  const music = present ? listFiles(musicDir) : [];
+  // Only actual audio files count as tracks — README.md and the cues/
+  // subdirectory live in music/ too.
+  const music = present
+    ? listFiles(musicDir).filter((n) => AUDIO_EXTENSIONS.some((ext) => n.toLowerCase().endsWith(ext)))
+    : [];
   const sfxDirs: string[] = [];
   let sfxFiles = 0;
   for (const name of present ? listDirs(sfxDir) : []) {
@@ -76,8 +83,8 @@ export function inventoryAssets(assetsDir: string = DEFAULT_ASSETS_DIR): AssetIn
       sfxFiles += count;
     }
   }
-  const cues = present ? listFiles(cuesDir).filter((n) => n.endsWith(".json")) : [];
-  const hasSfxAnalysis = present && existsSync(join(assetsDir, "sfx-analysis.md"));
+  const cues = present ? listFiles(cuesDir).filter((n) => n.endsWith(".music-cues.json")) : [];
+  const hasSfxAnalysis = present && existsSync(join(sfxDir, "sfx-analysis.md"));
 
   return { assetsDir, present, music, sfxDirs, sfxFiles, cues, hasSfxAnalysis };
 }

@@ -38,5 +38,5 @@ assets/
   music/            — ende.app tracks (mp3) + cues/ (music-cues.md/.json)
   sfx/              — Kenney impact packs: casino/, impact/, interface/, ui/
                       + keyboard/ (individual keypress set)
-  sfx-analysis.md   — SFX inventory and selection guidance
+                      + sfx-analysis.md / sfx-analysis.json (selection guidance)
 ```

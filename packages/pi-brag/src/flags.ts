@@ -52,7 +52,13 @@ export interface BragOptions {
   unknownFlags: string[];
 }
 
-/** Split on whitespace, respecting single- and double-quoted spans. */
+/**
+ * Split on whitespace, respecting double-quoted spans and single-quoted
+ * spans that START a token. An apostrophe inside a word (`it's`, `don't`)
+ * is a literal character, not a quote — otherwise contractions would open
+ * a quoted span and swallow the flags after them. An unmatched quote keeps
+ * everything to its right in one token.
+ */
 export function tokenize(input: string): string[] {
   const tokens: string[] = [];
   let current = "";
@@ -67,7 +73,8 @@ export function tokenize(input: string): string[] {
       }
       continue;
     }
-    if (ch === '"' || ch === "'") {
+    if ((ch === '"' || ch === "'") && current.length === 0) {
+      // A quote character only opens a span at the start of a token.
       quote = ch;
       hasContent = true;
       continue;

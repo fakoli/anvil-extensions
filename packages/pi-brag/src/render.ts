@@ -23,6 +23,8 @@ export const DEFAULT_TIMEOUT_SECONDS: Record<RenderSubcommand, number> = {
 const STDOUT_TAIL_CHARS = 1200;
 const UPDATE_INTERVAL_MS = 2000;
 const MAX_STREAM_BUFFER = 64 * 1024;
+/** Grace period after a kill before we stop waiting on a close event. */
+const SETTLE_GRACE_MS = 10_000;
 
 export interface BuildArgsInput {
   subcommand: RenderSubcommand;
@@ -77,11 +79,19 @@ export interface RunHyperframesResult {
 export interface SpawnDeps {
   spawnFn?: typeof spawn;
   now?: () => number;
+  /** Overrides SETTLE_GRACE_MS (tests). */
+  settleGraceMs?: number;
 }
 
 function tail(s: string, maxChars = STDOUT_TAIL_CHARS): string {
   const trimmed = s.length > maxChars ? s.slice(s.length - maxChars) : s;
   return trimmed.trim();
+}
+
+/** Append a chunk to a stream buffer, keeping only the last `max` characters. */
+export function appendBounded(current: string, chunk: string, max: number = MAX_STREAM_BUFFER): string {
+  const next = current + chunk;
+  return next.length > max ? next.slice(-max) : next;
 }
 
 /**
@@ -121,8 +131,16 @@ export async function runHyperframes(
 
   return await new Promise<RunHyperframesResult>((resolvePromise) => {
     let child: ChildProcess;
+    const isWindows = process.platform === "win32";
     try {
-      child = spawnFn("npx", argv, { cwd: input.cwd, shell: process.platform === "win32" });
+      // detached on POSIX gives the engine its own process group so we can
+      // kill the whole tree (npx → hyperframes → chromium/ffmpeg), not just
+      // the launcher.
+      child = spawnFn("npx", argv, {
+        cwd: input.cwd,
+        shell: isWindows,
+        detached: !isWindows,
+      });
     } catch (err) {
       resolvePromise({
         ok: false,
@@ -140,12 +158,8 @@ export async function runHyperframes(
 
     let stdout = "";
     let stderr = "";
-    // Keep only the last MAX_STREAM_BUFFER bytes per stream: renders can run
+    // Keep only the last MAX_STREAM_BUFFER chars per stream: renders can run
     // for many minutes and a chatty engine would otherwise balloon memory.
-    const appendStream = (current: string, chunk: Buffer): string => {
-      const next = current + chunk.toString();
-      return next.length > MAX_STREAM_BUFFER ? next.slice(-MAX_STREAM_BUFFER) : next;
-    };
     let timedOut = false;
     let aborted = false;
     let settled = false;
@@ -162,12 +176,45 @@ export async function runHyperframes(
       onUpdate({ text: tail(text) || "(no output yet)" });
     };
 
+    /**
+     * Kill the whole process tree. On POSIX the child runs detached in its
+     * own group, so a negative pid signals every descendant; fall back to
+     * child.kill when the group is already gone (or on Windows, where the
+     * detached flag is not set).
+     */
     const kill = () => {
       if (child.exitCode !== null || child.signalCode) return;
-      child.kill("SIGTERM");
+      const pid = child.pid;
+      let signaled = false;
+      if (pid && !isWindows) {
+        try {
+          process.kill(-pid, "SIGTERM");
+          signaled = true;
+        } catch {
+          // group already gone — fall through to child.kill
+        }
+      }
+      if (!signaled) child.kill("SIGTERM");
       setTimeout(() => {
-        if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+        if (child.exitCode !== null || child.signalCode) return;
+        if (pid && !isWindows) {
+          try {
+            process.kill(-pid, "SIGKILL");
+          } catch {
+            child.kill("SIGKILL");
+          }
+        } else {
+          child.kill("SIGKILL");
+        }
       }, 5000).unref();
+      // Descendants can inherit our stdio pipes and outlive the launcher, so
+      // 'close' may never fire. Give the tree a grace period to settle, then
+      // finish with what we have rather than hanging the tool forever.
+      // NOT unref'd: this timer must keep the loop alive until it fires.
+      const settleGraceMs = deps.settleGraceMs ?? SETTLE_GRACE_MS;
+      setTimeout(() => {
+        if (!settled) finish(child.exitCode, child.signalCode ?? "SIGKILL");
+      }, settleGraceMs);
     };
 
     const onAbort = () => {
@@ -182,11 +229,11 @@ export async function runHyperframes(
     }, timeoutSeconds * 1000);
 
     child.stdout?.on("data", (chunk: Buffer) => {
-      stdout = appendStream(stdout, chunk);
+      stdout = appendBounded(stdout, chunk.toString());
       pushUpdate();
     });
     child.stderr?.on("data", (chunk: Buffer) => {
-      stderr = appendStream(stderr, chunk);
+      stderr = appendBounded(stderr, chunk.toString());
       pushUpdate();
     });
 
@@ -209,7 +256,7 @@ export async function runHyperframes(
     };
 
     child.on("error", (err) => {
-      stderr += `\nspawn error: ${err.message}`;
+      stderr = appendBounded(stderr, `\nspawn error: ${err.message}`);
       finish(null, null);
     });
     child.on("close", (code, sig) => finish(code, sig));

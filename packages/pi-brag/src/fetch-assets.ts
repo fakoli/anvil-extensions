@@ -5,19 +5,27 @@
 // this tool downloads the upstream tarball once and copies skills/brag/assets
 // into place. Network is used ONLY here, never in the skill workflow itself.
 
-import { createWriteStream } from "node:fs";
+import { createWriteStream, mkdirSync } from "node:fs";
 import { cpSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { DEFAULT_ASSETS_DIR, inventoryAssets, type AssetInventory } from "./paths.js";
+import { UPSTREAM_COMMIT } from "./provenance.js";
 
 export const UPSTREAM_REPO = "latent-spaces/brag";
-export const UPSTREAM_REF = "main";
+/** Default fetch ref: the pinned upstream commit, so assets match the ledger. */
+export const UPSTREAM_REF = UPSTREAM_COMMIT;
 
-/** Codeload URL for a branch or tag ref (tags live under refs/tags). */
-export function tarballUrl(ref: string = UPSTREAM_REF, kind: "heads" | "tags" = "heads"): string {
-  return `https://codeload.github.com/${UPSTREAM_REPO}/tar.gz/refs/${kind}/${ref}`;
+/**
+ * Codeload tarball URL. The classic `/tar.gz/<ref>` form resolves branches,
+ * tags, and commit SHAs alike (the refs/heads|tags forms 404 on the wrong
+ * kind, and SHAs resolve under neither).
+ */
+export function tarballUrl(ref: string = UPSTREAM_REF): string {
+  return `https://codeload.github.com/${UPSTREAM_REPO}/tar.gz/${ref}`;
 }
 
 export interface TarDeps {
@@ -36,31 +44,27 @@ const DEFAULT_EXTRACT = (tarball: string, destDir: string) =>
     });
   });
 
-function download(url: string, destFile: string, fetchImpl: typeof fetch, signal?: AbortSignal): Promise<void> {
-  return fetchImpl(url, { signal })
-    .then(async (res) => {
-      if (!res.ok || !res.body) {
-        throw new Error(`download failed: HTTP ${res.status} for ${url}`);
-      }
-      const file = createWriteStream(destFile);
-      const reader = res.body.getReader();
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (!file.write(Buffer.from(value))) {
-          await new Promise<void>((resolvePromise, reject) => {
-            file.once("drain", resolvePromise);
-            file.once("error", reject);
-          });
-        }
-      }
-      await new Promise<void>((resolvePromise, reject) => {
-        file.end((err) => (err ? reject(err) : resolvePromise()));
-      });
-    })
-    .catch((err) => {
-      throw new Error(`asset download failed: ${(err as Error).message}`);
-    });
+/**
+ * Stream the response body to destFile. pipeline() tears down both sides on
+ * error or abort and rethrows the first error — no leaked readers/writers.
+ */
+async function download(url: string, destFile: string, fetchImpl: typeof fetch, signal?: AbortSignal): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetchImpl(url, { signal });
+  } catch (err) {
+    if (signal?.aborted) throw new Error(`asset download aborted: ${url}`);
+    throw new Error(`asset download failed: ${(err as Error).message}`);
+  }
+  if (!res.ok || !res.body) {
+    throw new Error(`download failed: HTTP ${res.status} for ${url}`);
+  }
+  try {
+    await pipeline(Readable.fromWeb(res.body as import("node:stream/web").ReadableStream), createWriteStream(destFile), { signal });
+  } catch (err) {
+    if (signal?.aborted) throw new Error(`asset download aborted: ${url}`);
+    throw new Error(`asset download failed: ${(err as Error).message}`);
+  }
 }
 
 /** Find the extracted `skills/brag/assets` dir inside an extraction root. */
@@ -85,7 +89,7 @@ export function locateExtractedAssets(root: string): string | null {
 export interface FetchAssetsInput {
   /** Destination assets dir (default: this package's skills/brag/assets). */
   dest?: string;
-  /** Upstream git branch or tag to fetch from (default: main). */
+  /** Upstream git branch, tag, or commit SHA (default: the pinned upstream commit). */
   ref?: string;
   /** Abort signal for the download. */
   signal?: AbortSignal;
@@ -108,15 +112,10 @@ export async function fetchAssets(input: FetchAssetsInput = {}, deps: TarDeps = 
   const scratch = mkdtempSync(join(tmpdir(), "brag-assets-"));
   try {
     const tarball = join(scratch, "brag.tar.gz");
-    // Branches live under refs/heads, tags under refs/tags — codeload 404s on
-    // the wrong kind, so fall back once.
-    try {
-      await download(tarballUrl(ref, "heads"), tarball, fetchImpl, input.signal);
-    } catch (err) {
-      if (!/HTTP 404/.test((err as Error).message)) throw err;
-      await download(tarballUrl(ref, "tags"), tarball, fetchImpl, input.signal);
-    }
+    await download(tarballUrl(ref), tarball, fetchImpl, input.signal);
+    // tar -C does not create the target directory; it fails without this.
     const extractDir = join(scratch, "extract");
+    mkdirSync(extractDir, { recursive: true });
     await extract(tarball, extractDir);
     const source = locateExtractedAssets(extractDir);
     if (!source) {
