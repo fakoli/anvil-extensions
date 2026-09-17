@@ -18,6 +18,8 @@ import {
 import { renderExpanded, renderLines } from "./src/render.js";
 import { CHECKPOINT_TYPE, fromCheckpoint, toCheckpoint } from "./src/persistence.js";
 
+import { installToolActivity } from "./src/tool-activity.js";
+
 interface Config {
   enabled: boolean;
   minIntervalMs: number;
@@ -58,6 +60,7 @@ export default function (pi: ExtensionAPI): void {
   const PENDING_LIMIT = 512;
 
   const active = () => enabled && sessionOn;
+  const clearToolActivity = installToolActivity(pi, active);
 
   function trackPending(): void {
     if (pendingCalls.size >= PENDING_LIMIT) {
@@ -279,6 +282,7 @@ export default function (pi: ExtensionAPI): void {
       const arg = (args ?? "").trim().toLowerCase();
       if (arg === "off") {
         sessionOn = false;
+        clearToolActivity();
         try {
           if (ctx.hasUI) ctx.ui.setWidget("pi-insights", []);
         } catch {

@@ -604,7 +604,7 @@ describe("execChildPrompt", () => {
     }
   });
 
-  it.skipIf(process.platform === "win32")("hard-kills descendants in the timed-out child process group", async () => {
+  it.skipIf(process.platform === "win32").each([true, false])("hard-kills descendants when parent ignores SIGTERM: %s", async (parentIgnoresTerm) => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pi-watchdog-tree-"));
     const pidPath = path.join(directory, "descendant.pid");
     const watchdogPath = fileURLToPath(new URL("../../src/handlers/child-process-watchdog.mjs", import.meta.url));
@@ -614,12 +614,12 @@ describe("execChildPrompt", () => {
       "const fs=require('node:fs');",
       `const child=spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{stdio:'ignore'});`,
       `fs.writeFileSync(${JSON.stringify(pidPath)},String(child.pid));`,
-      "process.on('SIGTERM',()=>{});setInterval(()=>{},1000);",
+      parentIgnoresTerm ? "process.on('SIGTERM',()=>{});setInterval(()=>{},1000);" : "setInterval(()=>{},1000);",
     ].join("");
 
     try {
       const code = await new Promise<number | null>((resolve) => {
-        const child = spawn(process.execPath, [watchdogPath, "100", "-", process.execPath, "-e", parent], {
+        const child = spawn(process.execPath, [watchdogPath, "500", "-", process.execPath, "-e", parent], {
           stdio: "ignore",
         });
         child.on("close", resolve);
@@ -630,14 +630,23 @@ describe("execChildPrompt", () => {
       while (Date.now() < deadline) {
         try {
           process.kill(descendantPid, 0);
+          // Linux can retain a terminated orphan as a zombie until PID 1 reaps it.
+          if (process.platform === "linux") {
+            const stat = await fs.readFile(`/proc/${descendantPid}/stat`, "utf-8");
+            if (stat.slice(stat.lastIndexOf(")") + 2).startsWith("Z ")) return;
+          }
           await new Promise((resolve) => setTimeout(resolve, 20));
         } catch (error) {
-          if ((error as NodeJS.ErrnoException).code === "ESRCH") return;
+          if (["ESRCH", "ENOENT"].includes((error as NodeJS.ErrnoException).code ?? "")) return;
           throw error;
         }
       }
       assert.fail("watchdog left a descendant process alive");
     } finally {
+      try {
+        const pid = Number(await fs.readFile(pidPath, "utf-8"));
+        process.kill(pid, "SIGKILL");
+      } catch { /* Already terminated; do not leak a fixture on failure. */ }
       await fs.rm(directory, { recursive: true, force: true });
     }
   });

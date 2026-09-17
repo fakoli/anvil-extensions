@@ -1,7 +1,24 @@
 // pi-insights — logic tests. Plain node + jiti (no bun dependency on this host).
 // Run: node tests/run-tests.mjs
 import assert from "node:assert/strict";
-import { createJiti } from "/data/apps/devtools/node-24.20.0/lib/node_modules/@earendil-works/pi-coding-agent/node_modules/jiti/lib/jiti.mjs";
+import { join, dirname } from "node:path";
+import { existsSync } from "node:fs";
+
+const PI_INSTALL_DIR = process.env.PI_INSTALL_DIR
+  ?? (() => {
+    // pi-coding-agent is a root devDependency; its ESM "." export resolves,
+    // and the bundle dir (with nested jiti/pi-tui/typebox) sits above it.
+    let dir = dirname(fileURLToPath(import.meta.resolve("@earendil-works/pi-coding-agent")));
+    while (!existsSync(join(dir, "package.json"))) dir = dirname(dir);
+    return dir;
+  })();
+
+let createJiti;
+try {
+  ({ createJiti } = await import("jiti"));
+} catch {
+  ({ createJiti } = await import(`${PI_INSTALL_DIR}/node_modules/jiti/lib/jiti.mjs`));
+}
 import { pathToFileURL } from "node:url";
 
 import { fileURLToPath } from "node:url";
@@ -148,6 +165,52 @@ test("renderExpanded lists milestones and last validation", () => {
   assert.match(lines[0], /session:/);
   assert.ok(lines.some((s) => s.includes("PR merged")));
   assert.ok(lines.some((s) => s.includes("last validation: passed")));
+});
+
+const { installToolActivity } = await jiti.import("../src/tool-activity.ts");
+test("tool wait status ages, tracks updates and parallel calls, and clears at boundaries", () => {
+  const originals = [Date.now, globalThis.setInterval, globalThis.clearInterval];
+  let now = 0, tick, enabled = true, unrefs = 0;
+  Date.now = () => now;
+  globalThis.setInterval = (fn) => { tick = fn; return { unref() { unrefs++; } }; };
+  globalThis.clearInterval = () => { tick = undefined; };
+  try {
+    const handlers = new Map(), values = [];
+    const ctx = { hasUI: true, mode: "tui", ui: { setStatus(key, value) { assert.equal(key, "pi-insights-tool"); values.push(value); } } };
+    const clear = installToolActivity({ on(name, fn) { handlers.set(name, fn); } }, () => enabled);
+    const emit = (name, event = {}, context = ctx) => handlers.get(name)(event, context);
+    emit("tool_execution_start", { toolCallId: "one", toolName: "bash", args: { command: "private" } });
+    assert.equal(unrefs, 1);
+    now = 90000; tick();
+    assert.equal(values.at(-1), "bash running 90s · no updates 90s");
+    emit("tool_execution_update", { toolCallId: "one", partialResult: "private" });
+    assert.match(values.at(-1), /no updates 0s$/);
+    emit("tool_execution_start", { toolCallId: "two", toolName: "read" });
+    assert.match(values.at(-1), /2 tools$/);
+    emit("tool_execution_end", { toolCallId: "one" });
+    assert.match(values.at(-1), /^read running/);
+    emit("tool_execution_end", { toolCallId: "two", isError: true });
+    assert.equal(values.at(-1), undefined); assert.equal(tick, undefined);
+    for (const boundary of ["agent_end", "session_start", "session_shutdown"]) {
+      emit("tool_execution_start", { toolCallId: "one", toolName: "bash" });
+      emit(boundary); assert.equal(tick, undefined); assert.equal(values.at(-1), undefined);
+    }
+    emit("tool_execution_start", { toolCallId: "one", toolName: "bash" });
+    clear(); assert.equal(tick, undefined);
+    for (const mode of ["json", "print"]) {
+      const count = values.length;
+      emit("tool_execution_start", { toolCallId: "one", toolName: "bash" }, { ...ctx, mode });
+      assert.equal(values.length, count); assert.equal(tick, undefined);
+    }
+    enabled = false;
+    emit("tool_execution_start", { toolCallId: "one", toolName: "bash" });
+    assert.equal(tick, undefined);
+    enabled = true;
+    emit("tool_execution_start", { toolCallId: "one", toolName: "\\x1b[2J".repeat(40) }, { ...ctx, mode: "rpc" });
+    assert.ok(values.at(-1).length < 100); assert.ok(!values.at(-1).includes("\x1b"));
+    enabled = false; tick(); assert.equal(tick, undefined);
+    assert.ok(!JSON.stringify(values).includes("private"));
+  } finally { [Date.now, globalThis.setInterval, globalThis.clearInterval] = originals; }
 });
 
 console.log(`\n${passed} tests passed`);

@@ -9,6 +9,10 @@ calls, no memory writes.
 🔀 PR opened · 📦 2 commits
 ```
 
+While a tool runs, the status bar shows its name, elapsed time, and time since
+its last progress update. This distinguishes a quiet tool from an idle session;
+it does not infer GPU activity or cancel long jobs. Commands and output stay private.
+
 ## How it works
 
 - **Deterministic activity ledger** — hooks `tool_call` (classification, from

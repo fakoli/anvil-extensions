@@ -23,13 +23,16 @@ jobs:
       - name: Install (workspaces, lockfile-pinned)
         run: npm ci --no-audit --no-fund
 
+      - name: Dependency security gate
+        run: npm audit --audit-level=high
+
       - name: Offline test suites
         run: |
           set -e
-          for ws in pi-brag pi-commentary pi-condense pi-hermes-memory pi-insights \
-                    pi-nano-banana pi-permission-system pi-sandbox-config \
-                    pi-subagents pi-tool-repair pi-voice-clone; do
+          # Single source of truth with scripts/release-verify.sh
+          while IFS= read -r ws; do
+            [ -z "$ws" ] && continue
             echo "::group::tests: $ws"
             npm test --workspace "$ws"
             echo "::endgroup::"
-          done
+          done < <(sed 's/#.*//' scripts/test-matrix.txt)

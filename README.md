@@ -8,7 +8,7 @@ An opinionated, battle-tested bundle of [pi coding agent](https://github.com/bad
 pi install git:github.com/fakoli/anvil-extensions@anvil-v0.6.0
 ```
 
-- **12 extensions · 1 pin · atomic updates** — every host runs the same reviewed tree
+- **13 extensions · 1 pin · atomic updates** — every host runs the same reviewed tree
 - **Content-hashed lockfile** — transitive dependencies are pinned by SHA-512 integrity
 - **Install-script allowlist** — package postinstall scripts run only when approved
 - **Tag-protected releases** — release tags are immutable via repository rulesets
@@ -40,6 +40,7 @@ If you maintain a fleet of agent hosts, this packaging model is the point. If yo
 | [pi-sandbox-config](packages/pi-sandbox-config/) | Fail-closed sandbox run-config editing with read-only launch prechecks |
 | [pi-nano-banana](packages/pi-nano-banana/) | Image generation as native tools: generate, edit, webpage-style remix, and local optimize |
 | [pi-voice-clone](packages/pi-voice-clone/) | Draft and voice-edit prose in the owner's measured voice (`voice_prompt` + `voice_check`) |
+| [pi-capability-upgrade](packages/pi-capability-upgrade/) | Candidate-only shipping, guarded documentation, browser verification, and explicit read-only operations resources |
 | [pi-brag](packages/pi-brag/) | Turn the current project into a short shareable launch video (`/brag` command + skill + render/poster/doctor tools) |
 
 Full catalog — including *why* each exists and how it works — is in [docs/packages.md](docs/packages.md). Fork lineage and what we changed in vendored packages is in [docs/forks.md](docs/forks.md).

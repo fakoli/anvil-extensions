@@ -1,6 +1,6 @@
 # Package catalog
 
-Twelve extensions, one pinned unit. Each entry covers what it does, why it exists, and how it works. Provenance (original vs vendored vs forked) is summarized here and detailed in [forks.md](forks.md); every package ships an `UPSTREAM.md` ledger beside its code.
+Thirteen extensions, one pinned unit. Each entry covers what it does, why it exists, and how it works. Provenance (original vs vendored vs forked) is summarized here and detailed in [forks.md](forks.md); every package ships an `UPSTREAM.md` ledger beside its code.
 
 | Package | Provenance | Category |
 |---|---|---|
@@ -15,6 +15,7 @@ Twelve extensions, one pinned unit. Each entry covers what it does, why it exist
 | [pi-sandbox-config](#pi-sandbox-config) | original | safety |
 | [pi-nano-banana](#pi-nano-banana) | original (port) | capabilities |
 | [pi-voice-clone](#pi-voice-clone) | original (bridge) | capabilities |
+| [pi-capability-upgrade](#pi-capability-upgrade) | original + adapted workflow ports | workflow |
 | [pi-brag](#pi-brag) | original (port) | capabilities |
 
 ## pi-condense
@@ -110,6 +111,14 @@ Twelve extensions, one pinned unit. Each entry covers what it does, why it exist
 **Why it exists:** Imitating a specific person's writing from scratch fails in characteristic ways — filler pleasantries, marketing puffery, hedging stacks, exclamation marks. A registered style corpus plus mechanical rules beats improvised imitation, and the corpus stays style-only: current-task facts come from you, never from the reference documents.
 
 **How it works:** The prompt tool registers the profile, pulls 2–3 real documents as few-shot style references, and attaches the hard rules; the checker lints drafts and every violation must be fixed before delivery.
+
+## pi-capability-upgrade
+
+**What:** Candidate-only resources for deterministic changed-path checks, receipt freshness feedback, guarded public documentation, a pinned local browser workflow, and deliberately disabled-by-default MCP operations.
+
+**Why it exists:** A coding session needs reproducible workflow support without silently importing host configuration, creating another State database, or granting a generic operations surface.
+
+**How it works:** The receipt uses a temporary Git index to bind content and policy identities without changing the operator's index. The documentation wrapper requires an explicit package version and bounded public question. The adapter has an isolated empty configuration, no discovery, scripting, or sampling, and denies every MCP tool call unless a later reviewed candidate supplies a complete policy boundary. See [the candidate guide](pi-capability-upgrade.md).
 
 ## How the bundle loads
 

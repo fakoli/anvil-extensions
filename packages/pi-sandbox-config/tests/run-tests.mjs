@@ -3,13 +3,19 @@
 // cross-check/preview paths run against the REAL anvil validator when a
 // sibling anvil checkout is available, and skip otherwise.
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const PI_INSTALL_DIR = process.env.PI_INSTALL_DIR
-  ?? "/data/apps/devtools/node-24.20.0/lib/node_modules/@earendil-works/pi-coding-agent";
+  ?? (() => {
+    // pi-coding-agent is a root devDependency; its ESM "." export resolves,
+    // and the bundle dir (with nested jiti/pi-tui/typebox) sits above it.
+    let dir = dirname(fileURLToPath(import.meta.resolve("@earendil-works/pi-coding-agent")));
+    while (!existsSync(join(dir, "package.json"))) dir = dirname(dir);
+    return dir;
+  })();
 
 let createJiti;
 try {

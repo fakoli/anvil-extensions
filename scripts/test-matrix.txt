@@ -1,0 +1,16 @@
+# Test matrix — single source of truth for CI and scripts/release-verify.sh.
+# One workspace name per line (npm --workspace form; scoped names included).
+# Packages shipping no upstream tests are intentionally absent:
+#   pi-permission-system (@gotgenes) — no test files vendored
+#   pi-subagents                     — no test dir vendored
+#   pi-tool-repair                   — no test files vendored
+#   pi-plan-mode (@narumitw)         — no test script at all
+pi-brag
+pi-commentary
+pi-condense
+@schovest/pi-hermes-memory
+pi-insights
+pi-nano-banana
+pi-sandbox-config
+pi-voice-clone
+pi-capability-upgrade

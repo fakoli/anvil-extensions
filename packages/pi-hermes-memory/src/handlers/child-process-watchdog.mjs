@@ -44,7 +44,7 @@ function terminateTree() {
   terminating = true;
   signalTree("SIGTERM");
   forceTimer = setTimeout(() => signalTree("SIGKILL"), 500);
-  forceTimer.unref();
+  // Keep the watchdog alive for escalation even if the direct child exits first.
 }
 
 const timeout = setTimeout(() => {
@@ -77,7 +77,7 @@ child.once("error", (error) => {
 child.once("close", (code, signal) => {
   clearTimeout(timeout);
   if (cancellationPoll) clearInterval(cancellationPoll);
-  if (forceTimer) clearTimeout(forceTimer);
+  if (forceTimer && !terminating) clearTimeout(forceTimer);
   if (timedOut) {
     process.exitCode = 124;
   } else if (cancelled) {
