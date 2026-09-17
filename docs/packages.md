@@ -1,6 +1,6 @@
 # Package catalog
 
-Twelve extensions, one pinned unit. Each entry covers what it does, why it exists, and how it works. Provenance (original vs vendored vs forked) is summarized here and detailed in [forks.md](forks.md); every package ships an `UPSTREAM.md` ledger beside its code.
+Thirteen extensions, one pinned unit. Each entry covers what it does, why it exists, and how it works. Provenance (original vs vendored vs forked) is summarized here and detailed in [forks.md](forks.md); every package ships an `UPSTREAM.md` ledger beside its code.
 
 | Package | Provenance | Category |
 |---|---|---|
@@ -16,6 +16,7 @@ Twelve extensions, one pinned unit. Each entry covers what it does, why it exist
 | [pi-nano-banana](#pi-nano-banana) | original (port) | capabilities |
 | [pi-voice-clone](#pi-voice-clone) | original (bridge) | capabilities |
 | [pi-capability-upgrade](#pi-capability-upgrade) | original + adapted workflow ports | workflow |
+| [pi-brag](#pi-brag) | original (port) | capabilities |
 
 ## pi-condense
 
@@ -96,6 +97,12 @@ Twelve extensions, one pinned unit. Each entry covers what it does, why it exist
 **Why it exists:** Images belong in the agent's hand, not on the side. The design carries a budget discipline from its plugin ancestor: one billable call per request, no automatic retries, atomic no-clobber writes, and explicit caps on every input and response.
 
 **How it works:** Tools build typed Gemini requests, stream progress, cancel via signal, and render results in the TUI; `sharp` does all image processing (loaded via dynamic import — see the embedded-runtime note in [forks.md](forks.md#pi-nano-banana)); configuration is shared with sibling tooling via a common config file.
+
+## pi-brag
+
+**What:** `/brag` turns the current project into a short, shareable launch video: the agent inspects the code, plans a 15–25s concept, builds an engine composition, passes a programmatic quality gate (WCAG contrast + layout), renders `brag-output/brag.mp4`, bakes the poster frame, and writes share copy. Tools: `brag_doctor` (environment checks), `brag_render` (long-running engine-CLI runner with streamed progress and timeouts), `brag_poster` (poster extract + frame-0 bake), `brag_fetch_assets` (one-time music/SFX download). `/brag-doctor` checks prerequisites without an agent turn.
+
+**Why it exists:** Shipping is the moment worth marking, and the work of making a launch video is exactly what an agent is good at — reading the project and scripting it. Ported from [latent-spaces/brag](https://github.com/latent-spaces/brag) (MIT); the creative workflow is upstream's, the pi glue is ours. Music/SFX assets are fetched on demand rather than vendored (bundle size; music licensing), and the skill degrades gracefully to a silent video.
 
 ## pi-voice-clone
 

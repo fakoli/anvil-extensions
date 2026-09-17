@@ -1,0 +1,38 @@
+{
+  "name": "pi-brag",
+  "version": "0.1.0",
+  "description": "Turn the current project into a short, shareable launch video — /brag command, skill, and helper tools. Port of latent-spaces/brag.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./index.ts",
+  "private": true,
+  "files": [
+    "index.ts",
+    "src",
+    "skills",
+    "tests",
+    "README.md",
+    "UPSTREAM.md"
+  ],
+  "scripts": {
+    "test": "node tests/run-tests.mjs"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  }
+}
