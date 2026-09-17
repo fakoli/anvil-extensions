@@ -58,6 +58,35 @@ brag-output/
   composition/            — the engine project
 ```
 
+## Configuration
+
+None. Defaults are in code: output paths under `brag-output/`, per-subcommand
+timeouts (`DEFAULT_TIMEOUT_SECONDS` in `src/render.ts`), and the pinned
+upstream commit for asset fetches (`src/provenance.ts`). Flags like `--tone`,
+`--format`, `--duration` are per-invocation, documented by `/brag --help`
+behavior in the skill.
+
+## Effects and limits
+
+- **Writes:** `brag-output/` in the project (video, poster, plan, brief, share
+  copy, composition) and, once, `skills/brag/assets/` via `brag_fetch_assets`.
+- **Runs:** `npx hyperframes` (long-lived, killed by process group on
+  timeout/abort), `ffmpeg`/`ffprobe`, `tar`. Nothing else.
+- **Network:** only `brag_fetch_assets`, to `codeload.github.com`.
+- **Limits:** durations 5–90s; a canceled poster bake never replaces the
+  video; renders settle (rather than hang) if engine descendants keep pipes
+  open after a kill. Without assets, videos are silent (`--no-music
+  --no-sfx`); voiceover does not depend on the assets.
+
+## Disablement and rollback
+
+Remove the `pi-brag` entries from `pi.extensions`/`pi.skills` in the root
+`package.json` (or the whole `packages/pi-brag/` directory plus its
+`scripts/test-matrix.txt` line) and re-pin. Nothing persists outside the
+project's `brag-output/` and the package's own assets dir — delete those to
+fully undo. Downgrade by restoring the previous bundle pin; there is no
+migration.
+
 ## Tests
 
 ```bash
@@ -65,5 +94,6 @@ cd packages/pi-brag && node tests/run-tests.mjs
 ```
 
 Fully offline: flag parsing, argument builders, doctor checks (injected
-executables), asset inventory (planted temp trees), poster command builders.
-No network, no engine calls.
+executables), asset inventory (planted temp trees), poster command builders,
+render lifecycle with fake children, real-`tar` extraction end-to-end,
+download failure/abort paths. No network, no engine calls.
