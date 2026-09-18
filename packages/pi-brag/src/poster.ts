@@ -13,6 +13,7 @@
 import { execFile } from "node:child_process";
 import { existsSync, renameSync, unlinkSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { childEnv } from "./paths.js";
 
 export interface ExecOutcome {
   code: number | null;
@@ -31,7 +32,7 @@ export interface PosterDeps {
 
 export const DEFAULT_RUN: RunFn = (args, signal) =>
   new Promise((resolvePromise) => {
-    execFile("ffmpeg", args, { encoding: "utf8", windowsHide: true, signal }, (err, _stdout, stderr) => {
+    execFile("ffmpeg", args, { encoding: "utf8", windowsHide: true, signal, env: childEnv() }, (err, _stdout, stderr) => {
       if (err && (err as NodeJS.ErrnoException).code === "ENOENT") {
         resolvePromise({ code: null, stderr: "", error: "not found: ffmpeg" });
         return;

@@ -39,8 +39,10 @@ references); the tools are pi glue around the fiddly parts.
 ## Requirements
 
 - Node.js ≥ 22.19
-- **ffmpeg + ffprobe** on PATH (render, poster, bake) — the one thing this
-  package cannot do for you
+- **ffmpeg + ffprobe** (render, poster, bake) — on PATH, or a static build in
+  `~/.pi/agent/bin` or `~/.local/bin`: the tools append both dirs to the PATH
+  they give every child process, so installs living there need no shell
+  configuration
 - The video-engine CLI (`npx hyperframes ...`; first run downloads it) and its
   domain skills (`hyperframes-core` et al.) — `brag_doctor` verifies both
 - Network, once, for `brag_fetch_assets` (bundled music/SFX are not vendored;
@@ -71,7 +73,11 @@ behavior in the skill.
 - **Writes:** `brag-output/` in the project (video, poster, plan, brief, share
   copy, composition) and, once, `skills/brag/assets/` via `brag_fetch_assets`.
 - **Runs:** `npx hyperframes` (long-lived, killed by process group on
-  timeout/abort), `ffmpeg`/`ffprobe`, `tar`. Nothing else.
+  timeout/abort), `ffmpeg`/`ffprobe`, `tar`. Nothing else. Spawned children
+  get a PATH extended with `~/.pi/agent/bin` and `~/.local/bin` (existing dirs
+  only, appended after the system PATH — system resolution order is
+  preserved), so ffmpeg installs in those locations are found without shell
+  configuration.
 - **Network:** only `brag_fetch_assets`, to `codeload.github.com`.
 - **Limits:** durations 5–90s; a canceled poster bake never replaces the
   video; renders settle (rather than hang) if engine descendants keep pipes

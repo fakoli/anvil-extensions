@@ -1,3 +1,6 @@
 node_modules/
 .pi/
 .pi-subagents/
+brag-output/
+packages/pi-brag/skills/brag/assets/music/
+packages/pi-brag/skills/brag/assets/sfx/

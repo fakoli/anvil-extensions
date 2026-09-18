@@ -6,6 +6,7 @@
 
 import { spawn, type ChildProcess } from "node:child_process";
 import { statSync } from "node:fs";
+import { childEnv } from "./paths.js";
 
 export const RENDER_SUBCOMMANDS = ["check", "render", "snapshot", "beats", "preview", "tts", "doctor"] as const;
 export type RenderSubcommand = (typeof RENDER_SUBCOMMANDS)[number];
@@ -135,11 +136,13 @@ export async function runHyperframes(
     try {
       // detached on POSIX gives the engine its own process group so we can
       // kill the whole tree (npx → hyperframes → chromium/ffmpeg), not just
-      // the launcher.
+      // the launcher. PATH is augmented so ffmpeg installs in user-bin dirs
+      // (~/.pi/agent/bin, ~/.local/bin) are visible to the engine.
       child = spawnFn("npx", argv, {
         cwd: input.cwd,
         shell: isWindows,
         detached: !isWindows,
+        env: childEnv(),
       });
     } catch (err) {
       resolvePromise({
