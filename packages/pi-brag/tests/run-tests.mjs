@@ -486,23 +486,41 @@ await atest("render: spawns detached on POSIX so kills reach the whole tree", as
 });
 
 await atest("render: spawned engine gets an augmented child env", async () => {
-  const child = new FakeChild();
-  const seen = [];
-  const spawnFn = (cmd, argv, opts) => {
-    seen.push({ cmd, argv, opts });
-    return child;
-  };
-  const promise = render.runHyperframes({ subcommand: "check", cwd: pkgRoot }, undefined, undefined, { spawnFn });
-  await new Promise((r) => setTimeout(r, 10));
-  child.close(0, null);
-  const result = await promise;
-  assert.ok(result.ok);
-  const opts = seen[0].opts;
-  assert.ok(opts.env, "child receives an env");
-  assert.ok(typeof opts.env.PATH === "string" && opts.env.PATH.length > 0, "child PATH is a non-empty string");
-  // Augmentation appends: the parent PATH stays a prefix (paths-level dir
-  // selection and dedupe are covered by the paths tests above).
-  assert.ok(opts.env.PATH.startsWith(process.env.PATH ?? ""), "parent PATH is preserved as a prefix");
+  const home = mkdtempSync(join(tmpdir(), "brag-render-home-"));
+  try {
+    plantTree(home, { ".pi/agent/bin/ffmpeg": "#!sh\n" });
+    const piBin = join(home, ".pi", "agent", "bin");
+    const child = new FakeChild();
+    const seen = [];
+    const spawnFn = (cmd, argv, opts) => {
+      seen.push({ cmd, argv, opts });
+      return child;
+    };
+    const promise = render.runHyperframes(
+      { subcommand: "check", cwd: pkgRoot },
+      undefined,
+      undefined,
+      { spawnFn, childEnvOpts: { home, delimiter: ":" } },
+    );
+    await new Promise((r) => setTimeout(r, 10));
+    child.close(0, null);
+    const result = await promise;
+    assert.ok(result.ok);
+    const opts = seen[0].opts;
+    assert.ok(opts.env, "child receives an env");
+    // Case-insensitive key lookup: Windows-style envs keep the `Path` casing.
+    const pathKey = Object.keys(opts.env).find((k) => k.toUpperCase() === "PATH");
+    assert.ok(pathKey, "child env has a PATH-like key");
+    const pathValue = opts.env[pathKey];
+    assert.ok(typeof pathValue === "string" && pathValue.length > 0, "child PATH is a non-empty string");
+    // The planted user-bin dir is appended after the parent PATH (paths-level
+    // dedupe/missing-dir handling is covered by the paths tests above).
+    const parentPath = process.env.PATH ?? "";
+    assert.ok(pathValue.startsWith(parentPath), "parent PATH is preserved as a prefix");
+    assert.ok(pathValue.endsWith(piBin), "planted ~/.pi/agent/bin is appended");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 await atest("render: settle guard finishes after kill even when close never fires", async () => {

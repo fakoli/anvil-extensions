@@ -5,13 +5,15 @@ plus repository hygiene for the files that run creates.
 
 **Behavior fix — ffmpeg resolution.** `brag_render` failed with
 "FFmpeg not found" on a host where a static ffmpeg build existed in
-`~/.pi/agent/bin` but was not on the parent process's PATH. All pi-brag
-spawn/exec sites (`brag_render`'s engine child, `brag_poster`'s ffmpeg,
-`brag_doctor`'s probes) now hand every child a PATH extended with
-`~/.pi/agent/bin` and `~/.local/bin` — existing directories only, appended
-after the system PATH so system resolution order is preserved. The doctor's
-ffmpeg verdict now uses the same augmented PATH, so it reports what the render
-and poster tools will actually resolve, and its hint names the two locations.
+`~/.pi/agent/bin` but was not on the parent process's PATH. The pi-brag
+engine child (`brag_render`), the ffmpeg/ffprobe steps (`brag_poster`), and
+the doctor probes (`brag_doctor`) now hand their children a PATH extended
+with `~/.pi/agent/bin` and `~/.local/bin` — existing directories only,
+appended after the system PATH so system resolution order is preserved. The
+doctor's ffmpeg verdict uses the same augmented PATH, so it reports what the
+render and poster tools will actually resolve, and its hint names the two
+locations. The `tar` exec in `brag_fetch_assets` keeps the inherited
+environment (it never needs user-bin dirs).
 
 **Repo hygiene — generated files stay untracked.** `.gitignore` gains
 `brag-output/` (render outputs) and the runtime-fetched

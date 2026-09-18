@@ -244,7 +244,7 @@ tl.fromTo("#bgm", { volume: 0 }, { volume: 0.25, duration: 0.5, ease: "power1.ou
 tl.to("#bgm", { volume: 0, duration: 1.5, ease: "power1.in" }, fadeOutStart); // fade-out into the logo hold
 ```
 
-This avoids the engine's `audio_volume_tween_overrides_gain` lint warning (a `data-volume` of 0.25 combined with a tween that names different values) and keeps the effective level exactly what the tweens say.
+This avoids the engine's `audio_volume_tween_overrides_gain` lint warning (a `data-volume` of 0.25 combined with a tween that names different values) and keeps the effective level exactly what the tweens say. The engine's own reference (`hyperframes-core` → variables-and-media) documents the same replace-not-scale rule and an alternative fix (scaling the tween targets to the gain); both are valid — pick one per composition and stay consistent.
 
 If the music file doesn't exist, skip it and notify the user after rendering.
 

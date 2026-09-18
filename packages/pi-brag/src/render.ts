@@ -82,6 +82,8 @@ export interface SpawnDeps {
   now?: () => number;
   /** Overrides SETTLE_GRACE_MS (tests). */
   settleGraceMs?: number;
+  /** Pass-through to childEnv's augmentPath (tests: plant a fake home). */
+  childEnvOpts?: { home?: string; exists?: (p: string) => boolean; delimiter?: string };
 }
 
 function tail(s: string, maxChars = STDOUT_TAIL_CHARS): string {
@@ -142,7 +144,7 @@ export async function runHyperframes(
         cwd: input.cwd,
         shell: isWindows,
         detached: !isWindows,
-        env: childEnv(),
+        env: childEnv(undefined, deps.childEnvOpts),
       });
     } catch (err) {
       resolvePromise({
