@@ -12,6 +12,16 @@ set -euo pipefail
 # a non-interactive shell's default PATH.
 export PATH="$PATH:$HOME/.local/bin:$HOME/.bun/bin"
 
+# The invoking shell may carry NODE_ENV=production (background/task shells on
+# some hosts do). npm then silently omits devDependencies from the clean-room
+# install: vitest never lands in node_modules/.bin ("vitest: not found") and
+# dev-only modules vanish ("Cannot find module '@sinclair/typebox'"), which
+# failed exactly pi-hermes-memory and pi-condense while every node-runner
+# suite still passed. The clean room is a TEST environment: it must always
+# install dev dependencies and run suites with development semantics, no
+# matter how the gate was invoked.
+unset NODE_ENV npm_config_production npm_config_omit
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MATRIX="$REPO_ROOT/scripts/test-matrix.txt"
 SCRATCH="${TMPDIR:-/tmp}/anvil-extensions-verify.$$"
