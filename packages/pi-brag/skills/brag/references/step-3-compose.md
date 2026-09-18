@@ -190,6 +190,14 @@ After `brag-output/brag-plan.md`, `brag-output/composition-brief.md`, and select
 4. Run Hyperframes check (the single gate before render).
 5. Render to `brag-output/brag.mp4`.
 
+### Recurring engine lint notes (observed with the current engine)
+
+Three lint behaviors cost real iterations in brag-sized compositions. They are engine-owned rules, so verify against the current `hyperframes-cli` skill — but plan for them:
+
+- **Keep the timeline registration inline.** `window.__timelines[compositionId] = tl` must live in a `<script>` inside the composition HTML. Moving the whole script to an external file (e.g. `main.js`) fails `missing_timeline_registry` even though registration still happens at runtime — the linter scans the HTML itself. External `styles.css` via `<link>` is fine.
+- **Music volume tweens own the level.** A `data-volume` gain plus a GSAP `volume` tween triggers `audio_volume_tween_overrides_gain`; use the `data-volume="1"` pattern in [audio.md](audio.md).
+- **SFX-heavy single-file compositions can trip `composition_file_too_large`.** A 15–25s brag comp with ~20 `<audio>` elements plus the build script lands around 300+ lines. Splitting scenes into sub-compositions fragments global beat locks (strong cues are absolute times on one timeline), so accepting this warning consciously is usually right for brag comps; say so in the PR/handoff rather than silently ignoring it.
+
 Do not manually copy stale composition snippets from this skill into the output. The point of delegating is to benefit from the latest Hyperframes guidance.
 
 ---

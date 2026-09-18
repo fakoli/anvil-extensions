@@ -7,7 +7,8 @@
 // --no-music / --no-sfx when assets are absent.
 
 import { existsSync, readdirSync, statSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { homedir } from "node:os";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const THIS_FILE = fileURLToPath(import.meta.url); // <pkg>/src/paths.ts
@@ -111,4 +112,62 @@ export function findDomainSkill(name: string, home: string, cwd: string): string
     if (existsSync(candidate)) return candidate;
   }
   return null;
+}
+
+/**
+ * User-bin directories appended to the PATH handed to spawned children
+ * (engine CLI, ffmpeg/ffprobe). Static ffmpeg builds are commonly installed
+ * in one of these without being on the parent process's PATH, which made
+ * `brag_render` fail with "FFmpeg not found" while the binary was present.
+ * Appended — never prepended — so system resolution order is preserved.
+ */
+export function extraPathDirs(home: string = homedir()): string[] {
+  return [join(home, ".pi", "agent", "bin"), join(home, ".local", "bin")];
+}
+
+/**
+ * Append {@link extraPathDirs} entries that exist to a PATH string.
+ * Pure/injectable: `exists` and `delimiter` are overridable for offline tests.
+ */
+export function augmentPath(
+  pathValue: string | undefined,
+  opts: { home?: string; exists?: (p: string) => boolean; delimiter?: string } = {},
+): string {
+  const exists =
+    opts.exists ??
+    ((p: string) => {
+      try {
+        return existsSync(p);
+      } catch {
+        return false;
+      }
+    });
+  const sep = opts.delimiter ?? delimiter;
+  const parts = pathValue ? pathValue.split(sep) : [];
+  for (const dir of extraPathDirs(opts.home)) {
+    let present: boolean;
+    try {
+      present = exists(dir);
+    } catch {
+      present = false;
+    }
+    if (present && !parts.includes(dir)) parts.push(dir);
+  }
+  return parts.join(sep);
+}
+
+/**
+ * Environment for spawned children (engine CLI, ffmpeg): a shallow copy of
+ * `env` with the PATH-like variable augmented via {@link augmentPath}. Uses
+ * the existing PATH casing (Windows env keys are case-preserved) and never
+ * mutates the input. `opts` passes through to {@link augmentPath}.
+ */
+export function childEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  opts: { home?: string; exists?: (p: string) => boolean; delimiter?: string } = {},
+): NodeJS.ProcessEnv {
+  const out = { ...env };
+  const key = Object.keys(out).find((k) => k.toUpperCase() === "PATH") ?? "PATH";
+  out[key] = augmentPath(out[key], opts);
+  return out;
 }

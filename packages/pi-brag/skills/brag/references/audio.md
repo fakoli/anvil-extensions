@@ -236,6 +236,16 @@ After copying files (see Asset paths above), reference them with relative paths 
 
 Volume: 0.3-0.4 for normal music beds. Use 0.12-0.22 for deadpan or very restrained parody. Never above 0.5. SFX at 0.55-0.85, with softer values for polished/deadpan.
 
+**Tweening music volume (fades, ducking):** the engine's `data-volume` gain and a GSAP `volume` tween do not stack — tween values are absolute and replace the gain. When a tween touches the music volume, set `data-volume="1"` and let the tweens carry the level themselves, encoding the posture in the tween targets:
+
+```js
+// data-volume="1" on the element; the tween owns the level:
+tl.fromTo("#bgm", { volume: 0 }, { volume: 0.25, duration: 0.5, ease: "power1.out" }, 0); // fade-in to the bed posture
+tl.to("#bgm", { volume: 0, duration: 1.5, ease: "power1.in" }, fadeOutStart); // fade-out into the logo hold
+```
+
+This avoids the engine's `audio_volume_tween_overrides_gain` lint warning (a `data-volume` of 0.25 combined with a tween that names different values) and keeps the effective level exactly what the tweens say. The engine's own reference (`hyperframes-core` → variables-and-media) documents the same replace-not-scale rule and an alternative fix (scaling the tween targets to the gain); both are valid — pick one per composition and stay consistent.
+
 If the music file doesn't exist, skip it and notify the user after rendering.
 
 ### Beat and cue sources

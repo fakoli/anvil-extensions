@@ -227,6 +227,49 @@ await atest("paths: findDomainSkill scans standard dirs", async () => {
   }
 });
 
+await atest("paths: augmentPath appends only existing extra dirs, deduped", async () => {
+  const home = mkdtempSync(join(tmpdir(), "brag-path-home-"));
+  try {
+    // Only .pi/agent/bin exists in the planted home; .local/bin does not.
+    plantTree(home, { ".pi/agent/bin/ffmpeg": "#!sh\n" });
+    const piBin = join(home, ".pi", "agent", "bin");
+    const localBin = join(home, ".local", "bin");
+    const out = paths.augmentPath("/usr/bin:/bin", { home, delimiter: ":" });
+    assert.equal(out, `/usr/bin:/bin:${piBin}`);
+    // Already-present entries are not duplicated.
+    assert.equal(paths.augmentPath(`/bin:${piBin}`, { home, delimiter: ":" }), `/bin:${piBin}`);
+    // A missing PATH becomes just the existing extras.
+    assert.equal(paths.augmentPath(undefined, { home, delimiter: ":" }), piBin);
+    // Pure exists override: both extras appended in order.
+    const both = paths.augmentPath("", { home, exists: () => true, delimiter: ":" });
+    assert.equal(both, `${piBin}:${localBin}`);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+await atest("paths: childEnv augments the PATH-like key without mutating input", async () => {
+  const home = mkdtempSync(join(tmpdir(), "brag-env-home-"));
+  try {
+    plantTree(home, { ".local/bin/.keep": "" });
+    const localBin = join(home, ".local", "bin");
+    // Windows-style casing is preserved.
+    const winEnv = Object.freeze({ Path: "C:\\Windows", HOME: home });
+    const winOut = paths.childEnv(winEnv, { home, delimiter: ":" });
+    assert.ok(winOut.Path.includes(localBin));
+    assert.equal(winOut.Path, `C:\\Windows:${localBin}`);
+    assert.equal(winEnv.Path, "C:\\Windows"); // input untouched
+    // POSIX default key.
+    const posixOut = paths.childEnv({ PATH: "/usr/bin", HOME: home }, { home, delimiter: ":" });
+    assert.equal(posixOut.PATH, `/usr/bin:${localBin}`);
+    // No PATH at all still yields an augmented PATH key.
+    const bare = paths.childEnv({ HOME: home }, { home, delimiter: ":" });
+    assert.equal(bare.PATH, localBin);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
 // --- doctor ------------------------------------------------------------------
 
 const okExec = async (cmd) =>
@@ -440,6 +483,44 @@ await atest("render: spawns detached on POSIX so kills reach the whole tree", as
   await promise;
   assert.equal(seen[0].cmd, "npx");
   if (process.platform !== "win32") assert.equal(seen[0].opts.detached, true);
+});
+
+await atest("render: spawned engine gets an augmented child env", async () => {
+  const home = mkdtempSync(join(tmpdir(), "brag-render-home-"));
+  try {
+    plantTree(home, { ".pi/agent/bin/ffmpeg": "#!sh\n" });
+    const piBin = join(home, ".pi", "agent", "bin");
+    const child = new FakeChild();
+    const seen = [];
+    const spawnFn = (cmd, argv, opts) => {
+      seen.push({ cmd, argv, opts });
+      return child;
+    };
+    const promise = render.runHyperframes(
+      { subcommand: "check", cwd: pkgRoot },
+      undefined,
+      undefined,
+      { spawnFn, childEnvOpts: { home, delimiter: ":" } },
+    );
+    await new Promise((r) => setTimeout(r, 10));
+    child.close(0, null);
+    const result = await promise;
+    assert.ok(result.ok);
+    const opts = seen[0].opts;
+    assert.ok(opts.env, "child receives an env");
+    // Case-insensitive key lookup: Windows-style envs keep the `Path` casing.
+    const pathKey = Object.keys(opts.env).find((k) => k.toUpperCase() === "PATH");
+    assert.ok(pathKey, "child env has a PATH-like key");
+    const pathValue = opts.env[pathKey];
+    assert.ok(typeof pathValue === "string" && pathValue.length > 0, "child PATH is a non-empty string");
+    // The planted user-bin dir is appended after the parent PATH (paths-level
+    // dedupe/missing-dir handling is covered by the paths tests above).
+    const parentPath = process.env.PATH ?? "";
+    assert.ok(pathValue.startsWith(parentPath), "parent PATH is preserved as a prefix");
+    assert.ok(pathValue.endsWith(piBin), "planted ~/.pi/agent/bin is appended");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 await atest("render: settle guard finishes after kill even when close never fires", async () => {

@@ -4,7 +4,7 @@
 
 import { execFile } from "node:child_process";
 import { homedir } from "node:os";
-import { DEFAULT_ASSETS_DIR, findDomainSkill, inventoryAssets, type AssetInventory } from "./paths.js";
+import { DEFAULT_ASSETS_DIR, childEnv, findDomainSkill, inventoryAssets, type AssetInventory } from "./paths.js";
 
 export const MIN_NODE_MAJOR = 22;
 export const MIN_NODE_MINOR = 19;
@@ -45,7 +45,9 @@ export interface DoctorReport {
 
 export const DEFAULT_EXEC: ExecFn = (cmd, args, timeoutMs) =>
   new Promise((resolvePromise) => {
-    execFile(cmd, args, { timeout: timeoutMs, encoding: "utf8", windowsHide: true }, (err, stdout, stderr) => {
+    // Same augmented PATH the render/poster children get, so the doctor's
+    // ffmpeg verdict matches what those tools will actually resolve.
+    execFile(cmd, args, { timeout: timeoutMs, encoding: "utf8", windowsHide: true, env: childEnv() }, (err, stdout, stderr) => {
       if (err && (err as NodeJS.ErrnoException).code === "ENOENT") {
         resolvePromise({ code: null, stdout: "", stderr: "", error: `not found: ${cmd}` });
         return;
@@ -82,8 +84,8 @@ async function checkFfmpeg(exec: ExecFn): Promise<CheckResult> {
     return {
       name: "ffmpeg",
       ok: false,
-      detail: "ffmpeg not on PATH — required for render, poster extraction, and frame-0 bake",
-      hint: "install ffmpeg (e.g. `sudo apt install ffmpeg`, `brew install ffmpeg`, or a static build on PATH)",
+      detail: "ffmpeg not found — required for render, poster extraction, and frame-0 bake",
+      hint: "install ffmpeg (e.g. `sudo apt install ffmpeg`, `brew install ffmpeg`, or a static build in ~/.pi/agent/bin or ~/.local/bin — brag tools append both to the PATH they give ffmpeg and the engine)",
     };
   }
   if (ffmpeg.code !== 0) {
