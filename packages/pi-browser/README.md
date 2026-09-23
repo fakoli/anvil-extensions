@@ -49,7 +49,9 @@ The enabled session advertises exactly four tools:
 
 Inputs are closed schemas: unknown keys are refused. Captures use the owner’s bounded entity page. A partial capture is incomplete and is never evidence that an element is absent. The worker permits results up to 15 KiB, while Pi applies a final 16 KiB text-receipt cap; raw image, screenshot, data URL, and inline media payloads are rejected before returning to Pi or its model provider.
 
-A browser client belongs to exactly one Pi session. The extension closes it before a session change and on shutdown, refuses fork and tree operations while it is active, and discards results that arrive after the originating state is replaced or closed. The owner validates the session binding again, so observations cannot be reused in a new session. Cancellation, an expired per-request deadline, launch failure, malformed worker frames, and an unavailable worker become typed refusal codes (`cancelled`, `deadline_exceeded`, `worker_unavailable`, or `worker_protocol`) and close the active client. The Serving owner retains its separate 120-second cumulative mediation budget.
+A browser client belongs to exactly one Pi session. The extension closes it before a session change and on shutdown, refuses fork and tree operations while it is active, and discards results that arrive after the originating state is replaced or closed. The owner validates the session binding again, so observations cannot be reused in a new session. Cancellation, an expired per-request deadline, launch failure, malformed worker frames, and an unavailable worker become typed refusal codes (`cancelled`, `deadline_exceeded`, `worker_unavailable`, or `worker_protocol`) and close the active client. The Serving live transport has its own 120-second lifetime.
+
+On Linux, shutdown sends TERM to the detached worker group, then sends a second TERM after 150 ms so the pinned Playwright runtime can take its force-close path. The retained worker-group KILL fallback begins at 300 ms. This cleanup sequence covers the observed stalled-Chromium runtime behavior; it is not a general process-isolation guarantee.
 
 ## Verification
 
@@ -58,9 +60,12 @@ Run the package tests:
 ```bash
 npm test --workspace pi-browser
 node packages/pi-browser/tests/pi-probe.mjs
+node packages/pi-browser/tests/chromium-cleanup.mjs
 ```
 
 `pi-probe.mjs` runs against the installed Pi 0.85.1 RPC runtime twice, once with a text-only model declaration and once with a model that declares image input. It loads the currently declared full root extension bundle plus this candidate extension through an explicit trusted fake-client factory, and fails on a Pi extension-load error. The fixture has no external model, browser, or network dependency. It proves inactive tools are absent and exercises the registered tools, text-only provider boundary, session binding, stale-handle refusal, fork cancellation, and reload cleanup. The two capability modes prove a no-media boundary only; they are not vision-quality qualification and do not open or satisfy a vision/OpenWire gate.
+
+`chromium-cleanup.mjs` launches the exact production worker and pinned Playwright Chromium against a synthetic in-memory transport. It checks normal close, cancellation, raw worker termination, and a stopped browser before any test cleanup resumes it. It makes no external network or model request. Before the Serving package pin is installed, maintainers may set `PI_BROWSER_SERVING_SOURCE` to a reviewed Serving checkout for this test only; production configuration has no such override.
 
 ## Provenance
 

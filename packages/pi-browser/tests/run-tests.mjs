@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, spawn as nodeSpawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -13,7 +13,8 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function fixture(mode, descendantPath = "") {
   const directory = await mkdtemp(join(tmpdir(), "pi-browser-worker-")), path = join(directory, "worker.mjs");
   await writeFile(path, `
-const mode = ${JSON.stringify(mode)}, descendantPath = ${JSON.stringify(descendantPath)}; let buffer = "", requestCount = 0, sessionId = "";
+const mode = ${JSON.stringify(mode)}, descendantPath = ${JSON.stringify(descendantPath)}; let buffer = "", requestCount = 0, sessionId = "", termCount = 0;
+if (mode === "second-term") process.on("SIGTERM", async () => { termCount += 1; await (await import("node:fs/promises")).writeFile(descendantPath, String(termCount)); if (termCount === 2) process.exit(0); });
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", async (part) => { buffer += part; const lines = buffer.split("\\n"); buffer = lines.pop(); for (const line of lines) { if (!line) continue; const value = JSON.parse(line);
   if (value.type === "init") {
@@ -96,6 +97,16 @@ test("close reaps a detached worker group after its leader exits", async () => {
     await client.close();
     const pid = Number((await (await import("node:fs/promises")).readFile(pidPath, "utf8")).trim());
     await wait(50); assert.throws(() => process.kill(pid, 0));
+  } finally { await client.close(); await rm(directory, { recursive: true, force: true }); await rm(worker.directory, { recursive: true, force: true }); }
+});
+
+test("close sends a second TERM before the retained worker-group KILL fallback", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-browser-second-term-")), termPath = join(directory, "terms"), worker = await fixture("second-term", termPath);
+  const client = createBrowserClient({ piSessionId: "session-1", trustedConfig: config, workerPath: worker.path });
+  try {
+    await client.execute({ operation: "release", observation_id: "o-1" });
+    await client.close();
+    assert.equal((await readFile(termPath, "utf8")).trim(), "2");
   } finally { await client.close(); await rm(directory, { recursive: true, force: true }); await rm(worker.directory, { recursive: true, force: true }); }
 });
 

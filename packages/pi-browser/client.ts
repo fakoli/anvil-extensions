@@ -90,7 +90,10 @@ export function createBrowserClient({ piSessionId, trustedConfig, workerPath = f
       if (!current?.pid) return;
       const closed = once(current, "close").catch(() => {});
       groupSignal(current, "SIGTERM");
-      await Promise.race([closed, pause(300)]);
+      await Promise.race([closed, pause(150)]);
+      // Playwright force-closes a stalled detached browser on a second TERM.
+      if (groupAlive(current.pid)) groupSignal(current, "SIGTERM");
+      await Promise.race([closed, pause(150)]);
       // The detached leader can exit while Chromium descendants remain in its group.
       if (groupAlive(current.pid)) groupSignal(current, "SIGKILL");
       await Promise.race([closed, pause(1_000)]);
