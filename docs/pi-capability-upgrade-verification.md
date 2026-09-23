@@ -86,34 +86,33 @@ A separately controlled live slice used explicit registered `llm.secondary` visi
 
 ## Optional Pi browser observations
 
-The browser package checks ran against Linux Node 24 with the pinned
-Playwright 1.63.0 worker and installed Pi 0.85.1. The deterministic native
-`pi-probe.mjs` used a fixture provider twice, once with a text-only model
-declaration and once declaring image input. It proved the default inactive
-state without `--browser`; in a fresh browser session it proved registered
-tool availability, session-bound opaque observations, stale-handle refusal,
-fork cancellation, reload cleanup, bounded text-only receipts, configured
-page-ID-only guidance, and zero browser media sent to the fixture provider.
-This is a public-DOM boundary check, not vision or general model-quality
-evidence.
+The final committed lockfile clean-room verification passed all 11 declared
+suites and its dependency audit reported zero vulnerabilities. The exact
+candidate checkout also reran the deterministic native `pi-probe.mjs` on
+installed Pi 0.85.1 with its fixture provider in both text-only and
+image-capable declaration modes. It proved the default inactive state without
+`--browser`; in a fresh browser session it proved registered tool availability,
+session-bound opaque observations, stale-handle refusal, fork cancellation,
+reload cleanup, bounded text-only receipts, configured page-ID-only guidance,
+and zero browser media sent to the fixture provider. This is a public-DOM
+boundary check, not vision or general model-quality evidence.
 
-The source-phase `chromium-cleanup.mjs` probe used a reviewed Serving source
-override with a synthetic in-memory transport. It covered normal close,
-cancellation, raw worker termination, and a stopped browser before test cleanup
-resumed it. That source-phase result exercises the Linux worker lifecycle
-without an external page, network request, or model call; it is not accepted
-installed-package evidence. The final installed-safe repetition without the
-source override remains pending. Package tests also cover protected config
-validation, closed tool inputs, result/frame bounds, worker protocol failures,
-and the partial-coverage contract: a partial result is never evidence of an
-absent element. Jev was not enabled for this evidence; its fixed export is
-separately gated by protected configuration.
+The pre-pin source/staged `chromium-cleanup.mjs` probe used a reviewed Serving
+source override and passed four lifecycle cases. The default installed cleanup
+repeat then passed those four cases without an override, using the npm-installed
+merged Serving dependency at `4d0bbebb`. It covered normal close, cancellation,
+raw worker termination, and a stopped browser before test cleanup resumed it.
+These are synthetic-transport lifecycle checks, not public-site evidence. The
+staged-release installed repetition remains pending. Package tests also cover
+protected config validation, closed tool inputs, result/frame bounds, worker
+protocol failures, and the partial-coverage contract: a partial result is never
+evidence of an absent element. Jev was not enabled for this evidence; its fixed
+export is separately gated by protected configuration.
 
-No website acceptance or live-model acceptance was run. At the time this
-evidence was collected, `llm.primary` was offline for benchmarking. Live-site
-and live-model acceptance therefore remain pending; completing them would
-qualify only that configured page-and-model path, with bounded receipts and an
-independent review.
+No neutral-website or live-primary acceptance has run. `llm.primary` remains
+offline for benchmarking. Those checks remain pending and would qualify only
+the configured page-and-model path, with bounded receipts and independent
+review; they do not block publication of this inactive optional resource.
 
 The strict wire-production gate is separate and remains **OPEN**. Its quota
 needs kernel enforcement that accounts for socket and TLS extra bytes; that
