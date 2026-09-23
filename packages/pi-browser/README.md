@@ -65,7 +65,15 @@ node packages/pi-browser/tests/chromium-cleanup.mjs
 
 `pi-probe.mjs` runs against the installed Pi 0.85.1 RPC runtime twice, once with a text-only model declaration and once with a model that declares image input. It loads the currently declared full root extension bundle plus this candidate extension through an explicit trusted fake-client factory, and fails on a Pi extension-load error. The fixture has no external model, browser, or network dependency. It proves inactive tools are absent and exercises the registered tools, text-only provider boundary, session binding, stale-handle refusal, fork cancellation, and reload cleanup. The two capability modes prove a no-media boundary only; they are not vision-quality qualification and do not open or satisfy a vision/OpenWire gate.
 
-`chromium-cleanup.mjs` launches the exact production worker and pinned Playwright Chromium against a synthetic in-memory transport. It checks normal close, cancellation, raw worker termination, and a stopped browser before any test cleanup resumes it. It makes no external network or model request. Before the Serving package pin is installed, maintainers may set `PI_BROWSER_SERVING_SOURCE` to a reviewed Serving checkout for this test only; production configuration has no such override.
+`chromium-cleanup.mjs` launches copied, hash-checked production client and worker files with the pinned Playwright 1.63.0 runtime. The configured Chrome executable is the browser under test; Playwright is the pinned launch/runtime dependency. Its temporary private dependency tree wraps the installed Serving adapter, or a reviewed source selected only for this pre-pin check, in a synthetic transport. It checks normal close, cancellation, raw worker termination, and a stopped browser before any test cleanup resumes it. It captures the worker PID at spawn and only examines that process’s descendants. It makes no external network or model request and does not change repository dependencies.
+
+Until the Serving package pin is installed, use the reviewed source only for this test:
+
+```bash
+PI_BROWSER_SERVING_SOURCE=/path/to/reviewed/anvil-serving node packages/pi-browser/tests/chromium-cleanup.mjs
+```
+
+`PI_BROWSER_SERVING_SOURCE` is a test-only pre-pin selector; production configuration has no such override.
 
 ## Provenance
 
