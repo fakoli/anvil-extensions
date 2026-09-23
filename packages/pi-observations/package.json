@@ -6,7 +6,8 @@
   "pi": { "extensions": ["./index.ts"] },
   "scripts": { "test": "node tests/run-tests.mjs" },
   "dependencies": {
-    "@anvil-serving/observations": "git+https://github.com/fakoli/anvil-serving.git#eb8ed5c4bf4acc7e40cbfced8ae817ea088239a7"
+    "@anvil-serving/observations": "git+https://github.com/fakoli/anvil-serving.git#eb8ed5c4bf4acc7e40cbfced8ae817ea088239a7",
+    "sharp": "0.35.4"
   },
   "peerDependencies": { "@earendil-works/pi-coding-agent": "0.85.1", "@earendil-works/pi-ai": "0.85.1", "typebox": "*" }
 }

@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 await import("./vision.test.mjs");
+await import("./images.test.mjs");
 
 const agentDir = mkdtempSync(path.join(tmpdir(), "pi-observations-"));
 process.env.PI_CODING_AGENT_DIR = agentDir;
@@ -96,8 +97,8 @@ test("duplicate marker and valid marker without durable owner state fail closed"
 test("unsupported projected history aborts before dispatch", async () => {
   const active = harness();
   await active.handlers.get("session_start")({ reason: "new" }, active.context);
-  active.setProjection([]);
-  await assert.rejects(active.handlers.get("context")({ messages: [{ role: "user", content: [{ type: "text", text: "mismatch" }] }] }, active.context), /context_failed/);
+  active.setProjection([{ type: "compaction" }]);
+  await assert.rejects(active.handlers.get("context")({ messages: [{ role: "user", content: [{ type: "text", text: "mismatch" }] }] }, active.context), /unsupported_history/);
   assert.equal(active.context.aborts > 0, true);
   await active.handlers.get("session_shutdown")({}, active.context);
 });
@@ -113,6 +114,29 @@ test("context cancellation reaches the automatic native inspector", async () => 
   const result = await active.handlers.get("context")({ messages: [message] }, active.context);
   assert.equal(received.aborted, true);
   assert.equal(JSON.stringify(result.messages).includes("data:image/"), false);
+  await active.handlers.get("session_shutdown")({}, active.context);
+});
+
+
+test("text-only context transforms preserve text while image provenance stays exact", async () => {
+  const active = harness(); await active.handlers.get("session_start")({ reason: "new" }, active.context);
+  const plain = { role: "user", content: [{ type: "text", text: "inspect @example.jpg" }] };
+  active.setProjection([{ id: "plain", type: "message", message: plain }]);
+  const transformed = { ...plain, content: "inspect @example.jpg" };
+  assert.deepEqual((await active.handlers.get("context")({ messages: [transformed] }, active.context)).messages, [transformed]);
+  const original = { role: "toolResult", toolCallId: "tool-1", toolName: "read", content: [{ type: "image", mimeType: "image/svg+xml", data: "PHN2Zy8+" }] };
+  active.setProjection([{ id: "plain", type: "message", message: plain }, { id: "image", type: "message", message: original }]);
+  const result = await active.handlers.get("context")({ messages: [transformed, original] }, active.context);
+  assert.match(JSON.stringify(result.messages), /unsupported_format/);
+  assert.equal(JSON.stringify(result.messages).includes("PHN2Zy8+"), false);
+  for (const omitted of [[], [transformed], [{ ...original, content: [] }]]) {
+    await assert.rejects(active.handlers.get("context")({ messages: omitted }, active.context), /image_source_mismatch/);
+  }
+  for (const changed of [{ ...original, toolCallId: "forged" }, { ...original, content: [...original.content, { type: "text", text: "forged question" }] }]) {
+    await assert.rejects(active.handlers.get("context")({ messages: [changed] }, active.context), /image_source_mismatch/);
+  }
+  active.setProjection([{ id: "one", type: "message", message: original }, { id: "two", type: "message", message: original }]);
+  await assert.rejects(active.handlers.get("context")({ messages: [original] }, active.context), /image_source_mismatch/);
   await active.handlers.get("session_shutdown")({}, active.context);
 });
 
