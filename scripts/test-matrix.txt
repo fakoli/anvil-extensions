@@ -11,6 +11,7 @@ pi-condense
 @schovest/pi-hermes-memory
 pi-insights
 pi-nano-banana
+pi-observations
 pi-sandbox-config
 pi-voice-clone
 pi-capability-upgrade

@@ -1,6 +1,6 @@
 # Package catalog
 
-Thirteen extensions, one pinned unit. Each entry covers what it does, why it exists, and how it works. Provenance (original vs vendored vs forked) is summarized here and detailed in [forks.md](forks.md); every package ships an `UPSTREAM.md` ledger beside its code.
+Fourteen packages, thirteen registered extension entrypoints, one pinned unit. `pi-observations` is registered but inert until a fresh session opts in with `--observation`. Each entry covers what it does, why it exists, and how it works. Provenance (original vs vendored vs forked) is summarized here and detailed in [forks.md](forks.md); every package ships an `UPSTREAM.md` ledger beside its code.
 
 | Package | Provenance | Category |
 |---|---|---|
@@ -17,6 +17,7 @@ Thirteen extensions, one pinned unit. Each entry covers what it does, why it exi
 | [pi-voice-clone](#pi-voice-clone) | original (bridge) | capabilities |
 | [pi-capability-upgrade](#pi-capability-upgrade) | original + adapted workflow ports | workflow |
 | [pi-brag](#pi-brag) | original (port) | capabilities |
+| [pi-observations](#pi-observations) | original | optional local vision mediation |
 
 ## pi-condense
 
@@ -97,6 +98,14 @@ Thirteen extensions, one pinned unit. Each entry covers what it does, why it exi
 **Why it exists:** Images belong in the agent's hand, not on the side. The design carries a budget discipline from its plugin ancestor: one billable call per request, no automatic retries, atomic no-clobber writes, and explicit caps on every input and response.
 
 **How it works:** Tools build typed Gemini requests, stream progress, cancel via signal, and render results in the TUI; `sharp` does all image processing (loaded via dynamic import — see the embedded-runtime note in [forks.md](forks.md#pi-nano-banana)); configuration is shared with sibling tooling via a common config file.
+
+## pi-observations
+
+**What:** An optional, bounded mediator for a fresh Pi session's PNG attachments. It replaces primary-model image input with opaque retained references and bounded, text-only inspection envelopes.
+
+**Why it exists:** A primary coding model can use visible-image facts without receiving raw image data, while tool-produced images require an explicit model question instead of an inferred caption.
+
+**How it works:** The registered entrypoint is inert until `--observation` starts an empty fresh session. A trusted user-agent config chooses one exact registered image-capable provider/model; the extension validates canonical RGB/RGBA PNG input, retains no second raw-PNG store, and calls Pi's native registered client with one image and a bounded question. It admits 64 source lifetimes (including tombstones), 256 MiB active bytes, one-hour retention, 32 attempts, 120 seconds cumulative reservation, and 30 seconds per call. Exact persisted projection is required; transformed/compacted history is refused. Its `observation_inspect` tool accepts an opaque reference, a question up to 512 UTF-8 bytes, and optional `follow_up`. Compaction, fork, and tree actions are cancelled while enabled. See [the package README](../packages/pi-observations/README.md).
 
 ## pi-brag
 

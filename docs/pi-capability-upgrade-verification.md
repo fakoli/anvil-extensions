@@ -68,3 +68,16 @@ The candidate preserves whitespace while stripping explicit grammar markers;
 its focused four-case regression and all 3/3 live smoke tasks passed. Original
 failures remain in private evidence. This small fixture suite demonstrates the
 specific repair correction, not general coding quality or statistical superiority.
+
+## Optional observation mediation
+
+Run the package checks with:
+
+```bash
+npm test --workspace pi-observations
+node packages/pi-observations/tests/pi-probe.mjs
+```
+
+The first command passed 15 offline checks. The installed-Pi 0.85.1 loopback probe passed both primary image modes, clean resume and cache reuse, user and tool questions, malformed-image, transport-failure, cancellation, session-budget, and fixture-clock expiry handling. It also proved every primary request had zero media and original Pi image entries remained unchanged. This is fixture evidence for the registered-client boundary, not model qualification.
+
+A separately controlled live slice used explicit registered `llm.secondary` vision and `llm.primary` primary selections with one 128×64 red-left/blue-right PNG, one explicit question, and a 1,024-token vision output cap. It recorded one inspector PNG request, zero primary media, preserved originals, and correct structured facts plus primary answer. It is a bounded integration observation, not a service/model change, a general quality result, or authorization to install or activate the package on a normal Pi profile.

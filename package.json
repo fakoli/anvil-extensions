@@ -20,7 +20,8 @@
       "./packages/pi-sandbox-config/index.ts",
       "./packages/pi-hermes-memory/src/index.ts",
       "./packages/pi-nano-banana/index.ts",
-      "./packages/pi-brag/index.ts"
+      "./packages/pi-brag/index.ts",
+      "./packages/pi-observations/index.ts"
     ],
     "skills": [
       "./packages/pi-subagents/skills",
