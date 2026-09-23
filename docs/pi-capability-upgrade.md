@@ -74,8 +74,9 @@ global agent settings.
 `pi-browser` is a separate candidate resource, not the external browser CLI
 composition above. It is registered by the bundle but starts inactive. Enable
 it only with `pi --browser` for an empty, fresh Pi 0.85.1 session and a private,
-protected `pi-browser.json` in the Pi agent directory. The configuration must
-be Pi-user-owned, non-symlinked, and not group- or world-writable. It fixes an
+protected `pi-browser.json` in the Pi agent directory. Its Pi-user-owned parent
+must be a directory and its file must be regular; neither may be a symlink or
+group- or world-writable. It fixes an
 absolute configured Chrome/Chromium executable, one or two same-origin public
 HTTPS pages, a 1–15,000 ms worker deadline, and an optional fixed Jev policy.
 It has no credentials, provider settings, router endpoint, or arbitrary
@@ -93,9 +94,9 @@ the fixed export from an existing observation and cannot act in the browser.
 
 The browser client is bound to one Pi session. Session changes, fork/tree
 attempts, shutdown, cancellation, request deadline expiry, malformed worker
-frames, or worker loss close it. Linux cleanup signals the detached worker
-group twice with TERM before retaining a KILL fallback for stalled Chromium
-descendants. Omit `--browser` for the normal disable path. To roll back, restore
+frames, or worker loss close it. Linux cleanup sends TERM to the detached worker
+group, then a second TERM after 150 ms for Playwright's cleanup, and retains a
+KILL fallback from 300 ms for that worker group. Omit `--browser` for the normal disable path. To roll back, restore
 the preceding bundle pin and start a fresh session; the package owns no browser
 state to migrate. This is independent of the existing `--observation` image
 workflow, which remains available under its own separate boundary.

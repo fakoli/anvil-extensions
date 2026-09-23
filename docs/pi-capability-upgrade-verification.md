@@ -97,21 +97,26 @@ page-ID-only guidance, and zero browser media sent to the fixture provider.
 This is a public-DOM boundary check, not vision or general model-quality
 evidence.
 
-`chromium-cleanup.mjs` launched the production worker and configured Chromium
-against a synthetic in-memory transport. It covered normal close, cancellation,
-raw worker termination, and a stopped browser before test cleanup resumed it.
-It exercises the Linux worker process lifecycle without an external page,
-network request, or model call. The package tests also cover protected config
+The source-phase `chromium-cleanup.mjs` probe used a reviewed Serving source
+override with a synthetic in-memory transport. It covered normal close,
+cancellation, raw worker termination, and a stopped browser before test cleanup
+resumed it. That source-phase result exercises the Linux worker lifecycle
+without an external page, network request, or model call; it is not accepted
+installed-package evidence. The final installed-safe repetition without the
+source override remains pending. Package tests also cover protected config
 validation, closed tool inputs, result/frame bounds, worker protocol failures,
 and the partial-coverage contract: a partial result is never evidence of an
 absent element. Jev was not enabled for this evidence; its fixed export is
 separately gated by protected configuration.
 
-No website acceptance or live-model acceptance was run. `llm.primary` was
-offline for benchmarking, so this evidence does not qualify a real public page,
-a configured Chrome deployment, a model, or a production route. The strict
-wire-production gate remains **OPEN**. Before that gate can close, run the
-reviewed live acceptance against the configured public page and model, retain
-the resulting bounded receipts and lifecycle outcome as private evidence, and
-have an independent reviewer assess it. The image workflow remains separately
-verified and is neither enabled nor changed by `--browser`.
+No website acceptance or live-model acceptance was run. At the time this
+evidence was collected, `llm.primary` was offline for benchmarking. Live-site
+and live-model acceptance therefore remain pending; completing them would
+qualify only that configured page-and-model path, with bounded receipts and an
+independent review.
+
+The strict wire-production gate is separate and remains **OPEN**. Its quota
+needs kernel enforcement that accounts for socket and TLS extra bytes; that
+enforcement has not been proven by the native fixture or a live-site receipt.
+The image workflow remains separately verified and is neither enabled nor
+changed by `--browser`.
