@@ -6,8 +6,10 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { validatePng } from "@anvil-serving/observations/png";
 
 const pi = process.env.PI_BINARY || "pi";
+const animatedGifNotice = "Animated GIF: only the first frame is available for inspection; motion and later frames are not included.";
 const timeout = 12_000;
 const childTimeout = 20_000;
 const maxBodyBytes = 2 * 1024 * 1024, maxRequests = 32, maxStdoutBytes = 2 * 1024 * 1024, maxStderrBytes = 64 * 1024;
@@ -63,7 +65,7 @@ async function startProvider() {
   };
 }
 
-function fixtureExtension() { return `import { Type } from "typebox";
+function fixtureExtension(toolImage = image) { return `import { Type } from "typebox";
 let offset = 0; const realNow = Date.now; Date.now = () => realNow() + offset;
 export default (pi) => {
   pi.registerProvider("fixture", { name: "fixture", baseUrl: process.env.PI_OBSERVATION_FIXTURE_URL, apiKey: "fixture", api: "openai-completions", models: [
@@ -71,18 +73,23 @@ export default (pi) => {
     { id: "vision", name: "vision", reasoning: false, input: ["text", "image"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 32768, maxTokens: 256 }
   ] });
   pi.registerCommand("fixture_expire", { description: "advance isolated fixture clock", async handler() { offset = 3_600_001; } });
-  pi.registerTool({ name: "fixture_image", description: "fixture", parameters: Type.Object({}), async execute() { return { content: [{ type: "image", mimeType: "image/png", data: "${image.data}" }] }; } });
+  pi.registerTool({ name: "fixture_image", description: "fixture", parameters: Type.Object({}), async execute() { return { content: [{ type: "image", mimeType: "${toolImage.mimeType}", data: "${toolImage.data}" }] }; } });
 };`; }
 function priorContextTransform() { return `export default (pi) => {
   pi.on("context", (event) => ({ messages: event.messages.map((message) => message?.role === "user" && Array.isArray(message.content) && message.content.every((part) => part?.type === "text") ? { ...message, content: message.content.map((part) => part.text).join("\\n") } : message) }));
 };`; }
 
-async function startPi(home, provider, primaryImageCapable, enableObservation = true, transformContext = false, bundle = false) {
+async function startPi(home, provider, primaryImageCapable, enableObservation = true, transformContext = false, bundle = false, toolImage = image) {
   await mkdir(join(home, "agent"), { recursive: true, mode: 0o700 });
-  await writeFile(join(home, "fixture.ts"), fixtureExtension(), { mode: 0o600 });
+  await writeFile(join(home, "fixture.ts"), fixtureExtension(toolImage), { mode: 0o600 });
   if (transformContext) await writeFile(join(home, "prior-context.ts"), priorContextTransform(), { mode: 0o600 });
   await writeFile(join(home, "agent", "pi-observations.json"), JSON.stringify({ provider: "fixture", model: "vision", profile: "fixture" }), { mode: 0o600 });
-  if (bundle) await writeFile(join(home, "agent", "settings.json"), JSON.stringify({ packages: [{ source: resolve("."), extensions: ["packages/pi-plan-mode/src/plan-mode.ts", "packages/pi-observations/index.ts"], skills: [], prompts: [], themes: [] }] }), { mode: 0o600 });
+  if (bundle) {
+    const root = JSON.parse(await readFile(resolve("package.json"), "utf8"));
+    const extensions = ["packages/pi-plan-mode/src/index.ts", "packages/pi-observations/index.ts"];
+    assert.deepEqual(root.pi?.extensions?.filter((entry) => extensions.includes(entry.replace(/^\.\//, ""))), extensions.map((entry) => `./${entry}`), "filtered bundle must select registered root-manifest entries");
+    await writeFile(join(home, "agent", "settings.json"), JSON.stringify({ packages: [{ source: resolve("."), extensions, skills: [], prompts: [], themes: [] }] }), { mode: 0o600 });
+  }
   const args = ["--mode", "rpc", ...(bundle ? [] : ["--no-extensions"]), "--no-skills", "--no-prompt-templates", "--no-context-files", "--extension", join(home, "fixture.ts"), ...(transformContext ? ["--extension", join(home, "prior-context.ts")] : []), ...(bundle ? [] : ["--extension", resolve("packages/pi-observations/index.ts")]), "--provider", "fixture", "--model", "primary", "--session-dir", join(home, "sessions"), ...(enableObservation ? ["--observation"] : [])];
   const child = spawn(pi, args, { cwd: process.cwd(), env: { ...process.env, HOME: home, PI_CODING_AGENT_DIR: join(home, "agent"), PI_CODING_AGENT_SESSION_DIR: join(home, "sessions"), PI_OFFLINE: "1", PI_OBSERVATION_FIXTURE_URL: provider.baseUrl, PI_OBSERVATION_PRIMARY_IMAGE: primaryImageCapable ? "1" : "0" }, stdio: ["pipe", "pipe", "pipe"] });
   const events = []; let buffer = "", stderr = "", stdoutBytes = 0, stderrBytes = 0, failure;
@@ -101,14 +108,34 @@ async function startPi(home, provider, primaryImageCapable, enableObservation = 
       counts[item.type] = (counts[item.type] ?? 0) + 1;
       if (item.type === "response" && item.success === false) errors.push({ id: item.id, error: String(item.error ?? "response_failed").slice(0, 256) });
       if (item.type === "error") errors.push({ error: String(item.error ?? "event_error").slice(0, 256) });
+      if (item.type === "message_end" && item.message?.stopReason === "error") errors.push({ error: String(item.message.errorMessage ?? "model_error").slice(0, 256) });
     }
-    return { counts, errors: errors.slice(-8), stderr: stderr.slice(-1024) };
+    return { counts, errors: errors.slice(-8), messageEnds: events.filter((item) => item.type === "message_end").slice(-8).map((item) => ({ role: item.message?.role, stopReason: item.message?.stopReason, contentTypes: Array.isArray(item.message?.content) ? item.message.content.map((part) => part?.type) : typeof item.message?.content })), stderr: stderr.slice(-1024) };
   };
   await once(child, "spawn"); return { child, events, stderr: () => stderr, failure: () => failure, diagnostics };
 }
 async function rpc(runner, command) { if (runner.failure()) throw runner.failure(); runner.child.stdin.write(`${JSON.stringify(command)}\n`); await waitFor(() => runner.events.some((item) => item.id === command.id && item.type === "response"), command.type, runner); const response = runner.events.find((item) => item.id === command.id && item.type === "response"); assert.equal(response.success, true, JSON.stringify(response)); return response.data; }
 async function prompt(runner, command) { const completed = runner.events.filter((item) => item.type === "agent_end").length; await rpc(runner, command); await waitFor(() => runner.events.filter((item) => item.type === "agent_end").length > completed, `${command.id} agent_end`, runner); }
 async function stop(child) { if (!child || child.exitCode !== null || child.signalCode !== null) return; const done = once(child, "close"); child.kill("SIGTERM"); await Promise.race([done, sleep(2_000).then(() => { child.kill("SIGKILL"); return done; })]); }
+async function generatedImage(mimeType, animated = false) {
+  const sharp = (await import("sharp")).default;
+  if (animated) {
+    const raw = Buffer.from([255, 0, 0, 0, 0, 255]);
+    return { mimeType, animated: true, data: (await sharp(raw, { raw: { width: 1, height: 2, channels: 3, pageHeight: 1 } }).gif({ loop: 0, delay: [100, 100] }).toBuffer()).toString("base64") };
+  }
+  const source = sharp({ create: { width: 2, height: 1, channels: 3, background: { r: 255, g: 0, b: 0 } } });
+  const output = mimeType === "image/jpeg" ? source.jpeg() : mimeType === "image/webp" ? source.webp() : source.gif();
+  return { mimeType, animated: false, data: (await output.toBuffer()).toString("base64") };
+}
+function assertedVisionPng(request) {
+  const parts = request.messages.find((message) => message.role === "user").content;
+  const imagePart = parts.find((part) => part.type === "image_url" || part.type === "image");
+  const url = imagePart.image_url?.url;
+  const match = typeof url === "string" && /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(url);
+  assert.ok(match, "vision request is not canonical PNG");
+  validatePng(match[1]);
+  return match[1];
+}
 
 async function main() {
   const version = spawnSync(pi, ["--version"], { encoding: "utf8", timeout }); assert.equal(version.status, 0, "Pi 0.85.1 executable is required"); assert.equal(version.stdout.trim(), "0.85.1", "installed Pi version changed");
@@ -216,6 +243,40 @@ async function registeredBundleRegression() {
     throw error;
   } finally { await stop(runner?.child); await provider.close(); await rm(home, { recursive: true, force: true }); }
 }
+async function nativeFormatRegression() {
+  const formats = [await generatedImage("image/jpeg"), await generatedImage("image/webp"), await generatedImage("image/gif"), await generatedImage("image/gif", true)];
+  for (const source of formats) {
+    const home = await mkdtemp(join(tmpdir(), "pi-observations-format-")), provider = await startProvider(); let runner;
+    try {
+      runner = await startPi(home, provider, false);
+      await prompt(runner, { id: `attachment-${source.mimeType}`, type: "prompt", message: "What is in this image?", images: [{ type: "image", ...source }] });
+      await waitFor(() => provider.primary.length >= 1 && provider.vision.length === 1, `${source.mimeType} attachment mediation`, runner);
+      const normalized = assertedVisionPng(provider.vision[0]);
+      assert.notEqual(normalized, source.data, `${source.mimeType} reached vision without normalization`);
+      assert.equal(provider.primary.every((request) => !hasMedia(request)), true, `${source.mimeType} leaked to primary`);
+      const entries = await rpc(runner, { id: `entries-${source.mimeType}`, type: "get_entries" });
+      assert.equal(JSON.stringify(entries.entries).includes(source.data), true, `${source.mimeType} original was not retained`);
+      assert.equal(JSON.stringify(provider.primary.at(-1).messages).includes(animatedGifNotice), source.animated, `${source.animated ? "animated" : "static"} GIF notice mismatch`);
+      provider.assertHealthy();
+    } catch (error) {
+      console.error(`pi observations format diagnostic: ${source.mimeType} ${JSON.stringify(runner?.diagnostics?.() ?? { error: String(error).slice(0, 256) })}`);
+      throw error;
+    } finally { await stop(runner?.child); await provider.close(); await rm(home, { recursive: true, force: true }); }
+  }
+  const toolSource = await generatedImage("image/jpeg");
+  const home = await mkdtemp(join(tmpdir(), "pi-observations-tool-format-")), provider = await startProvider(); let runner;
+  try {
+    runner = await startPi(home, provider, false, true, false, false, toolSource);
+    await prompt(runner, { id: "jpeg-tool", type: "prompt", message: "[tool-image]" });
+    await waitFor(() => provider.vision.length === 1 && provider.primary.length >= 2, "JPEG tool mediation", runner);
+    assertedVisionPng(provider.vision[0]);
+    assert.equal(provider.primary.every((request) => !hasMedia(request)), true, "JPEG tool leaked to primary");
+    const entries = await rpc(runner, { id: "entries-jpeg-tool", type: "get_entries" });
+    assert.equal(JSON.stringify(entries.entries).includes(toolSource.data), true, "JPEG tool original was not retained");
+    provider.assertHealthy();
+  } finally { await stop(runner?.child); await provider.close(); await rm(home, { recursive: true, force: true }); }
+  process.stdout.write("pi observations native formats: ok\n");
+}
 async function suite() {
   if (process.argv.includes("--single")) return main();
   for (const mode of ["--primary-image", "--primary-text-only"]) {
@@ -225,5 +286,6 @@ async function suite() {
   }
   await registeredBundleRegression();
   await transformedTextContextRegression();
+  await nativeFormatRegression();
 }
 suite().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });

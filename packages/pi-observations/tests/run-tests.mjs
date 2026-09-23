@@ -129,6 +129,9 @@ test("text-only context transforms preserve text while image provenance stays ex
   const result = await active.handlers.get("context")({ messages: [transformed, original] }, active.context);
   assert.match(JSON.stringify(result.messages), /unsupported_format/);
   assert.equal(JSON.stringify(result.messages).includes("PHN2Zy8+"), false);
+  for (const omitted of [[], [transformed], [{ ...original, content: [] }]]) {
+    await assert.rejects(active.handlers.get("context")({ messages: omitted }, active.context), /image_source_mismatch/);
+  }
   for (const changed of [{ ...original, toolCallId: "forged" }, { ...original, content: [...original.content, { type: "text", text: "forged question" }] }]) {
     await assert.rejects(active.handlers.get("context")({ messages: [changed] }, active.context), /image_source_mismatch/);
   }

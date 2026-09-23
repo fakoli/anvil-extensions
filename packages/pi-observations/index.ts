@@ -78,6 +78,7 @@ function imageProjection(ctx: ExtensionContext, messages: any[]): Map<number, st
     previous = candidates[0].position;
     matched.set(index, candidates[0].entryId);
   }
+  if (matched.size !== projected.length) throw new Error("image_source_mismatch");
   return matched;
 }
 
@@ -163,7 +164,8 @@ export default function (pi: ExtensionAPI): void {
             parts.push({ type: "text", text: JSON.stringify({ schema: "observation-input-error/v1", error: error.code, message: error.message }) });
             continue;
           }
-          const bound = current.owner.bind({ entryId: projection.get(index), imagePart: partIndex, image });
+          const bound = current.owner.bind({ entryId: projection.get(index), imagePart: partIndex, image: { mimeType: image.mimeType, data: image.data } });
+          if (image.notice) parts.push({ type: "text", text: image.notice });
           let envelope = bound;
           if (message.role === "user" && images.length === 1 && text && bytes(text) <= 512 && bound.status === "question_required") envelope = await current.owner.inspect({ observationId: bound.observation_id, question: text }, { signal });
           parts.push({ type: "text", text: JSON.stringify(envelope) });

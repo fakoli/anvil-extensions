@@ -1,9 +1,11 @@
 import { validatePng } from "@anvil-serving/observations/png";
+import { spawn } from "node:child_process";
 
 const MAX_BYTES = 8 * 1024 * 1024;
 const MAX_PIXELS = 8_000_000;
 const TIMEOUT_MS = 5_000;
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+const MAX_CHILD_STDOUT = 4 * Math.ceil(MAX_BYTES / 3) + 512;
 
 export type ImageErrorCode = "unsupported_format" | "input_too_large" | "pixel_limit" | "cancelled" | "animated_image";
 
@@ -22,7 +24,7 @@ export class ImageError extends Error {
 
 type ImageInput = { mimeType: string; data: string };
 type NormalizedImage = { mimeType: "image/png"; data: string; notice?: string };
-const GIF_NOTICE = "Animated GIF: only the first frame was inspected; motion and later frames were not analyzed.";
+const GIF_NOTICE = "Animated GIF: only the first frame is available for inspection; motion and later frames are not included.";
 
 const fail = (code: ImageErrorCode): never => { throw new ImageError(code); };
 
@@ -42,57 +44,99 @@ function expectedFormat(mimeType: unknown): "jpeg" | "png" | "webp" | "gif" {
   return fail("unsupported_format");
 }
 
-/** Counts GIF image descriptors without asking the decoder to render later frames. */
-function animatedGif(input: Buffer): boolean {
-  if (input.length < 13 || (input.subarray(0, 6).toString("ascii") !== "GIF87a" && input.subarray(0, 6).toString("ascii") !== "GIF89a")) return false;
-  let offset = 13;
-  const globalTable = input[10];
-  if (globalTable & 0x80) offset += 3 * (1 << ((globalTable & 0x07) + 1));
-  let frames = 0;
-  const skipSubBlocks = (): boolean => {
-    while (offset < input.length) {
-      const size = input[offset++];
-      if (size === 0) return true;
-      if (offset + size > input.length) return false;
-      offset += size;
-    }
-    return false;
-  };
-  while (offset < input.length) {
-    const marker = input[offset++];
-    if (marker === 0x3b) return false;
-    if (marker === 0x21) {
-      if (offset >= input.length) return false;
-      offset += 1;
-      if (!skipSubBlocks()) return false;
-      continue;
-    }
-    if (marker !== 0x2c || offset + 9 > input.length) return false;
-    const packed = input[offset + 8];
-    offset += 9;
-    if (packed & 0x80) offset += 3 * (1 << ((packed & 0x07) + 1));
-    if (offset >= input.length) return false;
-    offset += 1; // LZW minimum code size
-    if (!skipSubBlocks()) return false;
-    frames += 1;
-    if (frames > 1) return true;
-  }
-  return false;
+function runningInBun(): boolean {
+  return typeof (process.versions as { bun?: unknown }).bun === "string";
 }
 
-async function bounded<T>(work: Promise<T>, signal?: AbortSignal): Promise<T> {
-  if (signal?.aborted) fail("cancelled");
+async function bounded<T>(work: Promise<T>, signal: AbortSignal | undefined, stop: { code?: ImageErrorCode }, destroy: () => void | Promise<void>): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let remove: (() => void) | undefined;
-  const cancelled = new Promise<never>((_resolve, reject) => {
-    if (!signal) return;
-    const abort = () => reject(new ImageError("cancelled"));
-    signal.addEventListener("abort", abort, { once: true });
-    remove = () => signal.removeEventListener("abort", abort);
+  const interrupted = new Promise<never>((_resolve, reject) => {
+    const interrupt = (code: ImageErrorCode) => {
+      if (stop.code) return;
+      stop.code = code;
+      Promise.resolve().then(destroy).catch(() => undefined).finally(() => reject(new ImageError(code)));
+    };
+    if (signal?.aborted) interrupt("cancelled");
+    else if (signal) {
+      const abort = () => interrupt("cancelled");
+      signal.addEventListener("abort", abort, { once: true });
+      remove = () => signal.removeEventListener("abort", abort);
+    }
+    timer = setTimeout(() => interrupt("unsupported_format"), TIMEOUT_MS);
   });
-  const deadline = new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new ImageError("unsupported_format")), TIMEOUT_MS); });
-  try { return await Promise.race([work, cancelled, deadline]); }
+  try {
+    const result = await Promise.race([work, interrupted]);
+    if (stop.code) throw new ImageError(stop.code);
+    return result;
+  }
+  catch (error) {
+    if (stop.code) throw new ImageError(stop.code);
+    throw error;
+  }
   finally { if (timer !== undefined) clearTimeout(timer); remove?.(); }
+}
+
+const nodeChildScript = `
+import { ImageError, normalizeImage } from ${JSON.stringify(import.meta.url)};
+const chunks = [];
+process.stdin.on("data", (chunk) => chunks.push(chunk));
+process.stdin.on("end", async () => {
+  try {
+    const input = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    process.stdout.write(JSON.stringify({ ok: true, result: await normalizeImage(input) }));
+  } catch (error) {
+    process.stdout.write(JSON.stringify({ ok: false, code: error instanceof ImageError ? error.code : "unsupported_format" }));
+  }
+});
+`;
+
+function childResult(value: unknown): NormalizedImage {
+  if (!value || typeof value !== "object") fail("unsupported_format");
+  const result = value as { mimeType?: unknown; data?: unknown; notice?: unknown };
+  if (result.mimeType !== "image/png" || !canonicalBase64(result.data) || Buffer.from(result.data, "base64").length > MAX_BYTES || (result.notice !== undefined && result.notice !== GIF_NOTICE)) fail("unsupported_format");
+  try { validatePng(result.data); } catch { fail("unsupported_format"); }
+  return Object.freeze({ mimeType: "image/png", data: result.data, ...(result.notice === GIF_NOTICE ? { notice: GIF_NOTICE } : {}) });
+}
+
+function startNodeDecoder(input: ImageInput): { work: Promise<NormalizedImage>; destroy: () => Promise<void> } {
+  const child = spawn("node", ["--input-type=module", "--eval", nodeChildScript], {
+    env: { PATH: process.env.PATH ?? "" }, stdio: ["pipe", "pipe", "ignore"],
+  });
+  let output = "";
+  let outputBytes = 0;
+  let closed = false;
+  let resolveClose: (() => void) | undefined;
+  const closedPromise = new Promise<void>((resolve) => { resolveClose = resolve; });
+  const work = new Promise<NormalizedImage>((resolve, reject) => {
+    child.once("error", () => reject(new ImageError("unsupported_format")));
+    child.stdout.on("data", (chunk: Buffer) => {
+      outputBytes += chunk.length;
+      if (outputBytes > MAX_CHILD_STDOUT) { output = ""; child.kill("SIGTERM"); return; }
+      output += chunk.toString("utf8");
+    });
+    child.once("close", (status) => {
+      closed = true; resolveClose?.();
+      if (status !== 0 || outputBytes > MAX_CHILD_STDOUT) return reject(new ImageError("unsupported_format"));
+      try {
+        const response = JSON.parse(output) as { ok?: unknown; code?: unknown; result?: unknown };
+        if (response.ok === true) return resolve(childResult(response.result));
+        if (response.ok === false && (response.code === "unsupported_format" || response.code === "input_too_large" || response.code === "pixel_limit" || response.code === "cancelled" || response.code === "animated_image")) return reject(new ImageError(response.code));
+      } catch { /* Invalid child output is not exposed. */ }
+      reject(new ImageError("unsupported_format"));
+    });
+  });
+  child.stdin.on("error", () => undefined);
+  child.stdin.end(JSON.stringify({ mimeType: input.mimeType, data: input.data }));
+  return {
+    work,
+    destroy: async () => {
+      if (!closed) child.kill("SIGTERM");
+      const force = setTimeout(() => { if (!closed) child.kill("SIGKILL"); }, 100);
+      await closedPromise;
+      clearTimeout(force);
+    },
+  };
 }
 
 function strictPng(output: Buffer): Buffer {
@@ -116,8 +160,9 @@ function strictPng(output: Buffer): Buffer {
 /** Converts one declared image into the owner's strict PNG form without retaining it. */
 export async function normalizeImage(input: ImageInput, signal?: AbortSignal): Promise<NormalizedImage> {
   const format = expectedFormat(input?.mimeType);
-  if (!input || typeof input !== "object" || !canonicalBase64(input.data)) fail("unsupported_format");
+  if (!input || typeof input !== "object" || typeof input.data !== "string") fail("unsupported_format");
   if (input.data.length > 4 * Math.ceil(MAX_BYTES / 3)) fail("input_too_large");
+  if (!canonicalBase64(input.data)) fail("unsupported_format");
   const encoded = Buffer.from(input.data, "base64");
   if (encoded.length > MAX_BYTES) fail("input_too_large");
   if (encoded.toString("base64") !== input.data) fail("unsupported_format");
@@ -127,16 +172,30 @@ export async function normalizeImage(input: ImageInput, signal?: AbortSignal): P
     catch { /* Metadata-bearing PNGs continue through Sharp for normalization. */ }
   }
   try {
-    const sharp = (await bounded(import("sharp"), signal)).default;
-    const gifFirstFrame = format === "gif" && animatedGif(encoded);
-    const source = sharp(encoded, { pages: format === "gif" ? 1 : -1, failOn: "error", limitInputPixels: false, sequentialRead: true }).timeout({ seconds: 5 });
-    const metadata = await bounded(source.metadata(), signal);
-    if (metadata.format !== format || !Number.isSafeInteger(metadata.width) || !Number.isSafeInteger(metadata.height) || metadata.width < 1 || metadata.height < 1) fail("unsupported_format");
-    if (format !== "gif" && metadata.pages !== undefined && metadata.pages > 1) fail("animated_image");
-    if (metadata.width > Math.floor(MAX_PIXELS / metadata.height)) fail("pixel_limit");
-    const output = await bounded(source.rotate().toColourspace("srgb").png({ compressionLevel: 9, adaptiveFiltering: false, palette: false }).toBuffer(), signal);
-    if (output.length > MAX_BYTES) fail("input_too_large");
-    return Object.freeze({ mimeType: "image/png", data: strictPng(output).toString("base64"), ...(gifFirstFrame ? { notice: GIF_NOTICE } : {}) });
+    if (runningInBun()) {
+      const stop: { code?: ImageErrorCode } = {};
+      const child = startNodeDecoder(input);
+      return await bounded(child.work, signal, stop, child.destroy);
+    }
+    const stop: { code?: ImageErrorCode } = {};
+    let destroy = () => {};
+    return await bounded((async () => {
+      const module = await import("sharp");
+      const sharp = ((module as { default?: typeof import("sharp") }).default ?? module) as typeof import("sharp");
+      if (stop.code) fail(stop.code);
+      const source = sharp(encoded, { pages: format === "gif" ? 1 : -1, failOn: "error", limitInputPixels: false, sequentialRead: true }).timeout({ seconds: 5 });
+      destroy = () => { source.destroy(); };
+      const metadata = await source.metadata();
+      if (stop.code) fail(stop.code);
+      if (metadata.format !== format || !Number.isSafeInteger(metadata.width) || !Number.isSafeInteger(metadata.height) || metadata.width < 1 || metadata.height < 1) fail("unsupported_format");
+      const animated = metadata.pages !== undefined && metadata.pages > 1;
+      if (format !== "gif" && animated) fail("animated_image");
+      if (metadata.width > Math.floor(MAX_PIXELS / metadata.height)) fail("pixel_limit");
+      const output = await source.rotate().toColourspace("srgb").png({ compressionLevel: 9, adaptiveFiltering: false, palette: false }).toBuffer();
+      if (stop.code) fail(stop.code);
+      if (output.length > MAX_BYTES) fail("input_too_large");
+      return Object.freeze({ mimeType: "image/png", data: strictPng(output).toString("base64"), ...(format === "gif" && animated ? { notice: GIF_NOTICE } : {}) });
+    })(), signal, stop, () => destroy());
   } catch (error) {
     if (error instanceof ImageError) throw error;
     fail("unsupported_format");

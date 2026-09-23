@@ -7,6 +7,15 @@ import { ImageError, normalizeImage } from "../src/images.ts";
 const code = (expected) => (error) => error instanceof ImageError && error.code === expected;
 const image = async (format, options = {}) => sharp({ create: { width: 2, height: 1, channels: 3, background: { r: 255, g: 0, b: 0 } } })[format](options).toBuffer();
 const input = async (mimeType, format, options) => ({ mimeType, data: (await image(format, options)).toString("base64") });
+async function asBun(run) {
+  const descriptor = Object.getOwnPropertyDescriptor(process.versions, "bun");
+  Object.defineProperty(process.versions, "bun", { value: "fixture", configurable: true });
+  try { await run(); }
+  finally {
+    if (descriptor) Object.defineProperty(process.versions, "bun", descriptor);
+    else delete process.versions.bun;
+  }
+}
 
 test("normalizes static JPEG, WebP, GIF, and metadata-bearing PNG to strict deterministic PNG", async () => {
   for (const [mimeType, format] of [["image/jpeg", "jpeg"], ["image/webp", "webp"], ["image/gif", "gif"], ["image/png", "png"]]) {
@@ -30,8 +39,10 @@ test("normalizes only the first animated GIF frame and reports the fixed notice"
   const first = await normalizeImage(source);
   const second = await normalizeImage(source);
   assert.deepEqual(second, first);
-  assert.equal(first.notice, "Animated GIF: only the first frame was inspected; motion and later frames were not analyzed.");
+  assert.equal(first.notice, "Animated GIF: only the first frame is available for inspection; motion and later frames are not included.");
   assert.doesNotThrow(() => validatePng(first.data));
+  const firstFrame = await sharp(Buffer.from(first.data, "base64")).raw().toBuffer();
+  assert.deepEqual([...firstFrame.subarray(0, 3)], [255, 0, 0]);
 });
 
 test("respects JPEG orientation before producing strict PNG", async () => {
@@ -58,4 +69,17 @@ test("rejects malformed, mismatched, animated, oversized, and too-large-pixel in
 test("rejects a cancelled normalization before decoder work", async () => {
   const controller = new AbortController(); controller.abort();
   await assert.rejects(normalizeImage(await input("image/png", "png"), controller.signal), code("cancelled"));
+});
+
+test("uses the bounded Node decoder under Bun and terminates it on cancellation", async () => {
+  const jpeg = await input("image/jpeg", "jpeg");
+  await asBun(async () => {
+    const normalized = await normalizeImage(jpeg);
+    assert.equal(normalized.mimeType, "image/png");
+    assert.doesNotThrow(() => validatePng(normalized.data));
+    const controller = new AbortController();
+    const cancelled = normalizeImage(jpeg, controller.signal);
+    queueMicrotask(() => controller.abort());
+    await assert.rejects(cancelled, code("cancelled"));
+  });
 });

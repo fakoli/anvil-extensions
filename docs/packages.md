@@ -17,7 +17,7 @@ Fourteen packages, thirteen registered extension entrypoints, one pinned unit. `
 | [pi-voice-clone](#pi-voice-clone) | original (bridge) | capabilities |
 | [pi-capability-upgrade](#pi-capability-upgrade) | original + adapted workflow ports | workflow |
 | [pi-brag](#pi-brag) | original (port) | capabilities |
-| [pi-observations](#pi-observations) | original | optional local vision mediation |
+| [pi-observations](#pi-observations) | original | optional PNG/JPEG/WebP/GIF vision mediation |
 
 ## pi-condense
 
@@ -101,11 +101,11 @@ Fourteen packages, thirteen registered extension entrypoints, one pinned unit. `
 
 ## pi-observations
 
-**What:** An optional, bounded mediator for a fresh Pi session's PNG attachments. It replaces primary-model image input with opaque retained references and bounded, text-only inspection envelopes.
+**What:** An optional, bounded mediator for a fresh Pi session's PNG, JPEG, WebP, and GIF attachments. It replaces primary-model image input with opaque retained references and bounded, text-only inspection envelopes.
 
 **Why it exists:** A primary coding model can use visible-image facts without receiving raw image data, while tool-produced images require an explicit model question instead of an inferred caption.
 
-**How it works:** The registered entrypoint is inert until `--observation` starts an empty fresh session. A trusted user-agent config chooses one exact registered image-capable provider/model; the extension validates canonical RGB/RGBA PNG input, retains no second raw-PNG store, and calls Pi's native registered client with one image and a bounded question. It admits 64 source lifetimes (including tombstones), 256 MiB active bytes, one-hour retention, 32 attempts, 120 seconds cumulative reservation, and 30 seconds per call. Exact persisted projection is required; transformed/compacted history is refused. Its `observation_inspect` tool accepts an opaque reference, a question up to 512 UTF-8 bytes, and optional `follow_up`. Compaction, fork, and tree actions are cancelled while enabled. See [the package README](../packages/pi-observations/README.md).
+**How it works:** The registered entrypoint is inert until `--observation` starts an empty fresh session. A trusted user-agent config chooses one exact registered image-capable provider/model; the extension normalizes bounded, MIME-checked images to strict PNG in memory with the existing Sharp library; animated GIF uses only its first frame with an explicit coverage notice, retains no second raw-PNG store, and calls Pi's native registered client with one image and a bounded question. It admits 64 source lifetimes (including tombstones), 256 MiB active bytes, one-hour retention, 32 attempts, 120 seconds cumulative reservation, and 30 seconds per call. Every image-bearing message must exactly match one saved source in order; text-only hook transforms are supported. Altered or missing image sources and compacted history are refused. Its `observation_inspect` tool accepts an opaque reference, a question up to 512 UTF-8 bytes, and optional `follow_up`. Compaction, fork, and tree actions are cancelled while enabled. See [the package README](../packages/pi-observations/README.md).
 
 ## pi-brag
 
