@@ -5,10 +5,10 @@
 An opinionated, battle-tested bundle of [pi coding agent](https://github.com/badlogic/pi-mono) extensions — installed as **one pinned unit**, tracked as one auditable surface.
 
 ```
-pi install git:github.com/fakoli/anvil-extensions@anvil-v0.11.1
+pi install git:github.com/fakoli/anvil-extensions@anvil-v0.12.0
 ```
 
-- **14 packages · 13 registered extension entrypoints · 1 pin · atomic updates** — every host runs the same reviewed tree; `pi-observations` remains inert until a fresh session explicitly uses `--observation`
+- **15 packages · 14 registered extension entrypoints · 1 pin · atomic updates** — every host runs the same reviewed tree; `pi-observations` and `pi-browser` remain inert until a fresh session explicitly uses their opt-in flags
 - **Content-hashed lockfile** — transitive dependencies are pinned by SHA-512 integrity
 - **Install-script allowlist** — package postinstall scripts run only when approved
 - **Tag-protected releases** — release tags are immutable via repository rulesets
@@ -19,7 +19,7 @@ Most extension ecosystems distribute one package at a time, and each one floats 
 
 That gives you:
 
-- **Reproducibility** — `anvil-v0.11.1` means the same bytes on every machine, resolved through a committed lockfile, not fresh registry lookups.
+- **Reproducibility** — `anvil-v0.12.0` means the same bytes on every machine, resolved through a committed lockfile, not fresh registry lookups.
 - **A small blast radius** — a compromise or regression rolls back by pointing the pin at the previous tag.
 - **One audit surface** — dependency changes, fork diffs, and provenance all flow through one PR history.
 
@@ -43,6 +43,7 @@ If you maintain a fleet of agent hosts, this packaging model is the point. If yo
 | [pi-capability-upgrade](packages/pi-capability-upgrade/) | Candidate-only shipping, guarded documentation, browser verification, and explicit read-only operations resources |
 | [pi-brag](packages/pi-brag/) | Turn the current project into a short shareable launch video (`/brag` command + skill + render/poster/doctor tools) |
 | [pi-observations](packages/pi-observations/) | Optional bounded PNG/JPEG/WebP/GIF observation mediation for a fresh `--observation` Pi session; registered by the bundle but inert without that flag |
+| [pi-browser](packages/pi-browser/) | Optional bounded, read-only public-page observations for a fresh `--browser` Pi session with protected configuration; registered by the bundle but inert without that flag |
 
 Full catalog — including *why* each exists and how it works — is in [docs/packages.md](docs/packages.md). Fork lineage and what we changed in vendored packages is in [docs/forks.md](docs/forks.md).
 
@@ -51,13 +52,13 @@ Full catalog — including *why* each exists and how it works — is in [docs/pa
 **Install** (pins the exact tag):
 
 ```bash
-pi install git:github.com/fakoli/anvil-extensions@anvil-v0.11.1
+pi install git:github.com/fakoli/anvil-extensions@anvil-v0.12.0
 ```
 
 **Update** (bump the pin, then reinstall):
 
 ```bash
-pi install git:github.com/fakoli/anvil-extensions@anvil-v0.11.1
+pi install git:github.com/fakoli/anvil-extensions@anvil-v0.12.0
 ```
 
 **Disable individual resources** without touching the pin — two ways:
@@ -70,7 +71,7 @@ pi install git:github.com/fakoli/anvil-extensions@anvil-v0.11.1
   "packages": [
     "pi-condense",
     {
-      "source": "git:github.com/fakoli/anvil-extensions@anvil-v0.11.1",
+      "source": "git:github.com/fakoli/anvil-extensions@anvil-v0.12.0",
       "extensions": ["./packages/pi-nano-banana/index.ts"],
       "skills": []
     }
@@ -78,7 +79,7 @@ pi install git:github.com/fakoli/anvil-extensions@anvil-v0.11.1
 }
 ```
 
-An empty `"extensions"` array loads nothing from that resource type — the package stays installed but contributes no tools or skills. `pi-observations` is already registered by this bundle, but its mediation remains inert unless a fresh session supplies `--observation`; disabling it for a marked session that still contains images removes its primary media guard, so close that session and start a new unobserved one instead. The full matrix (global vs project-local, per-resource filtering) is in pi's [settings docs](https://github.com/badlogic/pi-mono).
+An empty `"extensions"` array loads nothing from that resource type — the package stays installed but contributes no tools or skills. `pi-observations` is already registered by this bundle, but its mediation remains inert unless a fresh session supplies `--observation`; disabling it for a marked session that still contains images removes its primary media guard, so close that session and start a new unobserved one instead. `pi-browser` is likewise inert unless a fresh session supplies `--browser` and its protected `pi-browser.json` is present. The image and browser workflows are independent; enabling one does not enable the other. The full matrix (global vs project-local, per-resource filtering) is in pi's [settings docs](https://github.com/badlogic/pi-mono).
 
 ## Security posture
 

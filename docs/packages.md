@@ -1,6 +1,6 @@
 # Package catalog
 
-Fourteen packages, thirteen registered extension entrypoints, one pinned unit. `pi-observations` is registered but inert until a fresh session opts in with `--observation`. Each entry covers what it does, why it exists, and how it works. Provenance (original vs vendored vs forked) is summarized here and detailed in [forks.md](forks.md); every package ships an `UPSTREAM.md` ledger beside its code.
+Fifteen packages, fourteen registered extension entrypoints, one pinned unit. `pi-observations` and `pi-browser` are registered but inert until a fresh session opts in with `--observation` or `--browser`. Their image and browser workflows are independent. Each entry covers what it does, why it exists, and how it works. Provenance (original vs vendored vs forked) is summarized here and detailed in [forks.md](forks.md); every package ships an `UPSTREAM.md` ledger beside its code.
 
 | Package | Provenance | Category |
 |---|---|---|
@@ -18,6 +18,7 @@ Fourteen packages, thirteen registered extension entrypoints, one pinned unit. `
 | [pi-capability-upgrade](#pi-capability-upgrade) | original + adapted workflow ports | workflow |
 | [pi-brag](#pi-brag) | original (port) | capabilities |
 | [pi-observations](#pi-observations) | original | optional PNG/JPEG/WebP/GIF vision mediation |
+| [pi-browser](#pi-browser) | original | optional read-only public-page observations |
 
 ## pi-condense
 
@@ -106,6 +107,14 @@ Fourteen packages, thirteen registered extension entrypoints, one pinned unit. `
 **Why it exists:** A primary coding model can use visible-image facts without receiving raw image data, while tool-produced images require an explicit model question instead of an inferred caption.
 
 **How it works:** The registered entrypoint is inert until `--observation` starts an empty fresh session. A trusted user-agent config chooses one exact registered image-capable provider/model; the extension normalizes bounded, MIME-checked images to strict PNG in memory with the existing Sharp library; animated GIF uses only its first frame with an explicit coverage notice, retains no second raw-PNG store, and calls Pi's native registered client with one image and a bounded question. It admits 64 source lifetimes (including tombstones), 256 MiB active bytes, one-hour retention, 32 attempts, 120 seconds cumulative reservation, and 30 seconds per call. Every image-bearing message must exactly match one saved source in order; text-only hook transforms are supported. Altered or missing image sources and compacted history are refused. The primary guard permits shared tool schemas while rejecting actual cycles, media, and traversal beyond 8,192 object occurrences. Its `observation_inspect` tool accepts an opaque reference, a question up to 512 UTF-8 bytes, and optional `follow_up`. Compaction, fork, and tree actions are cancelled while enabled. See [the package README](../packages/pi-observations/README.md).
+
+## pi-browser
+
+**What:** An optional bounded, read-only mediator for one or two same-origin public HTTPS pages. It exposes four tools — capture, resolve, release, and fixed-policy Jev resolve — that exchange only opaque references and text receipts.
+
+**Why it exists:** Public-page facts can be useful in an agent session without giving the primary model browser media, arbitrary navigation, page scripting, or an action channel. This workflow is separate from image observation mediation and does not enable it.
+
+**How it works:** The registered entrypoint is inert until `--browser` starts an empty fresh session with a protected `pi-browser.json`. That configuration fixes the browser executable, one or two page IDs at one HTTPS origin, a per-worker deadline, and the optional fixed Jev policy. The package starts one session-bound client, announces only the configured page IDs in enabled-session guidance, and exposes no configured URLs or settings. Closed tool schemas limit capture intent, predicates, scope, paging, and opaque follow-up IDs. Results are bounded text only; raw media is refused before Pi or its model provider receives it. Session changes and shutdown close the client; fork and tree actions are cancelled while it is active. See [the package README](../packages/pi-browser/README.md).
 
 ## pi-brag
 

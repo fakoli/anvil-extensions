@@ -83,3 +83,39 @@ The 0.11.0 package suite passed 22 checks, including format/MIME/byte/pixel reje
 The 0.11.1 regression exercises the full registered root bundle, including shared image and supervisor tool schemas, and a plain path prompt followed by Pi's built-in JPEG read and explicit observation inspection. Earlier native bundle checks selected only plan-mode and observations, which missed the shared-schema false positive. Unit regressions distinguish shared references from cycles and preserve media and object-occurrence limits.
 
 A separately controlled live slice used explicit registered `llm.secondary` vision and `llm.primary` primary selections with one 128×64 red-left/blue-right PNG, one explicit question, and a 1,024-token vision output cap. It recorded one inspector PNG request, zero primary media, preserved originals, and correct structured facts plus primary answer. It is a bounded integration observation, not a service/model change, a general quality result, or authorization to install or activate the package on a normal Pi profile.
+
+## Optional Pi browser observations
+
+The final committed lockfile clean-room verification passed all 11 declared
+suites and its dependency audit reported zero vulnerabilities. The exact
+candidate checkout also reran the deterministic native `pi-probe.mjs` on
+installed Pi 0.85.1 with its fixture provider in both text-only and
+image-capable declaration modes. It proved the default inactive state without
+`--browser`; in a fresh browser session it proved registered tool availability,
+session-bound opaque observations, stale-handle refusal, fork cancellation,
+reload cleanup, bounded text-only receipts, configured page-ID-only guidance,
+and zero browser media sent to the fixture provider. This is a public-DOM
+boundary check, not vision or general model-quality evidence.
+
+The pre-pin source/staged `chromium-cleanup.mjs` probe used a reviewed Serving
+source override and passed four lifecycle cases. The default installed cleanup
+repeat then passed those four cases without an override, using the npm-installed
+merged Serving dependency at `4d0bbebb`. It covered normal close, cancellation,
+raw worker termination, and a stopped browser before test cleanup resumed it.
+These are synthetic-transport lifecycle checks, not public-site evidence. The
+staged-release installed repetition remains pending. Package tests also cover
+protected config validation, closed tool inputs, result/frame bounds, worker
+protocol failures, and the partial-coverage contract: a partial result is never
+evidence of an absent element. Jev was not enabled for this evidence; its fixed
+export is separately gated by protected configuration.
+
+No neutral-website or live-primary acceptance has run. `llm.primary` remains
+offline for benchmarking. Those checks remain pending and would qualify only
+the configured page-and-model path, with bounded receipts and independent
+review; they do not block publication of this inactive optional resource.
+
+The strict wire-production gate is separate and remains **OPEN**. Its quota
+needs kernel enforcement that accounts for socket and TLS extra bytes; that
+enforcement has not been proven by the native fixture or a live-site receipt.
+The image workflow remains separately verified and is neither enabled nor
+changed by `--browser`.
