@@ -69,6 +69,37 @@ Use a named candidate session, loopback target, isolated profile, mocked inputs,
 assertions, and candidate-only cleanup. Do not install its upstream skill into
 global agent settings.
 
+## Optional Pi browser observations
+
+`pi-browser` is a separate candidate resource, not the external browser CLI
+composition above. It is registered by the bundle but starts inactive. Enable
+it only with `pi --browser` for an empty, fresh Pi 0.85.1 session and a private,
+protected `pi-browser.json` in the Pi agent directory. The configuration must
+be Pi-user-owned, non-symlinked, and not group- or world-writable. It fixes an
+absolute configured Chrome/Chromium executable, one or two same-origin public
+HTTPS pages, a 1–15,000 ms worker deadline, and an optional fixed Jev policy.
+It has no credentials, provider settings, router endpoint, or arbitrary
+navigation target.
+
+On Linux with Node 24, the pinned Playwright 1.63.0 worker exposes bounded,
+read-only public-DOM observations. The enabled session names configured page
+IDs but not URLs or settings, and offers only capture, resolve, release, and
+fixed-policy Jev resolve tools. All follow-up references are opaque. Results
+are text receipts only; raw media, screenshots, page objects, page scripting,
+form submission, and arbitrary navigation are outside the interface. Treat
+partial coverage as incomplete: it cannot prove that a page element is absent.
+Jev remains disabled by default; if explicitly configured, it evaluates only
+the fixed export from an existing observation and cannot act in the browser.
+
+The browser client is bound to one Pi session. Session changes, fork/tree
+attempts, shutdown, cancellation, request deadline expiry, malformed worker
+frames, or worker loss close it. Linux cleanup signals the detached worker
+group twice with TERM before retaining a KILL fallback for stalled Chromium
+descendants. Omit `--browser` for the normal disable path. To roll back, restore
+the preceding bundle pin and start a fresh session; the package owns no browser
+state to migrate. This is independent of the existing `--observation` image
+workflow, which remains available under its own separate boundary.
+
 ## State and verification
 
 The native State integration remains the only task/claim/evidence/acceptance

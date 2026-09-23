@@ -83,3 +83,35 @@ The 0.11.0 package suite passed 22 checks, including format/MIME/byte/pixel reje
 The 0.11.1 regression exercises the full registered root bundle, including shared image and supervisor tool schemas, and a plain path prompt followed by Pi's built-in JPEG read and explicit observation inspection. Earlier native bundle checks selected only plan-mode and observations, which missed the shared-schema false positive. Unit regressions distinguish shared references from cycles and preserve media and object-occurrence limits.
 
 A separately controlled live slice used explicit registered `llm.secondary` vision and `llm.primary` primary selections with one 128×64 red-left/blue-right PNG, one explicit question, and a 1,024-token vision output cap. It recorded one inspector PNG request, zero primary media, preserved originals, and correct structured facts plus primary answer. It is a bounded integration observation, not a service/model change, a general quality result, or authorization to install or activate the package on a normal Pi profile.
+
+## Optional Pi browser observations
+
+The browser package checks ran against Linux Node 24 with the pinned
+Playwright 1.63.0 worker and installed Pi 0.85.1. The deterministic native
+`pi-probe.mjs` used a fixture provider twice, once with a text-only model
+declaration and once declaring image input. It proved the default inactive
+state without `--browser`; in a fresh browser session it proved registered
+tool availability, session-bound opaque observations, stale-handle refusal,
+fork cancellation, reload cleanup, bounded text-only receipts, configured
+page-ID-only guidance, and zero browser media sent to the fixture provider.
+This is a public-DOM boundary check, not vision or general model-quality
+evidence.
+
+`chromium-cleanup.mjs` launched the production worker and configured Chromium
+against a synthetic in-memory transport. It covered normal close, cancellation,
+raw worker termination, and a stopped browser before test cleanup resumed it.
+It exercises the Linux worker process lifecycle without an external page,
+network request, or model call. The package tests also cover protected config
+validation, closed tool inputs, result/frame bounds, worker protocol failures,
+and the partial-coverage contract: a partial result is never evidence of an
+absent element. Jev was not enabled for this evidence; its fixed export is
+separately gated by protected configuration.
+
+No website acceptance or live-model acceptance was run. `llm.primary` was
+offline for benchmarking, so this evidence does not qualify a real public page,
+a configured Chrome deployment, a model, or a production route. The strict
+wire-production gate remains **OPEN**. Before that gate can close, run the
+reviewed live acceptance against the configured public page and model, retain
+the resulting bounded receipts and lifecycle outcome as private evidence, and
+have an independent reviewer assess it. The image workflow remains separately
+verified and is neither enabled nor changed by `--browser`.
