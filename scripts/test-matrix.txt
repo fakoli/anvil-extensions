@@ -6,6 +6,7 @@
 #   pi-tool-repair                   — no test files vendored
 #   pi-plan-mode (@narumitw)         — no test script at all
 pi-brag
+pi-browser
 pi-commentary
 pi-condense
 @schovest/pi-hermes-memory

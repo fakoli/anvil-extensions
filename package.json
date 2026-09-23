@@ -21,7 +21,8 @@
       "./packages/pi-hermes-memory/src/index.ts",
       "./packages/pi-nano-banana/index.ts",
       "./packages/pi-brag/index.ts",
-      "./packages/pi-observations/index.ts"
+      "./packages/pi-observations/index.ts",
+      "./packages/pi-browser/index.ts"
     ],
     "skills": [
       "./packages/pi-subagents/skills",
