@@ -73,12 +73,17 @@ export default (pi) => {
   pi.registerCommand("fixture_expire", { description: "advance isolated fixture clock", async handler() { offset = 3_600_001; } });
   pi.registerTool({ name: "fixture_image", description: "fixture", parameters: Type.Object({}), async execute() { return { content: [{ type: "image", mimeType: "image/png", data: "${image.data}" }] }; } });
 };`; }
+function priorContextTransform() { return `export default (pi) => {
+  pi.on("context", (event) => ({ messages: event.messages.map((message) => message?.role === "user" && Array.isArray(message.content) && message.content.every((part) => part?.type === "text") ? { ...message, content: message.content.map((part) => part.text).join("\\n") } : message) }));
+};`; }
 
-async function startPi(home, provider, primaryImageCapable, enableObservation = true) {
+async function startPi(home, provider, primaryImageCapable, enableObservation = true, transformContext = false, bundle = false) {
   await mkdir(join(home, "agent"), { recursive: true, mode: 0o700 });
   await writeFile(join(home, "fixture.ts"), fixtureExtension(), { mode: 0o600 });
+  if (transformContext) await writeFile(join(home, "prior-context.ts"), priorContextTransform(), { mode: 0o600 });
   await writeFile(join(home, "agent", "pi-observations.json"), JSON.stringify({ provider: "fixture", model: "vision", profile: "fixture" }), { mode: 0o600 });
-  const args = ["--mode", "rpc", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-context-files", "--extension", join(home, "fixture.ts"), "--extension", resolve("packages/pi-observations/index.ts"), "--provider", "fixture", "--model", "primary", "--session-dir", join(home, "sessions"), ...(enableObservation ? ["--observation"] : [])];
+  if (bundle) await writeFile(join(home, "agent", "settings.json"), JSON.stringify({ packages: [{ source: resolve("."), extensions: ["packages/pi-plan-mode/src/plan-mode.ts", "packages/pi-observations/index.ts"], skills: [], prompts: [], themes: [] }] }), { mode: 0o600 });
+  const args = ["--mode", "rpc", ...(bundle ? [] : ["--no-extensions"]), "--no-skills", "--no-prompt-templates", "--no-context-files", "--extension", join(home, "fixture.ts"), ...(transformContext ? ["--extension", join(home, "prior-context.ts")] : []), ...(bundle ? [] : ["--extension", resolve("packages/pi-observations/index.ts")]), "--provider", "fixture", "--model", "primary", "--session-dir", join(home, "sessions"), ...(enableObservation ? ["--observation"] : [])];
   const child = spawn(pi, args, { cwd: process.cwd(), env: { ...process.env, HOME: home, PI_CODING_AGENT_DIR: join(home, "agent"), PI_CODING_AGENT_SESSION_DIR: join(home, "sessions"), PI_OFFLINE: "1", PI_OBSERVATION_FIXTURE_URL: provider.baseUrl, PI_OBSERVATION_PRIMARY_IMAGE: primaryImageCapable ? "1" : "0" }, stdio: ["pipe", "pipe", "pipe"] });
   const events = []; let buffer = "", stderr = "", stdoutBytes = 0, stderrBytes = 0, failure;
   const fail = (error) => { failure ??= error instanceof Error ? error : new Error(String(error)); if (child.exitCode === null) child.kill("SIGTERM"); };
@@ -178,6 +183,39 @@ async function main() {
     throw error;
   } finally { await stop(runner?.child); await provider.close(); await rm(home, { recursive: true, force: true }); }
 }
+async function transformedTextContextRegression() {
+  const home = await mkdtemp(join(tmpdir(), "pi-observations-transform-")), provider = await startProvider(); let runner;
+  try {
+    runner = await startPi(home, provider, false, true, true);
+    const before = { primary: provider.primary.length, vision: provider.vision.length };
+    await prompt(runner, { id: "path-reference", type: "prompt", message: "@Downloads/example.jpg" });
+    await waitFor(() => provider.primary.length >= before.primary + 1, "transformed text context reached primary", runner);
+    assert.equal(provider.vision.length, before.vision, "text-only path reference reached vision");
+    assert.equal(provider.primary.every((request) => !hasMedia(request)), true, "transformed text context leaked media");
+    provider.assertHealthy();
+    process.stdout.write("pi observations transformed text context: ok\n");
+  } catch (error) {
+    console.error(`pi observations transform diagnostic: ${JSON.stringify(runner?.diagnostics?.() ?? { error: String(error).slice(0, 256) })}`);
+    throw error;
+  } finally { await stop(runner?.child); await provider.close(); await rm(home, { recursive: true, force: true }); }
+}
+async function registeredBundleRegression() {
+  const home = await mkdtemp(join(tmpdir(), "pi-observations-bundle-")), provider = await startProvider(); let runner;
+  try {
+    runner = await startPi(home, provider, false, true, false, true);
+    await prompt(runner, { id: "bundle-image", type: "prompt", message: "What is in this image?", images: [{ type: "image", ...image }] });
+    await waitFor(() => provider.primary.length >= 1 && provider.vision.length === 1, "registered bundle image mediation", runner);
+    assert.equal(provider.primary.every((request) => !hasMedia(request)), true, "registered bundle primary received media");
+    const visionParts = provider.vision[0].messages.find((message) => message.role === "user").content;
+    const visionImage = visionParts.find((part) => part.type === "image_url" || part.type === "image");
+    assert.match(visionImage.image_url?.url ?? visionImage.mimeType ?? "", /^data:image\/png;base64,|^image\/png$/, "registered bundle vision image is not canonical PNG");
+    provider.assertHealthy();
+    process.stdout.write("pi observations registered bundle: ok\n");
+  } catch (error) {
+    console.error(`pi observations bundle diagnostic: ${JSON.stringify(runner?.diagnostics?.() ?? { error: String(error).slice(0, 256) })}`);
+    throw error;
+  } finally { await stop(runner?.child); await provider.close(); await rm(home, { recursive: true, force: true }); }
+}
 async function suite() {
   if (process.argv.includes("--single")) return main();
   for (const mode of ["--primary-image", "--primary-text-only"]) {
@@ -185,5 +223,7 @@ async function suite() {
     assert.equal(child.status, 0, child.stderr || child.stdout);
     process.stdout.write(child.stdout);
   }
+  await registeredBundleRegression();
+  await transformedTextContextRegression();
 }
 suite().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });

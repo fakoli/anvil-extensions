@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import { lstatSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
+import { normalizeImage, ImageError } from "./src/images.ts";
 import { Type } from "typebox";
 import { getAgentDir, sessionEntryToContextMessages, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createObservationOwner, reopenObservationOwner } from "@anvil-serving/observations/owner";
@@ -61,12 +63,22 @@ function ownerDirectory(session: string): string {
   if (!directoryMetadata.isDirectory() || directoryMetadata.isSymbolicLink() || (statSync(directory).mode & 0o077) !== 0 || (typeof process.getuid === "function" && directoryMetadata.uid !== process.getuid())) throw new Error("pi-observations:state_directory");
   return directory;
 }
-function exactProjection(ctx: ExtensionContext, messages: any[]): Array<{ entryId: string; message: any }> {
+function imageProjection(ctx: ExtensionContext, messages: any[]): Map<number, string> {
   const source = ctx.sessionManager.buildContextEntries() as any[];
   if (source.some((entry) => entry?.type === "compaction" || entry?.type === "branch_summary")) throw new Error("unsupported_history");
-  const projected = source.flatMap((entry) => sessionEntryToContextMessages(entry as any).map((message) => ({ entryId: entry.id, message })));
-  if (projected.length !== messages.length || projected.some((item, index) => JSON.stringify(item.message) !== JSON.stringify(messages[index]) || !opaque(item.entryId))) throw new Error("unsupported_history");
-  return projected;
+  const hasImage = (message: any) => Array.isArray(message?.content) && message.content.some((part: any) => part?.type === "image");
+  const projected = source.flatMap((entry) => sessionEntryToContextMessages(entry as any).map((message) => ({ entryId: entry.id, message }))).filter((item) => hasImage(item.message));
+  const matched = new Map<number, string>();
+  let previous = -1;
+  for (const [index, message] of messages.entries()) {
+    if (!hasImage(message)) continue;
+    // Text-only transforms are independent; image-bearing messages keep their exact question and provenance.
+    const candidates = projected.map((item, position) => ({ ...item, position })).filter((item) => isDeepStrictEqual(item.message, message));
+    if (candidates.length !== 1 || candidates[0].position <= previous || !opaque(candidates[0].entryId)) throw new Error("image_source_mismatch");
+    previous = candidates[0].position;
+    matched.set(index, candidates[0].entryId);
+  }
+  return matched;
 }
 
 export default function (pi: ExtensionAPI): void {
@@ -134,7 +146,8 @@ export default function (pi: ExtensionAPI): void {
     if (!state?.enabled) return;
     try {
       const current = ready(ctx);
-      const projection = exactProjection(ctx, event.messages as any[]);
+      const projection = imageProjection(ctx, event.messages as any[]);
+      const signal = AbortSignal.any([current.controller.signal, ctx.signal].filter((candidate): candidate is AbortSignal => candidate !== undefined));
       const next: any[] = [];
       for (const [index, message] of event.messages.entries()) {
         if (!Array.isArray(message.content)) { next.push(message); continue; }
@@ -143,16 +156,27 @@ export default function (pi: ExtensionAPI): void {
         const text = message.content.filter((part: any) => part?.type === "text" && typeof part.text === "string").map((part: any) => part.text).join("\n");
         for (const [partIndex, part] of message.content.entries()) {
           if (part?.type !== "image") { parts.push(part); continue; }
-          const bound = current.owner.bind({ entryId: projection[index].entryId, imagePart: partIndex, image: { mimeType: part.mimeType, data: part.data } });
+          let image;
+          try { image = await normalizeImage({ mimeType: part.mimeType, data: part.data }, signal); }
+          catch (error) {
+            if (!(error instanceof ImageError)) throw error;
+            parts.push({ type: "text", text: JSON.stringify({ schema: "observation-input-error/v1", error: error.code, message: error.message }) });
+            continue;
+          }
+          const bound = current.owner.bind({ entryId: projection.get(index), imagePart: partIndex, image });
           let envelope = bound;
-          if (message.role === "user" && images.length === 1 && text && bytes(text) <= 512 && bound.status === "question_required") envelope = await current.owner.inspect({ observationId: bound.observation_id, question: text }, { signal: AbortSignal.any([current.controller.signal, ctx.signal].filter((candidate): candidate is AbortSignal => candidate !== undefined)) });
+          if (message.role === "user" && images.length === 1 && text && bytes(text) <= 512 && bound.status === "question_required") envelope = await current.owner.inspect({ observationId: bound.observation_id, question: text }, { signal });
           parts.push({ type: "text", text: JSON.stringify(envelope) });
         }
         next.push({ ...message, content: parts });
       }
       if (!noMedia(next)) return fail(ctx, "media_guard");
       return { messages: next };
-    } catch { return fail(ctx, "context_failed"); }
+    } catch (error) {
+      if (error instanceof Error && error.message === "unsupported_history") return fail(ctx, "unsupported_history: compacted or branched image history cannot be mediated");
+      if (error instanceof Error && error.message === "image_source_mismatch") return fail(ctx, "image_source_mismatch: an image message was altered, duplicated or cannot be matched to its saved source");
+      return fail(ctx, "context_failed: image context could not be prepared safely");
+    }
   });
 
   pi.on("before_provider_request", (event, ctx) => { try { if (state?.enabled && !noMedia(event.payload)) fail(ctx, "media_guard"); } catch { fail(ctx, "media_guard"); } });
