@@ -133,3 +133,7 @@ query duration and deny dashboards, alerts, raw query escapes, and writes.
 Rollback removes the candidate package entry or resource selection only. It
 does not alter existing sessions, baseline packages, router settings, or
 services.
+
+## Optional observation mediation
+
+`pi-observations` is registered with the bundle but is not part of a default candidate composition and does not select or alter the primary model. It activates only for an empty fresh session with `--observation` and trusted user-agent policy selecting an exact registered image-capable provider/model. It mediates one validated PNG and bounded question through Pi's native registered client, then gives the primary an opaque, text-only envelope. It refuses transformed or compacted history, cancels compaction/fork/tree operations while enabled, and requires a new unobserved session to disable safely. See [its verification evidence](pi-capability-upgrade-verification.md#optional-observation-mediation).

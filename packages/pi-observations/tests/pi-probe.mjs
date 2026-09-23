@@ -1,0 +1,189 @@
+import assert from "node:assert/strict";
+import { spawn, spawnSync } from "node:child_process";
+import { once } from "node:events";
+import { createServer } from "node:http";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const pi = process.env.PI_BINARY || "pi";
+const timeout = 12_000;
+const childTimeout = 20_000;
+const maxBodyBytes = 2 * 1024 * 1024, maxRequests = 32, maxStdoutBytes = 2 * 1024 * 1024, maxStderrBytes = 64 * 1024;
+const image = { mimeType: "image/png", data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNgZGAAAAAHAALpEtlMAAAAAElFTkSuQmCC" };
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const hasMedia = (value) => Array.isArray(value) ? value.some(hasMedia) : value && typeof value === "object" ? value.type === "image" || value.type === "image_url" || value.type === "input_image" || Object.values(value).some(hasMedia) : typeof value === "string" && value.includes("data:image/");
+
+async function waitFor(predicate, label, runner) { const start = Date.now(); while (!predicate()) { if (runner?.failure()) throw runner.failure(); if (Date.now() - start > timeout) throw new Error(`${label} timed out`); await sleep(20); } }
+function event(delta, finish = null) { return `data: ${JSON.stringify({ id: "fixture", object: "chat.completion.chunk", choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`; }
+function reply(response, delta, finish = "stop") { response.writeHead(200, { "content-type": "text/event-stream" }); response.write(event(delta)); response.write(event({}, finish)); response.end("data: [DONE]\n\n"); }
+
+async function startProvider() {
+  const primary = [], vision = [];
+  let toolInspectionIssued = false, failNextVision = false, holdNextVision = false;
+  const heldResponses = new Set(); let requestCount = 0, failure;
+  const server = createServer(async (request, response) => {
+    try {
+      if (++requestCount > maxRequests) throw new Error(`fixture request count exceeds ${maxRequests}`);
+      const chunks = []; let bytes = 0;
+      for await (const part of request) { bytes += part.length; if (bytes > maxBodyBytes) throw new Error(`fixture body exceeds ${maxBodyBytes} bytes`); chunks.push(part); }
+      if (request.method !== "POST" || request.url !== "/v1/chat/completions") return response.writeHead(404).end();
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      if (body.model === "vision") {
+        vision.push(body);
+        if (failNextVision) { failNextVision = false; return response.writeHead(503, { "content-type": "application/json" }).end(JSON.stringify({ error: { message: "fixture vision failure" } })); }
+        if (holdNextVision) { holdNextVision = false; heldResponses.add(response); request.once("close", () => heldResponses.delete(response)); return; }
+        return reply(response, { role: "assistant", content: JSON.stringify({ inspection_status: "observed", facts: [{ kind: "visual_fact", text: "fixture", uncertainty: "unverified_interpretation", region_ref: null }], reason: "" }) });
+      }
+      primary.push(body);
+      const transcript = JSON.stringify(body.messages);
+      if (transcript.includes("[tool-image]") && !transcript.includes("question_required")) return reply(response, { role: "assistant", tool_calls: [{ index: 0, id: "fixture-image", type: "function", function: { name: "fixture_image", arguments: "{}" } }] }, "tool_calls");
+      const textBlocks = body.messages.flatMap((message) => Array.isArray(message.content) ? message.content.filter((part) => part?.type === "text").map((part) => part.text) : typeof message.content === "string" ? [message.content] : []);
+      const pending = [...textBlocks].reverse().map((text) => { try { return JSON.parse(text); } catch { return null; } }).find((value) => value?.schema === "observation-mediation/v1" && value.status === "question_required");
+      if (pending && !toolInspectionIssued) {
+        toolInspectionIssued = true;
+        const observation = pending.observation_id;
+        return reply(response, { role: "assistant", tool_calls: [{ index: 0, id: "inspect", type: "function", function: { name: "observation_inspect", arguments: JSON.stringify({ observation_id: observation, question: "What is in the fixture?" }) } }] }, "tool_calls");
+      }
+      return reply(response, { role: "assistant", content: "primary fixture answer" });
+    } catch (error) {
+      failure ??= error instanceof Error ? error : new Error(String(error));
+      if (!response.headersSent) response.writeHead(413, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: { message: "fixture request rejected" } }));
+    }
+  });
+  server.on("error", (error) => { failure ??= error; });
+  await new Promise((resolve, reject) => server.once("error", reject).listen(0, "127.0.0.1", resolve));
+  return {
+    baseUrl: `http://127.0.0.1:${server.address().port}/v1`, primary, vision,
+    failNextVision: () => { failNextVision = true; }, holdNextVision: () => { holdNextVision = true; },
+    assertHealthy: () => { if (failure) throw failure; },
+    close: async () => { for (const response of heldResponses) response.destroy(); server.closeAllConnections(); await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())); },
+  };
+}
+
+function fixtureExtension() { return `import { Type } from "typebox";
+let offset = 0; const realNow = Date.now; Date.now = () => realNow() + offset;
+export default (pi) => {
+  pi.registerProvider("fixture", { name: "fixture", baseUrl: process.env.PI_OBSERVATION_FIXTURE_URL, apiKey: "fixture", api: "openai-completions", models: [
+    { id: "primary", name: "primary", reasoning: false, input: process.env.PI_OBSERVATION_PRIMARY_IMAGE === "1" ? ["text", "image"] : ["text"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 32768, maxTokens: 256 },
+    { id: "vision", name: "vision", reasoning: false, input: ["text", "image"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 32768, maxTokens: 256 }
+  ] });
+  pi.registerCommand("fixture_expire", { description: "advance isolated fixture clock", async handler() { offset = 3_600_001; } });
+  pi.registerTool({ name: "fixture_image", description: "fixture", parameters: Type.Object({}), async execute() { return { content: [{ type: "image", mimeType: "image/png", data: "${image.data}" }] }; } });
+};`; }
+
+async function startPi(home, provider, primaryImageCapable, enableObservation = true) {
+  await mkdir(join(home, "agent"), { recursive: true, mode: 0o700 });
+  await writeFile(join(home, "fixture.ts"), fixtureExtension(), { mode: 0o600 });
+  await writeFile(join(home, "agent", "pi-observations.json"), JSON.stringify({ provider: "fixture", model: "vision", profile: "fixture" }), { mode: 0o600 });
+  const args = ["--mode", "rpc", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-context-files", "--extension", join(home, "fixture.ts"), "--extension", resolve("packages/pi-observations/index.ts"), "--provider", "fixture", "--model", "primary", "--session-dir", join(home, "sessions"), ...(enableObservation ? ["--observation"] : [])];
+  const child = spawn(pi, args, { cwd: process.cwd(), env: { ...process.env, HOME: home, PI_CODING_AGENT_DIR: join(home, "agent"), PI_CODING_AGENT_SESSION_DIR: join(home, "sessions"), PI_OFFLINE: "1", PI_OBSERVATION_FIXTURE_URL: provider.baseUrl, PI_OBSERVATION_PRIMARY_IMAGE: primaryImageCapable ? "1" : "0" }, stdio: ["pipe", "pipe", "pipe"] });
+  const events = []; let buffer = "", stderr = "", stdoutBytes = 0, stderrBytes = 0, failure;
+  const fail = (error) => { failure ??= error instanceof Error ? error : new Error(String(error)); if (child.exitCode === null) child.kill("SIGTERM"); };
+  const killTimer = setTimeout(() => { fail(new Error(`Pi child exceeded ${childTimeout}ms`)); setTimeout(() => { if (child.exitCode === null) child.kill("SIGKILL"); }, 1_000).unref(); }, childTimeout);
+  child.once("close", () => clearTimeout(killTimer)); child.once("error", fail);
+  child.stdout.setEncoding("utf8"); child.stdout.on("data", (data) => {
+    stdoutBytes += Buffer.byteLength(data); if (stdoutBytes > maxStdoutBytes) return fail(new Error(`Pi stdout exceeds ${maxStdoutBytes} bytes`));
+    buffer += data; const lines = buffer.split("\n"); buffer = lines.pop();
+    try { for (const line of lines) if (line) events.push(JSON.parse(line)); } catch (error) { fail(error); }
+  });
+  child.stderr.setEncoding("utf8"); child.stderr.on("data", (data) => { stderrBytes += Buffer.byteLength(data); if (stderrBytes > maxStderrBytes) return fail(new Error(`Pi stderr exceeds ${maxStderrBytes} bytes`)); stderr += data; });
+  const diagnostics = () => {
+    const counts = {}, errors = [];
+    for (const item of events) {
+      counts[item.type] = (counts[item.type] ?? 0) + 1;
+      if (item.type === "response" && item.success === false) errors.push({ id: item.id, error: String(item.error ?? "response_failed").slice(0, 256) });
+      if (item.type === "error") errors.push({ error: String(item.error ?? "event_error").slice(0, 256) });
+    }
+    return { counts, errors: errors.slice(-8), stderr: stderr.slice(-1024) };
+  };
+  await once(child, "spawn"); return { child, events, stderr: () => stderr, failure: () => failure, diagnostics };
+}
+async function rpc(runner, command) { if (runner.failure()) throw runner.failure(); runner.child.stdin.write(`${JSON.stringify(command)}\n`); await waitFor(() => runner.events.some((item) => item.id === command.id && item.type === "response"), command.type, runner); const response = runner.events.find((item) => item.id === command.id && item.type === "response"); assert.equal(response.success, true, JSON.stringify(response)); return response.data; }
+async function prompt(runner, command) { const completed = runner.events.filter((item) => item.type === "agent_end").length; await rpc(runner, command); await waitFor(() => runner.events.filter((item) => item.type === "agent_end").length > completed, `${command.id} agent_end`, runner); }
+async function stop(child) { if (!child || child.exitCode !== null || child.signalCode !== null) return; const done = once(child, "close"); child.kill("SIGTERM"); await Promise.race([done, sleep(2_000).then(() => { child.kill("SIGKILL"); return done; })]); }
+
+async function main() {
+  const version = spawnSync(pi, ["--version"], { encoding: "utf8", timeout }); assert.equal(version.status, 0, "Pi 0.85.1 executable is required"); assert.equal(version.stdout.trim(), "0.85.1", "installed Pi version changed");
+  const home = await mkdtemp(join(tmpdir(), "pi-observations-probe-")), provider = await startProvider(); let runner;
+  try {
+    runner = await startPi(home, provider, process.argv.includes("--primary-image"));
+    await prompt(runner, { id: "automatic", type: "prompt", message: "What is in this image?", images: [{ type: "image", ...image }] });
+    await waitFor(() => provider.primary.length >= 1 && provider.vision.length === 1, "automatic mediation", runner);
+    assert.equal(hasMedia(provider.primary[0]), false, "primary received original media");
+    const visionParts = provider.vision[0].messages.find((message) => message.role === "user").content;
+    assert.equal(visionParts.filter((part) => part.type === "image_url" || part.type === "image").length, 1, "vision request image count");
+    assert.equal(visionParts.find((part) => part.type === "text").text, "What is in this image?", "vision question changed");
+    const state = await rpc(runner, { id: "state", type: "get_state" });
+    const entries = await rpc(runner, { id: "entries", type: "get_entries" }); assert.equal(JSON.stringify(entries.entries).includes(image.data), true, "saved PNG changed");
+    await stop(runner.child); runner = await startPi(home, provider, process.argv.includes("--primary-image"), false);
+    await rpc(runner, { id: "resume", type: "switch_session", sessionPath: state.sessionFile });
+    const beforeResume = provider.vision.length;
+    await prompt(runner, { id: "cached", type: "prompt", message: "Use the retained image." });
+    await waitFor(() => provider.primary.length >= 2, "cached resume", runner);
+    assert.equal(provider.vision.length, beforeResume, "clean resume reinspected cached image");
+    await prompt(runner, { id: "tool", type: "prompt", message: "[tool-image]" });
+    await waitFor(() => provider.vision.length === 2 && provider.primary.length >= 3, "tool mediation", runner);
+    assert.equal(provider.primary.every((request) => !hasMedia(request)), true, "primary payload contains media");
+    const malformedBefore = { primary: provider.primary.length, vision: provider.vision.length };
+    await prompt(runner, { id: "malformed", type: "prompt", message: "refuse malformed", images: [{ type: "image", mimeType: "image/png", data: "not-base64" }] });
+    await waitFor(() => provider.primary.length >= malformedBefore.primary + 1, "malformed refusal primary response", runner);
+    assert.equal(provider.vision.length, malformedBefore.vision, "malformed PNG reached vision");
+    assert.equal(hasMedia(provider.primary.at(-1)), false, "malformed PNG leaked to primary");
+    const failedBefore = { primary: provider.primary.length, vision: provider.vision.length };
+    provider.failNextVision();
+    await prompt(runner, { id: "failed-vision", type: "prompt", message: "continue without media", images: [{ type: "image", ...image }] });
+    await waitFor(() => provider.primary.length >= failedBefore.primary + 1 && provider.vision.length >= failedBefore.vision + 1, "failed vision text-only continuation", runner);
+    assert.equal(hasMedia(provider.primary.at(-1)), false, "failed vision leaked raw media to primary");
+    const heldBefore = { primary: provider.primary.length, vision: provider.vision.length };
+    provider.holdNextVision();
+    await rpc(runner, { id: "held-vision", type: "prompt", message: "cancel held inspection", images: [{ type: "image", ...image }] });
+    await waitFor(() => provider.vision.length >= heldBefore.vision + 1, "held vision request", runner);
+    await sleep(100);
+    assert.equal(provider.primary.length, heldBefore.primary, "primary dispatched while vision was held");
+    await stop(runner.child); runner = undefined;
+    assert.equal(provider.primary.length, heldBefore.primary, "cancelling held vision dispatched primary");
+    runner = await startPi(home, provider, process.argv.includes("--primary-image"), false);
+    await rpc(runner, { id: "resume-after-cancel", type: "switch_session", sessionPath: state.sessionFile });
+    for (const id of ["budget-first", "budget-second"]) {
+      const beforeAttempt = { primary: provider.primary.length, vision: provider.vision.length };
+      provider.failNextVision();
+      await prompt(runner, { id, type: "prompt", message: id, images: [{ type: "image", ...image }] });
+      await waitFor(() => provider.primary.length >= beforeAttempt.primary + 1 && provider.vision.length >= beforeAttempt.vision + 1, `${id} reserved attempt`, runner);
+      assert.equal(hasMedia(provider.primary.at(-1)), false, `${id} leaked raw media to primary`);
+    }
+    const budgetBefore = { primary: provider.primary.length, vision: provider.vision.length };
+    await prompt(runner, { id: "budget-exhausted", type: "prompt", message: "budget exhausted", images: [{ type: "image", ...image }] });
+    await waitFor(() => provider.primary.length >= budgetBefore.primary + 1, "budget exhaustion continuation", runner);
+    assert.equal(provider.vision.length, budgetBefore.vision, "budget exhausted request reached vision");
+    assert.equal(hasMedia(provider.primary.at(-1)), false, "budget exhaustion leaked raw media to primary");
+    assert.equal(JSON.stringify(provider.primary.at(-1).messages).includes("budget_exhausted"), true, "budget exhaustion envelope missing");
+    await rpc(runner, { id: "expire-clock", type: "prompt", message: "/fixture_expire" });
+    const expiryBefore = { primary: provider.primary.length, vision: provider.vision.length };
+    await prompt(runner, { id: "expired-observation", type: "prompt", message: "use the retained observation" });
+    await waitFor(() => provider.primary.length >= expiryBefore.primary + 1, "expired observation continuation", runner);
+    assert.equal(provider.vision.length, expiryBefore.vision, "expired observation reached vision");
+    assert.equal(hasMedia(provider.primary.at(-1)), false, "expired observation leaked raw media to primary");
+    assert.equal(JSON.stringify(provider.primary.at(-1).messages).includes("expired_observation"), true, "expired observation envelope missing");
+    await sleep(200);
+    const before = { primary: provider.primary.length, vision: provider.vision.length };
+    runner.child.stdin.write('{"id":"compact","type":"compact"}\n'); await waitFor(() => runner.events.some((item) => item.id === "compact" && item.type === "response"), "compaction", runner);
+    assert.equal(runner.events.find((item) => item.id === "compact" && item.type === "response").success, false, "enabled compaction was allowed"); assert.deepEqual({ primary: provider.primary.length, vision: provider.vision.length }, before, "compaction made a provider request");
+    provider.assertHealthy();
+    process.stdout.write(`pi observations probe: ok (${version.stdout.trim()}; primary=${provider.primary.length}; vision=${provider.vision.length})\n`);
+  } catch (error) {
+    console.error(`pi observations diagnostic: ${JSON.stringify(runner?.diagnostics?.() ?? { error: String(error).slice(0, 256) })}`);
+    throw error;
+  } finally { await stop(runner?.child); await provider.close(); await rm(home, { recursive: true, force: true }); }
+}
+async function suite() {
+  if (process.argv.includes("--single")) return main();
+  for (const mode of ["--primary-image", "--primary-text-only"]) {
+    const child = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--single", mode], { cwd: process.cwd(), encoding: "utf8", timeout: 30_000 });
+    assert.equal(child.status, 0, child.stderr || child.stdout);
+    process.stdout.write(child.stdout);
+  }
+}
+suite().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });
