@@ -29,12 +29,17 @@ async function proc(pid) {
     return { pid, state: fields[0], ppid: Number(fields[1]), start: fields[19], cmd: cmdline.toString("utf8").replaceAll("\0", " ").trim() };
   } catch { return undefined; }
 }
-async function table() { return (await Promise.all((await readdir("/proc")).filter((name) => /^\d+$/.test(name)).map((name) => proc(Number(name))))).filter(Boolean); }
-function descendants(rows, parent) {
-  const children = new Map(), found = new Map();
-  for (const row of rows) { const list = children.get(row.ppid) ?? []; list.push(row); children.set(row.ppid, list); }
-  const visit = (pid) => { for (const row of children.get(pid) ?? []) if (!found.has(row.pid)) { found.set(row.pid, row); visit(row.pid); } };
-  visit(parent); return [...found.values()];
+async function children(pid) {
+  try {
+    const tasks = await readdir(`/proc/${pid}/task`);
+    return [...new Set((await Promise.all(tasks.map(async (task) => (await readFile(`/proc/${pid}/task/${task}/children`, "utf8").catch(() => "")).trim().split(/\s+/)))).flat().filter(Boolean).map(Number))];
+  } catch { return []; }
+}
+async function descendants(parent) {
+  const found = [], seen = new Set([parent.pid]);
+  const visit = async (identity) => { if (!await alive(identity)) return; const childPids = await children(identity.pid); if (!await alive(identity)) return; for (const child of childPids) if (!seen.has(child)) { seen.add(child); const next = await proc(child); if (next?.ppid === identity.pid) { found.push(next); await visit(next); } } };
+  await visit(parent);
+  return found;
 }
 async function alive(identity) { const current = await proc(identity.pid); return Boolean(current && current.start === identity.start); }
 async function survivors(identities) { const result = []; for (const identity of identities) if (await alive(identity)) result.push(identity); return result; }
@@ -132,7 +137,7 @@ try {
   function assertWarm(result) { assert.equal(result.status, "ok"); assert.equal(result.operation, "capture"); assert.equal(result.result.entities[0]?.text, "Fixture control"); }
   async function snapshot(worker) {
     assert.equal(await alive(worker), true, "test worker identity changed before descendant traversal");
-    const rows = await table(), owned = [worker, ...descendants(rows, worker.pid)];
+    const owned = [worker, ...await descendants(worker)];
     const browser = owned.find((entry) => entry.cmd.includes("--remote-debugging-pipe") && !entry.cmd.includes("--type="));
     assert.ok(browser, "the captured worker did not launch Chromium");
     remember(owned);
