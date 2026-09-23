@@ -62,6 +62,28 @@ test("primary media is rejected after mediation and disabled sessions remain ine
   assert.doesNotThrow(() => inert.handlers.get("before_provider_request")({ payload: { type: "image", data: "x" } }, inert.context));
 });
 
+test("provider media guard permits shared nonmedia but rejects media, cycles, and excess occurrences", async () => {
+  const active = harness();
+  await active.handlers.get("session_start")({ reason: "new" }, active.context);
+  const guard = active.handlers.get("before_provider_request");
+  const schema = { type: "object", properties: { prompt: { type: "string" } } };
+  assert.doesNotThrow(() => guard({ payload: { image_edit: schema, image_remix: schema, supervisor: schema, intercom: schema } }, active.context));
+  const media = { type: "image", data: "forbidden" };
+  assert.throws(() => guard({ payload: { image_edit: media, image_remix: media } }, active.context), /media_guard/);
+  for (const nested of [
+    { type: "image_url" }, { type: "input_image" }, { type: "media" }, { mimeType: "image/png" }, { mime_type: "image/png" },
+    { image_url: {} }, { inlineData: {} }, { inline_data: {} }, "metadata data:image/png;base64,forbidden",
+  ]) assert.throws(() => guard({ payload: { nested } }, active.context), /media_guard/);
+  const direct = {}; direct.self = direct;
+  assert.throws(() => guard({ payload: direct }, active.context), /media_guard/);
+  const first = {}, second = {}; first.next = second; second.next = first;
+  assert.throws(() => guard({ payload: first }, active.context), /media_guard/);
+  const repeated = { type: "object" };
+  assert.doesNotThrow(() => guard({ payload: { values: Array(8190).fill(repeated) } }, active.context));
+  assert.throws(() => guard({ payload: { values: Array(8191).fill(repeated) } }, active.context), /media_guard/);
+  await active.handlers.get("session_shutdown")({}, active.context);
+});
+
 test("corrupt sticky state fails closed and refuses guarded lifecycle operations", async () => {
   const corrupt = harness(true, [{ id: "bad", type: "custom", customType: "pi-observations-marker/v1", data: {} }]);
   await assert.rejects(corrupt.handlers.get("session_start")({ reason: "resume" }, corrupt.context), /startup_failed/);

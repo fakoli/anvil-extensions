@@ -37,17 +37,19 @@ function marker(entry: any): Marker | null {
   return value && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype && Object.keys(value).length === 5 && ["schema", "session", "authority", "model", "profile"].every((key) => key in value) && (value as Marker).schema === MARKER && opaque((value as Marker).session) && opaque((value as Marker).authority) && opaque((value as Marker).model) && opaque((value as Marker).profile) ? value as Marker : null;
 }
 function noMedia(value: unknown): boolean {
-  const pending: unknown[] = [value], seen = new WeakSet<object>();
+  const pending: Array<{ value: unknown; exit?: true }> = [{ value }], active = new WeakSet<object>();
   let inspected = 0;
   while (pending.length > 0) {
-    const current = pending.pop();
+    const frame = pending.pop()!;
+    const current = frame.value;
+    if (frame.exit) { active.delete(current as object); continue; }
     if (typeof current === "string") { if (/data:image\//i.test(current)) return false; continue; }
     if (!current || typeof current !== "object") continue;
-    if (++inspected > 8192 || seen.has(current)) return false;
-    seen.add(current);
+    if (++inspected > 8192 || active.has(current)) return false;
+    active.add(current);
     const record = current as Record<string, unknown>;
     if (record.type === "image" || record.type === "image_url" || record.type === "input_image" || record.type === "media" || (typeof record.mimeType === "string" && record.mimeType.toLowerCase().startsWith("image/")) || (typeof record.mime_type === "string" && record.mime_type.toLowerCase().startsWith("image/")) || "image_url" in record || "inlineData" in record || "inline_data" in record) return false;
-    pending.push(...Object.values(record));
+    pending.push({ value: current, exit: true }, ...Object.values(record).map((child) => ({ value: child })));
   }
   return true;
 }

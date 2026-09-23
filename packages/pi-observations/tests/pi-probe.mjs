@@ -17,13 +17,21 @@ const image = { mimeType: "image/png", data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCA
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const hasMedia = (value) => Array.isArray(value) ? value.some(hasMedia) : value && typeof value === "object" ? value.type === "image" || value.type === "image_url" || value.type === "input_image" || Object.values(value).some(hasMedia) : typeof value === "string" && value.includes("data:image/");
 
-async function waitFor(predicate, label, runner) { const start = Date.now(); while (!predicate()) { if (runner?.failure()) throw runner.failure(); if (Date.now() - start > timeout) throw new Error(`${label} timed out`); await sleep(20); } }
+function settleExtensionUi(runner) {
+  runner.respondedUi ??= new Set();
+  for (const event of runner.events.filter((event) => event.type === "extension_ui_request" && !runner.respondedUi.has(event.id))) {
+    if (!event.id || event.method !== "select" || !Array.isArray(event.options) || !event.options.includes("Yes")) continue;
+    runner.respondedUi.add(event.id);
+    runner.child.stdin.write(`${JSON.stringify({ type: "extension_ui_response", id: event.id, value: "Yes" })}\n`);
+  }
+}
+async function waitFor(predicate, label, runner) { const start = Date.now(); while (!predicate()) { runner?.settleUi?.(); if (runner?.failure()) throw runner.failure(); if (Date.now() - start > timeout) throw new Error(`${label} timed out`); await sleep(20); } }
 function event(delta, finish = null) { return `data: ${JSON.stringify({ id: "fixture", object: "chat.completion.chunk", choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`; }
 function reply(response, delta, finish = "stop") { response.writeHead(200, { "content-type": "text/event-stream" }); response.write(event(delta)); response.write(event({}, finish)); response.end("data: [DONE]\n\n"); }
 
 async function startProvider() {
   const primary = [], vision = [];
-  let toolInspectionIssued = false, failNextVision = false, holdNextVision = false;
+  let toolInspectionIssued = false, builtInReadIssued = false, builtInReadTarget = null, failNextVision = false, holdNextVision = false;
   const heldResponses = new Set(); let requestCount = 0, failure;
   const server = createServer(async (request, response) => {
     try {
@@ -41,8 +49,9 @@ async function startProvider() {
       primary.push(body);
       const transcript = JSON.stringify(body.messages);
       if (transcript.includes("[tool-image]") && !transcript.includes("question_required")) return reply(response, { role: "assistant", tool_calls: [{ index: 0, id: "fixture-image", type: "function", function: { name: "fixture_image", arguments: "{}" } }] }, "tool_calls");
+      if (builtInReadTarget && transcript.includes("[builtin-read]") && !builtInReadIssued) { builtInReadIssued = true; return reply(response, { role: "assistant", tool_calls: [{ index: 0, id: "builtin-read", type: "function", function: { name: "read", arguments: JSON.stringify({ path: builtInReadTarget }) } }] }, "tool_calls"); }
       const textBlocks = body.messages.flatMap((message) => Array.isArray(message.content) ? message.content.filter((part) => part?.type === "text").map((part) => part.text) : typeof message.content === "string" ? [message.content] : []);
-      const pending = [...textBlocks].reverse().map((text) => { try { return JSON.parse(text); } catch { return null; } }).find((value) => value?.schema === "observation-mediation/v1" && value.status === "question_required");
+      const pending = [...textBlocks].reverse().flatMap((text) => String(text).split(/\r?\n/)).map((text) => { try { return JSON.parse(text); } catch { return null; } }).find((value) => value?.schema === "observation-mediation/v1" && value.status === "question_required");
       if (pending && !toolInspectionIssued) {
         toolInspectionIssued = true;
         const observation = pending.observation_id;
@@ -59,7 +68,7 @@ async function startProvider() {
   await new Promise((resolve, reject) => server.once("error", reject).listen(0, "127.0.0.1", resolve));
   return {
     baseUrl: `http://127.0.0.1:${server.address().port}/v1`, primary, vision,
-    failNextVision: () => { failNextVision = true; }, holdNextVision: () => { holdNextVision = true; },
+    failNextVision: () => { failNextVision = true; }, holdNextVision: () => { holdNextVision = true; }, queueBuiltinRead: (path) => { assert.equal(typeof path, "string"); builtInReadTarget = path; },
     assertHealthy: () => { if (failure) throw failure; },
     close: async () => { for (const response of heldResponses) response.destroy(); server.closeAllConnections(); await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())); },
   };
@@ -86,8 +95,8 @@ async function startPi(home, provider, primaryImageCapable, enableObservation = 
   await writeFile(join(home, "agent", "pi-observations.json"), JSON.stringify({ provider: "fixture", model: "vision", profile: "fixture" }), { mode: 0o600 });
   if (bundle) {
     const root = JSON.parse(await readFile(resolve("package.json"), "utf8"));
-    const extensions = ["packages/pi-plan-mode/src/index.ts", "packages/pi-observations/index.ts"];
-    assert.deepEqual(root.pi?.extensions?.filter((entry) => extensions.includes(entry.replace(/^\.\//, ""))), extensions.map((entry) => `./${entry}`), "filtered bundle must select registered root-manifest entries");
+    const extensions = root.pi?.extensions?.map((entry) => entry.replace(/^\.\//, ""));
+    assert.ok(Array.isArray(extensions) && extensions.includes("packages/pi-observations/index.ts"), "full bundle must select the registered observations extension");
     await writeFile(join(home, "agent", "settings.json"), JSON.stringify({ packages: [{ source: resolve("."), extensions, skills: [], prompts: [], themes: [] }] }), { mode: 0o600 });
   }
   const args = ["--mode", "rpc", ...(bundle ? [] : ["--no-extensions"]), "--no-skills", "--no-prompt-templates", "--no-context-files", "--extension", join(home, "fixture.ts"), ...(transformContext ? ["--extension", join(home, "prior-context.ts")] : []), ...(bundle ? [] : ["--extension", resolve("packages/pi-observations/index.ts")]), "--provider", "fixture", "--model", "primary", "--session-dir", join(home, "sessions"), ...(enableObservation ? ["--observation"] : [])];
@@ -243,6 +252,40 @@ async function registeredBundleRegression() {
     throw error;
   } finally { await stop(runner?.child); await provider.close(); await rm(home, { recursive: true, force: true }); }
 }
+
+async function fullBundleBuiltinReadRegression() {
+  const home = await mkdtemp(join(tmpdir(), "pi-observations-builtin-read-")), provider = await startProvider(); let runner;
+  try {
+    const source = await generatedImage("image/jpeg"), sourcePath = join(home, "fixture-read.jpeg");
+    await writeFile(sourcePath, Buffer.from(source.data, "base64"), { mode: 0o600 });
+    runner = await startPi(home, provider, false, true, false, true);
+    runner.settleUi = () => settleExtensionUi(runner);
+    await prompt(runner, { id: "bundle-plain-path", type: "prompt", message: "/synthetic/plain-path.jpeg" });
+    await waitFor(() => provider.primary.length === 1, "full bundle plain path primary dispatch", runner);
+    const catalog = new Set(provider.primary[0].tools?.map((tool) => tool.function?.name ?? tool.name));
+    for (const name of ["read", "image_edit", "image_remix", "subagent_supervisor", "intercom", "observation_inspect"]) assert.equal(catalog.has(name), true, `full bundle omitted ${name}`);
+    assert.equal(provider.vision.length, 0, "plain path reached vision");
+    assert.equal(hasMedia(provider.primary[0]), false, "plain path primary payload contains media");
+    assert.equal(JSON.stringify(provider.primary[0].messages).includes("/synthetic/plain-path.jpeg"), true, "plain path did not reach primary");
+    provider.queueBuiltinRead(sourcePath);
+    await prompt(runner, { id: "bundle-builtin-read", type: "prompt", message: "[builtin-read]" });
+    await waitFor(() => runner.events.some((event) => event.type === "tool_execution_end" && event.toolName === "read"), "built-in read completion", runner);
+    const read = runner.events.find((event) => event.type === "tool_execution_end" && event.toolName === "read");
+    assert.equal(read.isError, false, "built-in read rejected the synthetic JPEG");
+    await waitFor(() => provider.vision.length === 1 && provider.primary.length >= 3, "built-in JPEG mediation", runner);
+    assertedVisionPng(provider.vision[0]);
+    assert.deepEqual([...new Set(runner.events.filter((event) => event.type === "tool_execution_end").map((event) => event.toolName))].sort(), ["observation_inspect", "read"], "full bundle executed an unexpected tool");
+    assert.equal(provider.primary.every((request) => !hasMedia(request)), true, "built-in read leaked media to primary");
+    const entries = await rpc(runner, { id: "entries-builtin-read", type: "get_entries" });
+    assert.equal(JSON.stringify(entries.entries).includes(source.data), true, "built-in read source bytes were not retained");
+    provider.assertHealthy();
+    process.stdout.write("pi observations full bundle built-in read: ok\n");
+  } catch (error) {
+    console.error(`pi observations built-in read diagnostic: ${JSON.stringify(runner?.diagnostics?.() ?? { error: String(error).slice(0, 256) })}`);
+    throw error;
+  } finally { await stop(runner?.child); await provider.close(); await rm(home, { recursive: true, force: true }); }
+}
+
 async function nativeFormatRegression() {
   const formats = [await generatedImage("image/jpeg"), await generatedImage("image/webp"), await generatedImage("image/gif"), await generatedImage("image/gif", true)];
   for (const source of formats) {
@@ -285,6 +328,7 @@ async function suite() {
     process.stdout.write(child.stdout);
   }
   await registeredBundleRegression();
+  await fullBundleBuiltinReadRegression();
   await transformedTextContextRegression();
   await nativeFormatRegression();
 }

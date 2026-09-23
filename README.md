@@ -5,7 +5,7 @@
 An opinionated, battle-tested bundle of [pi coding agent](https://github.com/badlogic/pi-mono) extensions — installed as **one pinned unit**, tracked as one auditable surface.
 
 ```
-pi install git:github.com/fakoli/anvil-extensions@anvil-v0.11.0
+pi install git:github.com/fakoli/anvil-extensions@anvil-v0.11.1
 ```
 
 - **14 packages · 13 registered extension entrypoints · 1 pin · atomic updates** — every host runs the same reviewed tree; `pi-observations` remains inert until a fresh session explicitly uses `--observation`
@@ -19,7 +19,7 @@ Most extension ecosystems distribute one package at a time, and each one floats 
 
 That gives you:
 
-- **Reproducibility** — `anvil-v0.11.0` means the same bytes on every machine, resolved through a committed lockfile, not fresh registry lookups.
+- **Reproducibility** — `anvil-v0.11.1` means the same bytes on every machine, resolved through a committed lockfile, not fresh registry lookups.
 - **A small blast radius** — a compromise or regression rolls back by pointing the pin at the previous tag.
 - **One audit surface** — dependency changes, fork diffs, and provenance all flow through one PR history.
 
@@ -51,13 +51,13 @@ Full catalog — including *why* each exists and how it works — is in [docs/pa
 **Install** (pins the exact tag):
 
 ```bash
-pi install git:github.com/fakoli/anvil-extensions@anvil-v0.11.0
+pi install git:github.com/fakoli/anvil-extensions@anvil-v0.11.1
 ```
 
 **Update** (bump the pin, then reinstall):
 
 ```bash
-pi install git:github.com/fakoli/anvil-extensions@anvil-v0.11.0
+pi install git:github.com/fakoli/anvil-extensions@anvil-v0.11.1
 ```
 
 **Disable individual resources** without touching the pin — two ways:
@@ -70,7 +70,7 @@ pi install git:github.com/fakoli/anvil-extensions@anvil-v0.11.0
   "packages": [
     "pi-condense",
     {
-      "source": "git:github.com/fakoli/anvil-extensions@anvil-v0.11.0",
+      "source": "git:github.com/fakoli/anvil-extensions@anvil-v0.11.1",
       "extensions": ["./packages/pi-nano-banana/index.ts"],
       "skills": []
     }

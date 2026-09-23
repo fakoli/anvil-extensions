@@ -37,7 +37,7 @@ Verbatim vendoring is deliberate: updates to these packages are explicit diffs w
 - **pi-sandbox-config** — original; fail-closed run-config editing cross-checked against the platform validator.
 - **pi-voice-clone** — original bridge to a privately-owned style plugin; the repo ships the bridge, not the private corpus.
 - **pi-capability-upgrade** — original receipt, documentation guard, and MCP-policy code, plus concise adapted workflow material from the public Fakoli plugin repository. Its `UPSTREAM.md` records the exact source revision and external package integrities.
-- **pi-observations** — original Pi extension and package documentation. It imports the neutral `@anvil-serving/observations` owner only through its public owner/PNG exports; its `UPSTREAM.md` and the root lock record the exact merged Serving commit and dependency integrity. Image normalization reuses unmodified `sharp@0.35.4`, already present in the bundle, through dynamic import under Node (a bounded decoder child for embedded Pi); GIF coverage is explicitly first-frame only.
+- **pi-observations** — original Pi extension and package documentation. It imports the neutral `@anvil-serving/observations` owner only through its public owner/PNG exports; its `UPSTREAM.md` and the root lock record the exact merged Serving commit and dependency integrity. Image normalization reuses unmodified `sharp@0.35.4`, already present in the bundle, through dynamic import under Node (a bounded decoder child for embedded Pi); GIF coverage is explicitly first-frame only. Its original media guard accepts shared non-cyclic Pi tool schemas without modifying upstream tools; media, cycles, and traversal limits remain enforced.
 
 ## Adapted port: pi-nano-banana
 
