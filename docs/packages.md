@@ -19,6 +19,7 @@ Fifteen packages, fourteen registered extension entrypoints, one pinned unit. `p
 | [pi-brag](#pi-brag) | original (port) | capabilities |
 | [pi-observations](#pi-observations) | original | optional PNG/JPEG/WebP/GIF vision mediation |
 | [pi-browser](#pi-browser) | original | optional read-only public-page observations |
+| [pi-stratus](#pi-stratus) | original | cloud/network diagram engine |
 
 ## pi-condense
 
@@ -141,3 +142,11 @@ Fifteen packages, fourteen registered extension entrypoints, one pinned unit. `p
 ## How the bundle loads
 
 The root `package.json` declares `pi.extensions`, `pi.skills`, and `pi.prompts` entries; pi loads each entry file through a TypeScript runtime at session start. Runtime modules (`typebox`, the agent core) resolve against pi's own bundled copies, so extensions share the host's versions rather than vendoring their own. Package dependencies install once into the monorepo's node_modules under the committed lockfile.
+
+## pi-stratus
+
+**What:** A cloud/network diagram engine as native, LLM-callable tools: `stratus_render`, `stratus_validate`, `stratus_presets`, `stratus_export`, `stratus_evaluate`, `stratus_jev_status`, `stratus_jev_assess`, and `stratus_cli`, plus `/stratus` and `/stratus-doctor` commands and the `/stratus-evaluate` skill.
+
+**Why it exists:** Agent-created cloud diagrams are usually eyeballed. Stratus makes them deterministic artifacts: a typed JSON spec validates against schema/containment/placement/routing/CIDR/edge-separation gates with supported fixes, then renders reference-grade standalone HTML/SVG for AWS/GCP/Azure — with an evaluation skill that judges agent-created diagrams against gold-standard dimensions instead of impressions.
+
+**How it works:** A typed spec compiles through a deterministic pipeline (normalize → layout → validate → render) with role-aware font floors, measured label masks, and a collision repair that guarantees zero intersecting label pairs; exports cover svg, html, pdf, png, jpeg, and pptx; the JEV bridge is strictly advisory-only (never a gate). See [the package README](../packages/pi-stratus/README.md).

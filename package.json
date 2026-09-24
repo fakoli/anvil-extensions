@@ -22,12 +22,14 @@
       "./packages/pi-nano-banana/index.ts",
       "./packages/pi-brag/index.ts",
       "./packages/pi-observations/index.ts",
-      "./packages/pi-browser/index.ts"
+      "./packages/pi-browser/index.ts",
+      "./packages/pi-stratus/index.ts"
     ],
     "skills": [
       "./packages/pi-subagents/skills",
       "./packages/pi-nano-banana/skills",
-      "./packages/pi-brag/skills"
+      "./packages/pi-brag/skills",
+      "./packages/pi-stratus/skills"
     ],
     "prompts": [
       "./packages/pi-subagents/prompts"

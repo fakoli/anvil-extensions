@@ -12,7 +12,7 @@ Nothing moves unless a maintainer moves it:
 
 ## Dependency integrity
 
-- `package-lock.json` is committed and must be updated **in the same change** as any dependency change. Transitive dependencies resolve to exact versions with SHA-512 integrity hashes — a reinstall cannot silently pull a different tarball.
+- `package-lock.json` is committed and must be updated **in the same change** as any dependency change. Transitive dependencies resolve to exact versions with SHA-512 integrity hashes — a reinstall cannot silently pull a different tarball. `pi-stratus` declares its runtime dependencies (`pptxgenjs`, `puppeteer-core`, `sharp`) in its package manifest and they are locked in the root lockfile; the package ships no tracked `node_modules` symlink, so verification is clean-install evidence.
 - Vendored packages pin their upstream import by **registry integrity hash** (see each package's `UPSTREAM.md`), so even the import step is content-addressed, not version-addressed.
 - **Install scripts are gated.** Package lifecycle scripts (the classic npm supply-chain vector) run only for packages explicitly approved by the installer's allowlist. An unapproved script blocks the install rather than executing.
 

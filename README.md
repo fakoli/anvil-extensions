@@ -44,6 +44,7 @@ If you maintain a fleet of agent hosts, this packaging model is the point. If yo
 | [pi-brag](packages/pi-brag/) | Turn the current project into a short shareable launch video (`/brag` command + skill + render/poster/doctor tools) |
 | [pi-observations](packages/pi-observations/) | Optional bounded PNG/JPEG/WebP/GIF observation mediation for a fresh `--observation` Pi session; registered by the bundle but inert without that flag |
 | [pi-browser](packages/pi-browser/) | Optional bounded, read-only public-page observations for a fresh `--browser` Pi session with protected configuration; registered by the bundle but inert without that flag |
+| [pi-stratus](packages/pi-stratus/) | Cloud/network diagram engine: typed JSON spec → deterministic validation → reference-grade standalone HTML/SVG for AWS/GCP/Azure (`/stratus` + `/stratus-doctor` commands, 8 tools, 8 presets) |
 
 Full catalog — including *why* each exists and how it works — is in [docs/packages.md](docs/packages.md). Fork lineage and what we changed in vendored packages is in [docs/forks.md](docs/forks.md).
 

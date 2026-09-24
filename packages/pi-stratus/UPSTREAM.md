@@ -9,8 +9,9 @@
 ## Provenance notes
 
 - The engine (src/, bin/, tests/, diagrams/, schemas/, docs/, skills/) is
-  synced from the dev repo at the remediation batch U7 state (86 tests
-  across 10 suites, tsc clean).
+  synced from the dev repo at the remediation batch U9 state (86 tests
+  across 10 suites, tsc clean, schema-boundary + preset-only contract
+  asserted).
 - `index.ts`, `package.json`, `tsconfig.json`, `README.md`, and this file
   are packaging files maintained in this repo — they are NOT synced from
   the dev repo.
