@@ -1,7 +1,7 @@
 {
   "name": "pi-stratus",
   "version": "0.1.0",
-  "description": "Pi coding-agent extension for the Stratus cloud/network diagram engine: typed JSON spec → deterministic validation → reference-grade standalone HTML/SVG for AWS/GCP/Azure, with render/validate/presets/export/evaluate/CLI tools.",
+  "description": "Pi coding-agent extension for the Stratus cloud/network diagram engine: typed JSON spec \u2192 deterministic validation \u2192 reference-grade standalone HTML/SVG for AWS/GCP/Azure, with render/validate/presets/export/evaluate/CLI tools.",
   "author": "Fakoli",
   "license": "MIT",
   "type": "module",
@@ -45,5 +45,10 @@
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*"
+  },
+  "dependencies": {
+    "pptxgenjs": "^4.0.1",
+    "puppeteer-core": "^25.12.0",
+    "sharp": "^0.35.4"
   }
 }

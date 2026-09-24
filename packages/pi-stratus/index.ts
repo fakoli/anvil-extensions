@@ -16,7 +16,7 @@ import { jevAssess, jevStatus } from "./src/jev.ts";
 export interface PiTool {
   name: string;
   description: string;
-  parameters: Record<string, { type: string; description: string; optional?: boolean }>;
+  parameters: Record<string, { type: string; description: string; optional?: boolean; items?: { type: string } }>;
   run: (args: Record<string, unknown>) => Promise<unknown> | unknown;
 }
 
@@ -25,7 +25,7 @@ export const tools: readonly PiTool[] = [
     name: "stratus_render",
     description: "Compile a Stratus spec into deterministic SVG + standalone interactive HTML with a validation receipt.",
     parameters: {
-      spec: { type: "object", description: "Stratus diagram spec (JSON)" },
+      spec: { type: "object", description: "Stratus diagram spec (JSON); omit to render the preset", optional: true },
       preset: { type: "string", description: "Preset id (simple-vpc, three-tier) when no spec given", optional: true },
       theme: { type: "string", description: "light or dark", optional: true },
     },
@@ -38,7 +38,7 @@ export const tools: readonly PiTool[] = [
     name: "stratus_validate",
     description: "Validate a Stratus spec and return the typed validation receipt (gates, diagnostics, reference grade).",
     parameters: {
-      spec: { type: "object", description: "Stratus diagram spec (JSON)" },
+      spec: { type: "object", description: "Stratus diagram spec (JSON); omit to validate the preset", optional: true },
       preset: { type: "string", description: "Preset id when no spec given (simple-vpc, alb-targets, three-tier, gateway-endpoint, site-to-site-vpn, transit-gateway, gcp-network, azure-vnet)", optional: true },
     },
     run: (args) => {
@@ -105,22 +105,22 @@ export const tools: readonly PiTool[] = [
     name: "stratus_cli",
     description: "Run a Stratus CLI verb (render, validate, catalog, network-check, doctor, preset) and return a structured receipt.",
     parameters: {
-      argv: { type: "array", description: "CLI argv parts, e.g. [\"render\", \"three-tier\"]" },
+      argv: { type: "array", description: "CLI argv parts, e.g. [\"render\", \"three-tier\"]", items: { type: "string" } },
     },
     run: (args) => runCli((args.argv as string[]) ?? ["doctor"]),
   },
 ];
 
 /** Convert the property-descriptor map to a proper JSON Schema object. */
-function toParametersSchema(params: Record<string, { type: string; description: string; optional?: boolean }>): {
+function toParametersSchema(params: Record<string, { type: string; description: string; optional?: boolean; items?: { type: string } }>): {
   type: "object";
-  properties: Record<string, { type: string; description: string }>;
+  properties: Record<string, { type: string; description: string; items?: { type: string } }>;
   required: string[];
 } {
-  const properties: Record<string, { type: string; description: string }> = {};
+  const properties: Record<string, { type: string; description: string; items?: { type: string } }> = {};
   const required: string[] = [];
   for (const [name, descriptor] of Object.entries(params)) {
-    properties[name] = { type: descriptor.type, description: descriptor.description };
+    properties[name] = { type: descriptor.type, description: descriptor.description, ...(descriptor.items ? { items: descriptor.items } : {}) };
     if (!descriptor.optional) required.push(name);
   }
   return { type: "object", properties, required };

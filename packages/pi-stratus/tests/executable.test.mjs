@@ -92,6 +92,50 @@ test("packaged adapter registers tools and commands and executes handlers", asyn
   index.default(pi);
   assert.equal(registered.tools.length, 8, "8 tools registered");
   assert.equal(registered.commands.length, 2, "/stratus + /stratus-doctor");
+  // Schema boundary: every tool registers a proper object JSON Schema
+  // (type/properties/required), not a property-descriptor map — pi's
+  // Anthropic conversion reads schema.properties, so a descriptor map would
+  // advertise zero arguments.
+  for (const tool of registered.tools) {
+    const schema = tool.parameters;
+    assert.ok(schema && typeof schema === "object", `${tool.name}: parameters is an object`);
+    assert.equal(schema.type, "object", `${tool.name}: schema.type is object`);
+    assert.ok(schema.properties && typeof schema.properties === "object", `${tool.name}: schema.properties present`);
+    assert.ok(Array.isArray(schema.required), `${tool.name}: schema.required is an array`);
+    for (const [name, prop] of Object.entries(schema.properties)) {
+      assert.ok(prop && typeof prop.type === "string" && typeof prop.description === "string", `${tool.name}.${name}: property has type + description`);
+    }
+  }
+  const renderSchemaBoundary = registered.tools.find((t) => t.name === "stratus_render").parameters;
+  assert.ok(renderSchemaBoundary.properties.spec, "render advertises spec");
+  assert.ok(!renderSchemaBoundary.required.includes("spec"), "spec is optional (preset-only calls valid via /stratus)");
+  assert.ok(!renderSchemaBoundary.required.includes("preset"), "preset is optional");
+  // Schema boundary: every tool registers a proper object JSON Schema
+  // (type/properties/required), not a property-descriptor map — pi's
+  // Anthropic conversion reads schema.properties, so a descriptor map would
+  // advertise zero arguments.
+  for (const tool of registered.tools) {
+    const schema = tool.parameters;
+    assert.ok(schema && typeof schema === "object", `${tool.name}: parameters is an object`);
+    assert.equal(schema.type, "object", `${tool.name}: schema.type is object`);
+    assert.ok(schema.properties && typeof schema.properties === "object", `${tool.name}: schema.properties present`);
+    assert.ok(Array.isArray(schema.required), `${tool.name}: schema.required is an array`);
+    for (const [name, prop] of Object.entries(schema.properties)) {
+      assert.ok(prop && typeof prop.type === "string" && typeof prop.description === "string", `${tool.name}.${name}: property has type + description`);
+      if (prop.items) assert.equal(prop.items.type, "string", `${tool.name}.${name}: array items are strings`);
+    }
+  }
+  // Command/schema contract: render/validate accept PRESET-ONLY calls (the
+  // /stratus command requests them), so their schemas must not require spec.
+  const renderSchemaTool = registered.tools.find((t) => t.name === "stratus_render");
+  const validateSchemaTool = registered.tools.find((t) => t.name === "stratus_validate");
+  assert.ok(!renderSchemaTool.parameters.required.includes("spec"), "render does not require spec (preset-only calls valid)");
+  assert.ok(!validateSchemaTool.parameters.required.includes("spec"), "validate does not require spec (preset-only calls valid)");
+  const cliSchemaTool = registered.tools.find((t) => t.name === "stratus_cli");
+  assert.equal(cliSchemaTool.parameters.properties.argv.items?.type, "string", "cli argv items are strings");
+  // Preset-only calls work through execute (the /stratus path).
+  const presetOnly = await renderSchemaTool.execute("tc-schema", { preset: "three-tier" }, undefined, undefined, {});
+  assert.equal(presetOnly.details.ok, true, "preset-only render executes");
   // Doctor handler executes against a mock ctx without throwing.
   const doctor = registered.commands.find((c) => c.name === "stratus-doctor");
   let notified = null;
