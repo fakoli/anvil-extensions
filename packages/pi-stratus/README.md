@@ -9,9 +9,10 @@ HTML/SVG for AWS/GCP/Azure.
 - pi ≥ 0.9.0 (installed as a pi package; see Installation)
 - Node ≥ 22.19 and the package dependencies (`pptxgenjs`, `puppeteer-core`,
   `sharp` — installed with the package)
-- A Chrome/Chromium binary on PATH (or `PUPPETEER_EXECUTABLE_PATH`) for the
-  `pdf`, `png`, and `jpeg` export formats; `svg`, `html`, and `pptx` need no
-  browser
+- A Chrome/Chromium binary at `STRATUS_CHROME_PATH` (default
+  `/usr/bin/google-chrome`) for the `pdf`, `png`, `jpeg`, and `pptx` export
+  formats — `pptx` renders its slide image through Chrome; only `svg` and
+  `html` are browser-free
 
 ## Installation
 

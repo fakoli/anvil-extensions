@@ -1,9 +1,10 @@
 # Package catalog
 
-Fifteen packages, fourteen registered extension entrypoints, one pinned unit. `pi-observations` and `pi-browser` are registered but inert until a fresh session opts in with `--observation` or `--browser`. Their image and browser workflows are independent. Each entry covers what it does, why it exists, and how it works. Provenance (original vs vendored vs forked) is summarized here and detailed in [forks.md](forks.md); every package ships an `UPSTREAM.md` ledger beside its code.
+Sixteen packages, fifteen registered extension entrypoints, one pinned unit. `pi-observations` and `pi-browser` are registered but inert until a fresh session opts in with `--observation` or `--browser`. Their image and browser workflows are independent. Each entry covers what it does, why it exists, and how it works. Provenance (original vs vendored vs forked) is summarized here and detailed in [forks.md](forks.md); every package ships an `UPSTREAM.md` ledger beside its code.
 
 | Package | Provenance | Category |
 |---|---|---|
+| [pi-stratus](#pi-stratus) | original | diagram engine |
 | [pi-condense](#pi-condense) | vendored, verbatim | context management |
 | [pi-insights](#pi-insights) | original | observability |
 | [pi-commentary](#pi-commentary) | original | observability |

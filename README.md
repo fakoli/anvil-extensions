@@ -8,7 +8,7 @@ An opinionated, battle-tested bundle of [pi coding agent](https://github.com/bad
 pi install git:github.com/fakoli/anvil-extensions@anvil-v0.12.0
 ```
 
-- **15 packages · 14 registered extension entrypoints · 1 pin · atomic updates** — every host runs the same reviewed tree; `pi-observations` and `pi-browser` remain inert until a fresh session explicitly uses their opt-in flags
+- **16 packages · 15 registered extension entrypoints · 1 pin · atomic updates** — every host runs the same reviewed tree; `pi-observations` and `pi-browser` remain inert until a fresh session explicitly uses their opt-in flags
 - **Content-hashed lockfile** — transitive dependencies are pinned by SHA-512 integrity
 - **Install-script allowlist** — package postinstall scripts run only when approved
 - **Tag-protected releases** — release tags are immutable via repository rulesets
