@@ -152,11 +152,13 @@ test("packaged adapter registers tools and commands and executes handlers", asyn
   setTimeout(() => ac.abort(), 25);
   const aborted = await exportTool.execute("tc-abort", { spec: getPreset("simple-vpc"), format: "pdf", outDir: "/tmp/stratus-adapter-abort" }, ac.signal, undefined, {});
   assert.equal(aborted.details.ok, false, "mid-flight abort rejects (ok:false)");
+  assert.equal(aborted.details.error ?? aborted.details.reason, "export cancelled", `cancellation-specific error: ${aborted.details.error ?? aborted.details.reason}`);
   // The signal reaches the engine: a pre-aborted export also rejects.
   const ac2 = new AbortController();
   ac2.abort();
   const preAborted = await exportTool.execute("tc-abort2", { spec: getPreset("simple-vpc"), format: "pdf", outDir: "/tmp/stratus-adapter-abort2" }, ac2.signal, undefined, {});
   assert.equal(preAborted.details.ok, false, "pre-aborted export rejects");
+  assert.ok(preAborted.details.error === "export cancelled" || preAborted.details.cancelled === true, "pre-aborted cancellation-specific detail");
 
   // The stratus_cli handler awaits the async API: a known verb resolves a
   // structured receipt; an unknown verb returns ok:false (never a serialized
