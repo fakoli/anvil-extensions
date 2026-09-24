@@ -111,6 +111,21 @@ export const tools: readonly PiTool[] = [
   },
 ];
 
+/** Convert the property-descriptor map to a proper JSON Schema object. */
+function toParametersSchema(params: Record<string, { type: string; description: string; optional?: boolean }>): {
+  type: "object";
+  properties: Record<string, { type: string; description: string }>;
+  required: string[];
+} {
+  const properties: Record<string, { type: string; description: string }> = {};
+  const required: string[] = [];
+  for (const [name, descriptor] of Object.entries(params)) {
+    properties[name] = { type: descriptor.type, description: descriptor.description };
+    if (!descriptor.optional) required.push(name);
+  }
+  return { type: "object", properties, required };
+}
+
 export default function stratusExtension(pi: PiExtensionAPI): void {
   for (const tool of tools) {
     pi.registerTool({
@@ -121,7 +136,7 @@ export default function stratusExtension(pi: PiExtensionAPI): void {
         .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
         .join(" "),
       description: tool.description,
-      parameters: tool.parameters,
+      parameters: toParametersSchema(tool.parameters),
       async execute(_toolCallId, params, signal, _onUpdate, _ctx) {
         // Cancellation reaches the engine through the shared signal.
         if (signal?.aborted) {

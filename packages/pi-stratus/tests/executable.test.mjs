@@ -92,6 +92,24 @@ test("packaged adapter registers tools and commands and executes handlers", asyn
   index.default(pi);
   assert.equal(registered.tools.length, 8, "8 tools registered");
   assert.equal(registered.commands.length, 2, "/stratus + /stratus-doctor");
+  // Schema boundary: every tool registers a proper object JSON Schema
+  // (type/properties/required), not a property-descriptor map — pi's
+  // Anthropic conversion reads schema.properties, so a descriptor map would
+  // advertise zero arguments.
+  for (const tool of registered.tools) {
+    const schema = tool.parameters;
+    assert.ok(schema && typeof schema === "object", `${tool.name}: parameters is an object`);
+    assert.equal(schema.type, "object", `${tool.name}: schema.type is object`);
+    assert.ok(schema.properties && typeof schema.properties === "object", `${tool.name}: schema.properties present`);
+    assert.ok(Array.isArray(schema.required), `${tool.name}: schema.required is an array`);
+    for (const [name, prop] of Object.entries(schema.properties)) {
+      assert.ok(prop && typeof prop.type === "string" && typeof prop.description === "string", `${tool.name}.${name}: property has type + description`);
+    }
+  }
+  const renderSchema = registered.tools.find((t) => t.name === "stratus_render").parameters;
+  assert.ok(renderSchema.properties.spec, "render advertises spec");
+  assert.ok(renderSchema.required.includes("spec"), "render requires spec");
+  assert.ok(!renderSchema.required.includes("preset"), "preset is optional");
   // Doctor handler executes against a mock ctx without throwing.
   const doctor = registered.commands.find((c) => c.name === "stratus-doctor");
   let notified = null;
