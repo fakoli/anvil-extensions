@@ -16,3 +16,4 @@ pi-observations
 pi-sandbox-config
 pi-voice-clone
 pi-capability-upgrade
+pi-repo-graph

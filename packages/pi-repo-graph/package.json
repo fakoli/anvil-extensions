@@ -1,0 +1,30 @@
+{
+  "name": "pi-repo-graph",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Offline repository system diagrams, dependency maps and data views for Pi.",
+  "license": "MIT",
+  "keywords": [
+    "pi-package"
+  ],
+  "files": [
+    "scripts",
+    "assets",
+    "skills",
+    "tests",
+    "README.md",
+    "UPSTREAM.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node tests/run-tests.mjs"
+  },
+  "pi": {
+    "skills": [
+      "./skills"
+    ]
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

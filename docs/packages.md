@@ -1,6 +1,6 @@
 # Package catalog
 
-Fifteen packages, fourteen registered extension entrypoints, one pinned unit. `pi-observations` and `pi-browser` are registered but inert until a fresh session opts in with `--observation` or `--browser`. Their image and browser workflows are independent. Each entry covers what it does, why it exists, and how it works. Provenance (original vs vendored vs forked) is summarized here and detailed in [forks.md](forks.md); every package ships an `UPSTREAM.md` ledger beside its code.
+Sixteen packages, fourteen registered extension entrypoints, one pinned unit. `pi-observations` and `pi-browser` are registered but inert until a fresh session opts in with `--observation` or `--browser`. Their image and browser workflows are independent. Each entry covers what it does, why it exists, and how it works. Provenance (original vs vendored vs forked) is summarized here and detailed in [forks.md](forks.md); every package ships an `UPSTREAM.md` ledger beside its code.
 
 | Package | Provenance | Category |
 |---|---|---|
@@ -19,6 +19,7 @@ Fifteen packages, fourteen registered extension entrypoints, one pinned unit. `p
 | [pi-brag](#pi-brag) | original (port) | capabilities |
 | [pi-observations](#pi-observations) | original | optional PNG/JPEG/WebP/GIF vision mediation |
 | [pi-browser](#pi-browser) | original | optional read-only public-page observations |
+| [pi-repo-graph](#pi-repo-graph) | adapted MIT port | default-discovered repository diagram skill |
 
 ## pi-condense
 
@@ -141,3 +142,21 @@ Fifteen packages, fourteen registered extension entrypoints, one pinned unit. `p
 ## How the bundle loads
 
 The root `package.json` declares `pi.extensions`, `pi.skills`, and `pi.prompts` entries; pi loads each entry file through a TypeScript runtime at session start. Runtime modules (`typebox`, the agent core) resolve against pi's own bundled copies, so extensions share the host's versions rather than vendoring their own. Package dependencies install once into the monorepo's node_modules under the committed lockfile.
+
+## pi-repo-graph
+
+**What:** The default-discovered `/skill:repo-graph` builds offline system,
+directory and dependency diagrams plus table/matrix data views. It adds no
+extension entrypoint. Python 3.10+ is required when invoked; Git is required
+for public HTTPS repository input.
+
+**Why it exists:** Large repository exploration needs bounded visual detail and
+compact scan results instead of loading the source tree into the agent context.
+
+**How it works:** Pi's native skill and bash tool invoke the packaged stdlib
+scanner from the caller's repository. It batches bounded source reads, caches
+imports and emits self-contained HTML, JSON and Mermaid in the user's cache.
+System grouping, paged drilldown, filters and exports reuse that scan. No model
+calls are made by the scanner unless the user opts into `--jev` for advisory
+role labels. The agent still uses its normal configured model. Imports and
+system roles are heuristic. See [setup, limits, security and tests](../packages/pi-repo-graph/README.md).

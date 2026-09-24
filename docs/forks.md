@@ -61,3 +61,13 @@ Ported from [latent-spaces/brag](https://github.com/latent-spaces/brag) v0.2.2 (
 ## Why vendoring at all
 
 Three reasons: hosts must be able to install without trusting a registry at load time; we patch what we need without waiting on upstream release cycles; and the git history of every vendored change is reviewable. The cost — re-syncing upstream improvements manually — is accepted and tracked in each `UPSTREAM.md`.
+
+## Adapted port: pi-repo-graph
+
+The MIT Repo Graph 0.3.0 scanner and viewer from `fakoli/agent-plugins`
+are imported verbatim. Pi uses its native skill discovery and bash tool;
+no extension wrapper or runtime dependency is added. The skill fixes caller
+working-directory handling and adds Pi invocation and credential permission
+guidance. Tests use package-relative paths and add native Pi discovery/execution
+coverage. [The ledger](../packages/pi-repo-graph/UPSTREAM.md) records the exact
+source commit, hashes, retained license and every adaptation.

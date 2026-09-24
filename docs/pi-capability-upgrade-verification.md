@@ -119,3 +119,20 @@ needs kernel enforcement that accounts for socket and TLS extra bytes; that
 enforcement has not been proven by the native fixture or a live-site receipt.
 The image workflow remains separately verified and is neither enabled nor
 changed by `--browser`.
+
+## Repository diagrams (0.13.0)
+
+The `pi-repo-graph` offline suite passed five scanner regressions, viewer
+geometry/event checks and verbatim import hashes. Both the pinned npm Pi 0.85.1
+CLI and the installed Pi 0.85.1 binary passed package discovery, native
+`/skill:repo-graph` registration and RPC bash execution with an isolated
+configuration and a synthetic caller repository. All five artifacts, repeat
+cache reuse and source-output rejection were checked. No model/provider request
+was made; model instruction-following and browser visual QA are not claimed.
+
+The port also scanned a cached public Terraform AWS provider checkout: 20,370
+files, 6,657 directories, 6,948 aggregated import links and 9,528 supported source
+files. Of those, 441 exceeded the 64 KiB extraction cap; the repeat reused all
+9,528 import entries. This checks the local scanner and bounded output structure,
+not semantic completeness of heuristic imports. Jev remained off. Existing
+candidate selection and installed bundle pins were preserved.
