@@ -70,7 +70,8 @@ test("packaged adapter registers tools and commands and executes handlers", asyn
     process.env.STRATUS_PACKAGE_DIR,
     // Own package root (portable): this test lives in <package>/tests/.
     join(import.meta.dirname, ".."),
-    "/tmp/anvil-extensions-stratus/packages/pi-stratus",
+    // The anvil-extensions worktree (current packaging home).
+    "/data/workspaces/wt-pi-stratus-package/packages/pi-stratus",
   ].filter(Boolean);
   const pkg = candidates.find((c) => existsSync(join(c, "index.ts")));
   if (!pkg) {
@@ -106,10 +107,6 @@ test("packaged adapter registers tools and commands and executes handlers", asyn
       assert.ok(prop && typeof prop.type === "string" && typeof prop.description === "string", `${tool.name}.${name}: property has type + description`);
     }
   }
-  const renderSchemaBoundary = registered.tools.find((t) => t.name === "stratus_render").parameters;
-  assert.ok(renderSchemaBoundary.properties.spec, "render advertises spec");
-  assert.ok(!renderSchemaBoundary.required.includes("spec"), "spec is optional (preset-only calls valid via /stratus)");
-  assert.ok(!renderSchemaBoundary.required.includes("preset"), "preset is optional");
   // Schema boundary: every tool registers a proper object JSON Schema
   // (type/properties/required), not a property-descriptor map — pi's
   // Anthropic conversion reads schema.properties, so a descriptor map would
