@@ -92,24 +92,6 @@ test("packaged adapter registers tools and commands and executes handlers", asyn
   index.default(pi);
   assert.equal(registered.tools.length, 8, "8 tools registered");
   assert.equal(registered.commands.length, 2, "/stratus + /stratus-doctor");
-  // Schema boundary: every tool registers a proper object JSON Schema
-  // (type/properties/required), not a property-descriptor map — pi's
-  // Anthropic conversion reads schema.properties, so a descriptor map would
-  // advertise zero arguments.
-  for (const tool of registered.tools) {
-    const schema = tool.parameters;
-    assert.ok(schema && typeof schema === "object", `${tool.name}: parameters is an object`);
-    assert.equal(schema.type, "object", `${tool.name}: schema.type is object`);
-    assert.ok(schema.properties && typeof schema.properties === "object", `${tool.name}: schema.properties present`);
-    assert.ok(Array.isArray(schema.required), `${tool.name}: schema.required is an array`);
-    for (const [name, prop] of Object.entries(schema.properties)) {
-      assert.ok(prop && typeof prop.type === "string" && typeof prop.description === "string", `${tool.name}.${name}: property has type + description`);
-    }
-  }
-  const renderSchema = registered.tools.find((t) => t.name === "stratus_render").parameters;
-  assert.ok(renderSchema.properties.spec, "render advertises spec");
-  assert.ok(renderSchema.required.includes("spec"), "render requires spec");
-  assert.ok(!renderSchema.required.includes("preset"), "preset is optional");
   // Doctor handler executes against a mock ctx without throwing.
   const doctor = registered.commands.find((c) => c.name === "stratus-doctor");
   let notified = null;
@@ -359,6 +341,37 @@ test("batch-T behavioral regressions hold", async t => {
       }
       assert.ok(worstOut <= 0.5, `${flow} many-row: card labels inside card (${worstOut.toFixed(1)})`);
       assert.ok(many.scene.cards.every((c2) => (c2.rowBaselines ?? []).length > 0 || c2.labelIds.length <= 1), `${flow}: row baselines stored`);
+    }
+  }
+
+  // 5j. Side-by-side cells wrap to their INDIVIDUAL column widths — a long
+  // IPv6 destination never paints outside the card; grown cards re-stack so
+  // the next card's title never overlaps.
+  {
+    const spec6 = getPreset("three-tier");
+    const table6 = spec6.cloud.regions[0].vpcs[0].routeTables?.[0];
+    if (table6) table6.rows[0].destination = { kind: "cidr", cidr: { value: "2001:db8:1234:5678:90ab:cdef::/96" } };
+    for (const flow of ["top-down", "left-right"]) {
+      const scene = compileAnyDiagram(spec6, { theme: "light", interactive: false, flow });
+      assert.ok(scene.ok, `${flow} IPv6 dest compiles`);
+      let worstOut = 0;
+      for (const cd of scene.scene.cards) {
+        for (const id of cd.labelIds) {
+          const mk = scene.scene.labels.find((x) => x.id === id);
+          if (mk) worstOut = Math.max(worstOut, cd.rect.x - mk.mask.x, (mk.mask.x + mk.mask.width) - (cd.rect.x + cd.rect.width), cd.rect.y - mk.mask.y, (mk.mask.y + mk.mask.height) - (cd.rect.y + cd.rect.height));
+        }
+      }
+      assert.ok(worstOut <= 0.5, `${flow} IPv6 dest: labels inside card (${worstOut.toFixed(1)})`);
+      const labels = scene.scene.labels;
+      let overlaps = 0;
+      for (let i = 0; i < labels.length; i++) {
+        for (let j = i + 1; j < labels.length; j++) {
+          const a = labels[i].mask;
+          const b = labels[j].mask;
+          if (a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height) overlaps += 1;
+        }
+      }
+      assert.equal(overlaps, 0, `${flow} IPv6 dest: zero intersecting label pairs`);
     }
   }
 

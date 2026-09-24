@@ -1311,23 +1311,53 @@ export function layoutSpec(
           card.headingsY = quantize(headingsY);
           card.firstRowY = quantize(firstRowY);
         }
-        const maxH = rows.length > 0 ? Math.max(...rows.map((l) => maskH(wrapText(l.runs[0]?.text ?? "", 220, l.fontSize), l.fontSize))) : 24;
+        // Cells wrap to their INDIVIDUAL column widths (dest 150, target
+        // 170) — never the whole card width.
+        const destColW = Math.max(48, card.destinationWidth - 16);
+        const targetColW = Math.max(48, card.rect.width - 24 - card.destinationWidth - 24 - 24 - 16);
+        const destHs = destLabels.map((l) => maskH(wrapText(l.runs[0]?.text ?? "", destColW, l.fontSize), l.fontSize));
+        const targetHs = targetLabels.map((l) => maskH(wrapText(l.runs[0]?.text ?? "", targetColW, l.fontSize), l.fontSize));
+        const maxH = Math.max(24, ...destHs, ...targetHs);
         const spacing = Math.max(40, maxH + 8);
         const baselines: number[] = [];
         destLabels.forEach((l, i) => {
-          const h = maskH(wrapText(l.runs[0]?.text ?? "", wrapW, l.fontSize), l.fontSize);
-          rederiveCentered(l, card.rect.x + 24 + card.destinationWidth / 2, firstRowY + i * spacing + h, wrapW);
+          const h = destHs[i] ?? 24;
+          rederiveCentered(l, card.rect.x + 24 + card.destinationWidth / 2, firstRowY + i * spacing + h, destColW);
           baselines.push(firstRowY + i * spacing + h);
         });
         targetLabels.forEach((l, i) => {
-          const h = maskH(wrapText(l.runs[0]?.text ?? "", wrapW, l.fontSize), l.fontSize);
-          rederiveCentered(l, card.rect.x + 24 + card.destinationWidth + 24 + 85, firstRowY + i * spacing + h, wrapW);
+          const h = targetHs[i] ?? 24;
+          rederiveCentered(l, card.rect.x + 24 + card.destinationWidth + 24 + 85, firstRowY + i * spacing + h, targetColW);
         });
         card.rowHeights = destLabels.map(() => spacing);
         card.rowBaselines = baselines;
         // Grow the card to contain the last row.
         const lastBottom = baselines.length > 0 ? (baselines[baselines.length - 1] ?? firstRowY) + 8 : firstRowY;
         if (lastBottom > card.rect.y + card.rect.height) card.rect.height = quantize(lastBottom - card.rect.y);
+      }
+      // Re-stack the cards along y so a grown card never overlaps the next
+      // card's title.
+      const stacked = [...returned.cards].sort((a, b) => (a.rect.y - b.rect.y) || (a.rect.x - b.rect.x));
+      for (let i = 1; i < stacked.length; i += 1) {
+        const prev = stacked[i - 1];
+        const cur = stacked[i];
+        if (!prev || !cur) continue;
+        const prevEnd = prev.rect.y + prev.rect.height;
+        if (cur.rect.y < prevEnd + 16) {
+          const shift = prevEnd + 16 - cur.rect.y;
+          cur.rect.y += shift;
+          if (cur.headerLineY !== undefined) cur.headerLineY += shift;
+          if (cur.headingsY !== undefined) cur.headingsY += shift;
+          if (cur.firstRowY !== undefined) cur.firstRowY += shift;
+          if (cur.rowBaselines !== undefined) cur.rowBaselines = cur.rowBaselines.map((b) => b + shift);
+          for (const id of cur.labelIds) {
+            const l = returned.labels.find((x) => x.id === id);
+            if (l) {
+              l.mask = { ...l.mask, y: l.mask.y + shift };
+              l.baseline = { ...l.baseline, y: l.baseline.y + shift };
+            }
+          }
+        }
       }
     }
   };
