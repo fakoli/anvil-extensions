@@ -1,0 +1,49 @@
+{
+  "name": "pi-stratus",
+  "version": "0.1.0",
+  "description": "Pi coding-agent extension for the Stratus cloud/network diagram engine: typed JSON spec → deterministic validation → reference-grade standalone HTML/SVG for AWS/GCP/Azure, with render/validate/presets/export/evaluate/CLI tools.",
+  "author": "Fakoli",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-coding-agent",
+    "diagrams",
+    "cloud",
+    "network",
+    "aws",
+    "gcp",
+    "azure",
+    "tools"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "files": [
+    "index.ts",
+    "src/**/*.ts",
+    "bin/*.mjs",
+    "skills/**/*.md",
+    "tests/*.mjs",
+    "diagrams/*.json",
+    "schemas/*.json",
+    "docs/*.md",
+    "README.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "scripts": {
+    "test": "node tests/run-tests.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  }
+}

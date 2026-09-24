@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "layout": { "mode": "grid", "cols": 4, "gapX": 70 },
+  "meta": {
+    "title": "Centralized Network Firewall Inspection",
+    "output": "firewalls-centralized-rendered.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    { "id": "internet", "type": "external", "label": "Internet", "row": 0, "col": 3 },
+    { "id": "spoke-a", "type": "backend", "label": "Spoke VPC A", "sublabel": "workload", "row": 1, "col": 0 },
+    { "id": "spoke-b", "type": "backend", "label": "Spoke VPC B", "sublabel": "workload", "row": 2, "col": 0 },
+    { "id": "tgw", "type": "cloud", "label": "Transit Gateway", "sublabel": "hub", "row": 1, "col": 1 },
+    { "id": "insp", "type": "security", "label": "Network Firewall", "sublabel": "inspection VPC", "row": 1, "col": 2, "tag": "centralized" },
+    { "id": "igw-c", "type": "cloud", "label": "IGW", "row": 1, "col": 3 }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "AWS Region", "wraps": ["spoke-a", "spoke-b", "tgw", "insp", "igw-c"] },
+    { "kind": "region", "label": "Inspection VPC", "wraps": ["insp", "igw-c"] },
+    { "kind": "region", "label": "Spoke VPC A", "wraps": ["spoke-a"] },
+    { "kind": "region", "label": "Spoke VPC B", "wraps": ["spoke-b"] }
+  ],
+  "connections": [
+    { "id": "a-to-tgw", "from": "spoke-a", "to": "tgw", "label": "egress" },
+    { "id": "b-to-tgw", "from": "spoke-b", "to": "tgw" },
+    { "id": "tgw-to-insp", "from": "tgw", "to": "insp", "label": "inspect", "variant": "emphasis" },
+    { "id": "insp-to-igw", "from": "insp", "to": "igw-c", "label": "filtered" },
+    { "id": "igw-to-inet", "from": "igw-c", "to": "internet", "label": "filtered egress", "variant": "emphasis" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Centralized inspection", "items": ["One inspection VPC inspects all spoke traffic via Transit Gateway", "TGW route tables steer 0.0.0.0/0 to the firewall endpoints", "Single policy surface to manage and audit"] },
+    { "dot": "rose", "title": "Trade-offs", "items": ["Consistent rules across all spokes", "TGW data-processing cost on every inspected flow", "Inspection VPC is a shared failure domain"] }
+  ]
+}

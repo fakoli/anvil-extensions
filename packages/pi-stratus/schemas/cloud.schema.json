@@ -1,0 +1,467 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stratus.dev/schemas/cloud.schema.json",
+  "title": "Stratus cloud/network diagram spec",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "title",
+    "provider",
+    "cloud",
+    "views",
+    "presentation"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "provider": {
+      "enum": [
+        "aws",
+        "gcp",
+        "azure"
+      ]
+    },
+    "geography": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "code",
+          "zones"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "zones": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "externals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "kind",
+          "actorType"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "kind": {
+            "const": "external"
+          },
+          "actorType": {
+            "enum": [
+              "users",
+              "internet",
+              "partner",
+              "system"
+            ]
+          }
+        }
+      }
+    },
+    "policies": {
+      "type": "array"
+    },
+    "frames": {
+      "type": "array"
+    },
+    "planes": {
+      "type": "array"
+    },
+    "edges": {
+      "type": "array"
+    },
+    "routingFacts": {
+      "type": "array"
+    },
+    "routeCards": {
+      "type": "array"
+    },
+    "cloud": {
+      "$ref": "#/$defs/cloud"
+    },
+    "views": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "focusIds",
+          "detail"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "kind": {
+            "const": "view"
+          },
+          "focusIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "detail": {
+            "enum": [
+              "overview",
+              "detail"
+            ]
+          },
+          "omittedContext": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "presentation": {
+      "type": "object",
+      "required": [
+        "profile",
+        "spacing",
+        "flow"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "enum": [
+            "normalized",
+            "dense",
+            "presentation"
+          ]
+        },
+        "spacing": {
+          "enum": [
+            "comfortable",
+            "compact"
+          ]
+        },
+        "flow": {
+          "enum": [
+            "top-down",
+            "left-right"
+          ]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "cidrEntry": {
+      "type": "object",
+      "required": [
+        "family",
+        "value"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "enum": [
+            "ipv4",
+            "ipv6"
+          ]
+        },
+        "value": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F:.]+/\\d{1,3}$"
+        }
+      }
+    },
+    "cidrKnown": {
+      "type": "object",
+      "required": [
+        "status",
+        "value"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "const": "known"
+        },
+        "value": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/cidrEntry"
+          }
+        }
+      }
+    },
+    "cidrUnknown": {
+      "type": "object",
+      "required": [
+        "status",
+        "reason"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "const": "unknown"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "cidr": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/cidrKnown"
+        },
+        {
+          "$ref": "#/$defs/cidrUnknown"
+        }
+      ]
+    },
+    "cloud": {
+      "type": "object",
+      "required": [
+        "kind",
+        "id",
+        "label",
+        "regions",
+        "resources"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "aws-cloud"
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "maxItems": 512
+        },
+        "regions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/region"
+          },
+          "maxItems": 512
+        }
+      }
+    },
+    "region": {
+      "type": "object",
+      "required": [
+        "kind",
+        "id",
+        "label",
+        "regionId",
+        "resources",
+        "vpcs"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "aws-region"
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "regionId": {
+          "type": "string"
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "maxItems": 512
+        },
+        "vpcs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/vpc"
+          },
+          "maxItems": 512
+        }
+      }
+    },
+    "vpc": {
+      "type": "object",
+      "required": [
+        "kind",
+        "id",
+        "label",
+        "resources",
+        "cidrs",
+        "azs"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "aws-vpc"
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "maxItems": 512
+        },
+        "cidrs": {
+          "$ref": "#/$defs/cidr"
+        },
+        "azs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/az"
+          },
+          "maxItems": 512
+        }
+      }
+    },
+    "az": {
+      "type": "object",
+      "required": [
+        "kind",
+        "id",
+        "label",
+        "zone",
+        "resources",
+        "subnets"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "aws-az-slice"
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "zone": {
+          "type": "object",
+          "required": [
+            "regionId",
+            "zone"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "regionId": {
+              "type": "string"
+            },
+            "zone": {
+              "type": "string"
+            }
+          }
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "maxItems": 512
+        },
+        "subnets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/subnet"
+          },
+          "maxItems": 512
+        }
+      }
+    },
+    "subnet": {
+      "type": "object",
+      "required": [
+        "kind",
+        "id",
+        "label",
+        "resources",
+        "tier",
+        "classification",
+        "cidrs"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "subnet"
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "maxItems": 512
+        },
+        "tier": {
+          "type": "string"
+        },
+        "classification": {
+          "enum": [
+            "public",
+            "private",
+            "isolated"
+          ]
+        },
+        "cidrs": {
+          "$ref": "#/$defs/cidr"
+        }
+      }
+    }
+  }
+}

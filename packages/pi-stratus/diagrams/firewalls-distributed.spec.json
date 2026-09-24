@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "title": "Distributed Network Firewall — corrected",
+  "provider": "aws",
+  "geography": [{ "id": "geo-us-east-1", "label": "US East (N. Virginia)", "code": "us-east-1", "zones": ["us-east-1a"] }],
+  "externals": [
+    { "id": "internet", "label": "Internet", "kind": "external", "actorType": "internet" }
+  ],
+  "policies": [],
+  "frames": [],
+  "planes": [
+    { "id": "plane-egress", "kind": "traffic-plane", "label": "egress", "family": "ipv4", "role": "egress" }
+  ],
+  "cloud": {
+    "kind": "aws-cloud",
+    "id": "aws-cloud",
+    "label": "AWS Cloud",
+    "resources": [],
+    "regions": [{
+      "kind": "aws-region",
+      "id": "region-use1",
+      "label": "US East",
+      "regionId": "geo-us-east-1",
+      "resources": [],
+      "vpcs": [{
+        "kind": "aws-vpc",
+        "id": "vpc-dist",
+        "label": "Spoke VPC (distributed)",
+        "resources": [
+          { "kind": "resource", "id": "igw-d", "label": "Internet Gateway", "service": "aws.internet-gateway", "placement": { "kind": "network", "networkId": "vpc-dist" }, "tier": "ingress" },
+          {
+            "kind": "resource", "id": "fw-d", "label": "Network Firewall", "service": "aws.network-firewall",
+            "placement": { "kind": "single-subnet", "attachment": { "id": "att-fw-d", "label": "per-VPC endpoint", "subnetId": "subnet-dist-public", "role": "member" } },
+            "tier": "ingress"
+          },
+          {
+            "kind": "resource", "id": "dist", "label": "Workload", "service": "aws.asg",
+            "placement": { "kind": "single-subnet", "attachment": { "id": "att-dist", "label": "workload", "subnetId": "subnet-dist-private", "role": "member" } },
+            "tier": "compute"
+          }
+        ],
+        "cidrs": { "status": "known", "value": [ { "family": "ipv4", "value": "10.0.0.0/16" } ] },
+        "azs": [
+          {
+            "kind": "aws-az-slice", "id": "az-dist", "label": "AZ 1", "zone": { "regionId": "geo-us-east-1", "zone": "us-east-1a" }, "resources": [],
+            "subnets": [
+              { "kind": "subnet", "id": "subnet-dist-public", "label": "public — firewall endpoint", "resources": [], "tier": "ingress", "classification": "public", "cidrs": { "status": "known", "value": [ { "family": "ipv4", "value": "10.0.1.0/24" } ] } },
+              { "kind": "subnet", "id": "subnet-dist-private", "label": "private — workload", "resources": [], "tier": "compute", "classification": "private", "cidrs": { "status": "known", "value": [ { "family": "ipv4", "value": "10.0.11.0/24" } ] } }
+            ]
+          }
+        ]
+      }]
+    }]
+  },
+  "edges": [
+    { "kind": "request", "id": "edge-dist-fw", "label": "dist-fw", "semanticLabel": { "text": "egress to firewall endpoint" }, "variant": "normal", "from": { "kind": "resource", "resourceId": "dist", "attachmentId": "att-dist" }, "to": { "kind": "resource", "resourceId": "fw-d", "attachmentId": "att-fw-d" }, "planeId": "plane-egress", "protocol": { "status": "known", "value": { "transport": "tcp" } }, "direction": "forward", "routing": { "status": "unknown", "reason": "VPC route table steers 0.0.0.0/0 through the firewall endpoint" }, "step": 1 },
+    { "kind": "request", "id": "edge-fw-igw", "label": "fw-igw", "semanticLabel": { "text": "filtered egress" }, "variant": "normal", "from": { "kind": "resource", "resourceId": "fw-d", "attachmentId": "att-fw-d" }, "to": { "kind": "resource", "resourceId": "igw-d" }, "planeId": "plane-egress", "protocol": { "status": "known", "value": { "transport": "tcp" } }, "direction": "forward", "routing": { "status": "unknown", "reason": "firewall endpoint forwards filtered traffic to the IGW" }, "step": 2 },
+    { "kind": "request", "id": "edge-igw-internet", "label": "igw-internet", "semanticLabel": { "text": "filtered egress" }, "variant": "normal", "from": { "kind": "resource", "resourceId": "igw-d" }, "to": { "kind": "external", "actorId": "internet" }, "planeId": "plane-egress", "protocol": { "status": "known", "value": { "transport": "tcp" } }, "direction": "forward", "routing": { "status": "unknown", "reason": "IGW forwards the filtered traffic to the internet" }, "step": 3 }
+  ],
+  "routingFacts": [
+    {
+      "kind": "route-table", "id": "rt-dist", "label": "VPC route table", "tableType": "vpc", "ownerScopeId": "vpc-dist",
+      "appliesTo": [ { "kind": "subnet", "subnetId": "subnet-dist-private" } ],
+      "completeness": "complete-for-declared-flow",
+      "rows": [
+        { "id": "row-local", "label": "local", "destination": { "kind": "cidr", "cidr": { "family": "ipv4", "value": "10.0.0.0/16" } }, "target": { "status": "known", "value": { "kind": "local" } }, "origin": "system" },
+        { "id": "row-fw", "label": "firewall endpoint", "destination": { "kind": "cidr", "cidr": { "family": "ipv4", "value": "0.0.0.0/0" } }, "target": { "status": "known", "value": { "kind": "resource", "resourceId": "fw-d" } }, "origin": "static" }
+      ]
+    },
+    {
+      "kind": "routing-decision", "id": "rd-distributed", "label": "distributed inspection stage",
+      "basis": { "kind": "route", "tableId": "rt-dist" },
+      "explanation": "The VPC route table steers 0.0.0.0/0 through the per-VPC firewall endpoint; filtered traffic exits via the IGW. No Transit Gateway hop for egress."
+    }
+  ],
+  "routeCards": [
+    { "id": "card-distributed", "label": "Distributed — VPC route table steers 0.0.0.0/0 through the firewall endpoint; no TGW hop", "tableId": "rt-dist", "rail": "left" }
+  ],
+  "views": [
+    { "id": "view-overview", "label": "Overview", "kind": "view", "focusIds": ["vpc-dist"], "detail": "overview", "omittedContext": [] }
+  ],
+  "presentation": { "profile": "normalized", "spacing": "comfortable", "flow": "top-down" }
+}

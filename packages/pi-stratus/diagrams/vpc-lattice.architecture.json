@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "layout": { "mode": "grid", "cols": 4, "gapX": 100 },
+  "meta": {
+    "title": "VPC Lattice Service Network",
+    "output": "vpc-lattice-rendered.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    { "id": "clients", "type": "external", "label": "Clients", "sublabel": "Client VPC", "row": 1, "col": 0 },
+    { "id": "lattice", "type": "cloud", "label": "VPC Lattice", "sublabel": "service network", "row": 1, "col": 1, "tag": "SN-1" },
+    { "id": "svc-a", "type": "backend", "label": "Service A", "sublabel": "EC2 ASG", "row": 0, "col": 2 },
+    { "id": "svc-b", "type": "backend", "label": "Service B", "sublabel": "EKS pods", "row": 1, "col": 2 },
+    { "id": "svc-c", "type": "backend", "label": "Service C", "sublabel": "Lambda", "row": 2, "col": 2 },
+    { "id": "authz", "type": "security", "label": "IAM Auth", "sublabel": "SigV4 + auth policy", "row": 2, "col": 1 }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "AWS Region: us-east-1", "wraps": ["lattice", "svc-a", "svc-b", "svc-c", "authz"] },
+    { "kind": "region", "label": "Client VPC", "wraps": ["clients"] },
+    { "kind": "region", "label": "Service VPC A", "wraps": ["svc-a"] },
+    { "kind": "region", "label": "Service VPC B", "wraps": ["svc-b"] }
+  ],
+  "connections": [
+    { "id": "clients-to-sn", "from": "clients", "to": "lattice", "label": "SigV4 request", "variant": "emphasis" },
+    { "id": "sn-to-a", "from": "lattice", "to": "svc-a" },
+    { "id": "sn-to-b", "from": "lattice", "to": "svc-b" },
+    { "id": "sn-to-c", "from": "lattice", "to": "svc-c", "label": "invoke" },
+    { "id": "auth-attach", "from": "authz", "to": "lattice", "label": "auth policy", "variant": "security", "fromSide": "top", "toSide": "bottom" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Service network", "items": ["One service network connects clients and services across VPCs", "No VPC peering, no overlapping-CIDR conflicts"] },
+    { "dot": "emerald", "title": "Services", "items": ["EC2, EKS, and Lambda targets behind HTTPS listeners", "Lambda targets need no VPC attachment", "Access logs flow to CloudWatch"] },
+    { "dot": "rose", "title": "Access control", "items": ["IAM SigV4-signed requests at the service network", "Auth policies attached per service network"] }
+  ]
+}

@@ -1,0 +1,692 @@
+{
+  "schemaVersion": 1,
+  "title": "EKS IPv6 Networking \u2014 corrected",
+  "provider": "aws",
+  "geography": [
+    {
+      "id": "geo-us-west-2",
+      "label": "US West (Oregon)",
+      "code": "us-west-2",
+      "zones": [
+        "us-west-2a",
+        "us-west-2b"
+      ]
+    }
+  ],
+  "externals": [
+    {
+      "id": "users",
+      "label": "Users",
+      "kind": "external",
+      "actorType": "users"
+    }
+  ],
+  "policies": [],
+  "frames": [],
+  "planes": [
+    {
+      "id": "plane-dual",
+      "kind": "traffic-plane",
+      "label": "dual-stack",
+      "family": "dual",
+      "role": "internet"
+    }
+  ],
+  "cloud": {
+    "kind": "aws-cloud",
+    "id": "aws-cloud",
+    "label": "AWS Cloud",
+    "resources": [],
+    "regions": [
+      {
+        "kind": "aws-region",
+        "id": "region-usw2",
+        "label": "US West (Oregon)",
+        "regionId": "geo-us-west-2",
+        "resources": [
+          {
+            "kind": "resource",
+            "id": "eks-cp",
+            "label": "EKS Control Plane",
+            "service": "aws.eks",
+            "managedBy": "provider",
+            "placement": {
+              "kind": "region"
+            },
+            "tier": "application"
+          }
+        ],
+        "vpcs": [
+          {
+            "kind": "aws-vpc",
+            "id": "vpc-eks",
+            "label": "Customer VPC",
+            "resources": [
+              {
+                "kind": "resource",
+                "id": "igw",
+                "label": "Internet Gateway",
+                "service": "aws.internet-gateway",
+                "placement": {
+                  "kind": "network",
+                  "networkId": "vpc-eks"
+                },
+                "tier": "ingress"
+              },
+              {
+                "kind": "resource",
+                "id": "eigw",
+                "label": "Egress-Only IGW",
+                "service": "aws.egress-only-internet-gateway",
+                "placement": {
+                  "kind": "network",
+                  "networkId": "vpc-eks"
+                },
+                "tier": "ingress"
+              },
+              {
+                "kind": "resource",
+                "id": "alb",
+                "label": "ALB",
+                "service": "aws.application-load-balancer",
+                "placement": {
+                  "kind": "multi-subnet",
+                  "deployment": "distributed",
+                  "attachments": [
+                    {
+                      "id": "att-alb-1",
+                      "label": "ALB A",
+                      "subnetId": "subnet-public-1",
+                      "role": "member"
+                    },
+                    {
+                      "id": "att-alb-2",
+                      "label": "ALB B",
+                      "subnetId": "subnet-public-2",
+                      "role": "member"
+                    }
+                  ]
+                },
+                "tier": "load-balancer",
+                "exposure": "internet-facing"
+              },
+              {
+                "kind": "resource",
+                "id": "nat64",
+                "label": "NAT64 / DNS64",
+                "service": "aws.nat-gateway",
+                "placement": {
+                  "kind": "single-subnet",
+                  "attachment": {
+                    "id": "att-nat64",
+                    "label": "NAT64 A",
+                    "subnetId": "subnet-public-1",
+                    "role": "member"
+                  }
+                },
+                "tier": "ingress",
+                "exposure": "internal"
+              },
+              {
+                "kind": "resource",
+                "id": "nodes",
+                "label": "Customer Nodes",
+                "service": "aws.asg",
+                "placement": {
+                  "kind": "multi-subnet",
+                  "deployment": "distributed",
+                  "attachments": [
+                    {
+                      "id": "att-nodes-1",
+                      "label": "nodes A",
+                      "subnetId": "subnet-private-1",
+                      "role": "member"
+                    },
+                    {
+                      "id": "att-nodes-2",
+                      "label": "nodes B",
+                      "subnetId": "subnet-private-2",
+                      "role": "member"
+                    }
+                  ]
+                },
+                "tier": "compute"
+              }
+            ],
+            "cidrs": {
+              "status": "known",
+              "value": [
+                {
+                  "family": "ipv4",
+                  "value": "10.0.0.0/16"
+                },
+                {
+                  "family": "ipv6",
+                  "value": "2001:db8:1234:1a00::/56"
+                }
+              ]
+            },
+            "azs": [
+              {
+                "kind": "aws-az-slice",
+                "id": "az-1",
+                "label": "AZ 1",
+                "zone": {
+                  "regionId": "geo-us-west-2",
+                  "zone": "us-west-2a"
+                },
+                "resources": [],
+                "subnets": [
+                  {
+                    "kind": "subnet",
+                    "id": "subnet-public-1",
+                    "label": "public A \u2014 dual-stack",
+                    "resources": [],
+                    "tier": "ingress",
+                    "classification": "public",
+                    "cidrs": {
+                      "status": "known",
+                      "value": [
+                        {
+                          "family": "ipv4",
+                          "value": "10.0.1.0/24"
+                        },
+                        {
+                          "family": "ipv6",
+                          "value": "2001:db8:1234:1a00::/64"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "kind": "subnet",
+                    "id": "subnet-private-1",
+                    "label": "private A \u2014 dual-stack /64",
+                    "resources": [],
+                    "tier": "compute",
+                    "classification": "private",
+                    "cidrs": {
+                      "status": "known",
+                      "value": [
+                        {
+                          "family": "ipv4",
+                          "value": "10.0.11.0/24"
+                        },
+                        {
+                          "family": "ipv6",
+                          "value": "2001:db8:1234:1a01::/64"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "kind": "aws-az-slice",
+                "id": "az-2",
+                "label": "AZ 2",
+                "zone": {
+                  "regionId": "geo-us-west-2",
+                  "zone": "us-west-2b"
+                },
+                "resources": [],
+                "subnets": [
+                  {
+                    "kind": "subnet",
+                    "id": "subnet-public-2",
+                    "label": "public B \u2014 dual-stack",
+                    "resources": [],
+                    "tier": "ingress",
+                    "classification": "public",
+                    "cidrs": {
+                      "status": "known",
+                      "value": [
+                        {
+                          "family": "ipv4",
+                          "value": "10.0.2.0/24"
+                        },
+                        {
+                          "family": "ipv6",
+                          "value": "2001:db8:1234:1a02::/64"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "kind": "subnet",
+                    "id": "subnet-private-2",
+                    "label": "private B \u2014 dual-stack /64",
+                    "resources": [],
+                    "tier": "compute",
+                    "classification": "private",
+                    "cidrs": {
+                      "status": "known",
+                      "value": [
+                        {
+                          "family": "ipv4",
+                          "value": "10.0.12.0/24"
+                        },
+                        {
+                          "family": "ipv6",
+                          "value": "2001:db8:1234:1a03::/64"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "edges": [
+    {
+      "kind": "request",
+      "id": "edge-users-alb",
+      "label": "users-alb",
+      "semanticLabel": {
+        "text": "HTTPS :443"
+      },
+      "variant": "emphasis",
+      "from": {
+        "kind": "external",
+        "actorId": "users"
+      },
+      "to": {
+        "kind": "resource",
+        "resourceId": "alb",
+        "attachmentId": "att-alb-1"
+      },
+      "planeId": "plane-dual",
+      "protocol": {
+        "status": "known",
+        "value": {
+          "transport": "tcp",
+          "ports": [
+            443
+          ],
+          "application": "HTTPS"
+        }
+      },
+      "direction": "forward",
+      "routing": {
+        "status": "unknown",
+        "reason": "listener routing declared at the ALB"
+      },
+      "step": 1
+    },
+    {
+      "kind": "request",
+      "id": "edge-alb-nodes",
+      "label": "alb-nodes",
+      "semanticLabel": {
+        "text": "IPv6 to pods"
+      },
+      "variant": "normal",
+      "from": {
+        "kind": "resource",
+        "resourceId": "alb",
+        "attachmentId": "att-alb-1"
+      },
+      "to": {
+        "kind": "resource",
+        "resourceId": "nodes",
+        "attachmentId": "att-nodes-1"
+      },
+      "planeId": "plane-dual",
+      "protocol": {
+        "status": "known",
+        "value": {
+          "transport": "tcp",
+          "application": "HTTP over IPv6"
+        }
+      },
+      "direction": "forward",
+      "routing": {
+        "status": "unknown",
+        "reason": "in-subnet IPv6 routing"
+      },
+      "step": 2
+    },
+    {
+      "kind": "request",
+      "id": "edge-nodes-cp",
+      "label": "nodes-cp",
+      "semanticLabel": {
+        "text": "Kubernetes API :443"
+      },
+      "variant": "normal",
+      "from": {
+        "kind": "resource",
+        "resourceId": "nodes",
+        "attachmentId": "att-nodes-1"
+      },
+      "to": {
+        "kind": "resource",
+        "resourceId": "eks-cp"
+      },
+      "planeId": "plane-dual",
+      "protocol": {
+        "status": "known",
+        "value": {
+          "transport": "tcp",
+          "ports": [
+            443
+          ],
+          "application": "HTTPS"
+        }
+      },
+      "direction": "forward",
+      "routing": {
+        "status": "unknown",
+        "reason": "crosses the VPC boundary to the AWS-managed control plane rail"
+      },
+      "step": 3
+    },
+    {
+      "kind": "request",
+      "id": "edge-nodes-eigw",
+      "label": "nodes-eigw",
+      "semanticLabel": {
+        "text": "IPv6 egress ::/0"
+      },
+      "variant": "async",
+      "from": {
+        "kind": "resource",
+        "resourceId": "nodes",
+        "attachmentId": "att-nodes-1"
+      },
+      "to": {
+        "kind": "resource",
+        "resourceId": "eigw"
+      },
+      "planeId": "plane-dual",
+      "protocol": {
+        "status": "known",
+        "value": {
+          "transport": "tcp"
+        }
+      },
+      "direction": "forward",
+      "routing": {
+        "status": "unknown",
+        "reason": "::/0 \u2192 egress-only IGW in the private route table"
+      }
+    },
+    {
+      "kind": "request",
+      "id": "edge-nodes-nat64",
+      "label": "nodes-nat64",
+      "semanticLabel": {
+        "text": "IPv4-only dest via DNS64"
+      },
+      "variant": "async",
+      "from": {
+        "kind": "resource",
+        "resourceId": "nodes",
+        "attachmentId": "att-nodes-1"
+      },
+      "to": {
+        "kind": "resource",
+        "resourceId": "nat64",
+        "attachmentId": "att-nat64"
+      },
+      "planeId": "plane-dual",
+      "protocol": {
+        "status": "known",
+        "value": {
+          "transport": "tcp"
+        }
+      },
+      "direction": "forward",
+      "routing": {
+        "status": "unknown",
+        "reason": "DNS64 synthesizes AAAA for IPv4-only destinations; NAT64 translates in the public subnet"
+      }
+    }
+  ],
+  "routingFacts": [
+    {
+      "kind": "route-table",
+      "id": "rt-public",
+      "label": "public subnets route table",
+      "tableType": "vpc",
+      "ownerScopeId": "vpc-eks",
+      "appliesTo": [
+        {
+          "kind": "subnet",
+          "subnetId": "subnet-public-1"
+        },
+        {
+          "kind": "subnet",
+          "subnetId": "subnet-public-2"
+        }
+      ],
+      "completeness": "complete-for-declared-flow",
+      "rows": [
+        {
+          "id": "row-local-v4",
+          "label": "local",
+          "destination": {
+            "kind": "cidr",
+            "cidr": {
+              "family": "ipv4",
+              "value": "10.0.0.0/16"
+            }
+          },
+          "target": {
+            "status": "known",
+            "value": {
+              "kind": "local"
+            }
+          },
+          "origin": "system"
+        },
+        {
+          "id": "row-local-v6",
+          "label": "local",
+          "destination": {
+            "kind": "cidr",
+            "cidr": {
+              "family": "ipv6",
+              "value": "2001:db8:1234:1a00::/56"
+            }
+          },
+          "target": {
+            "status": "known",
+            "value": {
+              "kind": "local"
+            }
+          },
+          "origin": "system"
+        },
+        {
+          "id": "row-igw-v4",
+          "label": "igw",
+          "destination": {
+            "kind": "cidr",
+            "cidr": {
+              "family": "ipv4",
+              "value": "0.0.0.0/0"
+            }
+          },
+          "target": {
+            "status": "known",
+            "value": {
+              "kind": "resource",
+              "resourceId": "igw"
+            }
+          },
+          "origin": "static"
+        },
+        {
+          "id": "row-igw-v6",
+          "label": "igw",
+          "destination": {
+            "kind": "cidr",
+            "cidr": {
+              "family": "ipv6",
+              "value": "::/0"
+            }
+          },
+          "target": {
+            "status": "known",
+            "value": {
+              "kind": "resource",
+              "resourceId": "igw"
+            }
+          },
+          "origin": "static"
+        }
+      ]
+    },
+    {
+      "kind": "route-table",
+      "id": "rt-private",
+      "label": "private subnets route table",
+      "tableType": "vpc",
+      "ownerScopeId": "vpc-eks",
+      "appliesTo": [
+        {
+          "kind": "subnet",
+          "subnetId": "subnet-private-1"
+        },
+        {
+          "kind": "subnet",
+          "subnetId": "subnet-private-2"
+        }
+      ],
+      "completeness": "complete-for-declared-flow",
+      "rows": [
+        {
+          "id": "row-local-v4",
+          "label": "local",
+          "destination": {
+            "kind": "cidr",
+            "cidr": {
+              "family": "ipv4",
+              "value": "10.0.0.0/16"
+            }
+          },
+          "target": {
+            "status": "known",
+            "value": {
+              "kind": "local"
+            }
+          },
+          "origin": "system"
+        },
+        {
+          "id": "row-eigw-v6",
+          "label": "eigw",
+          "destination": {
+            "kind": "cidr",
+            "cidr": {
+              "family": "ipv6",
+              "value": "::/0"
+            }
+          },
+          "target": {
+            "status": "known",
+            "value": {
+              "kind": "resource",
+              "resourceId": "eigw"
+            }
+          },
+          "origin": "static"
+        },
+        {
+          "id": "row-nat64-v4",
+          "label": "nat64",
+          "destination": {
+            "kind": "cidr",
+            "cidr": {
+              "family": "ipv4",
+              "value": "0.0.0.0/0"
+            }
+          },
+          "target": {
+            "status": "known",
+            "value": {
+              "kind": "resource",
+              "resourceId": "nat64"
+            }
+          },
+          "origin": "static"
+        }
+      ]
+    },
+    {
+      "kind": "routing-decision",
+      "id": "rd-dns64",
+      "label": "DNS64 stage",
+      "basis": {
+        "kind": "route",
+        "tableId": "rt-private",
+        "rowId": "row-nat64-v4",
+        "selection": "longest-prefix"
+      },
+      "explanation": "IPv6-only pods reach IPv4-only destinations: DNS64 synthesizes AAAA records, the private route table steers the synthesized traffic to NAT64 in the public subnet, NAT64 translates to IPv4 and forwards to the IGW.",
+      "flowId": "flow-eks",
+      "stage": 1,
+      "at": {
+        "kind": "resource",
+        "resourceId": "eks-cp"
+      },
+      "match": {
+        "status": "known",
+        "value": {
+          "source": {
+            "family": "ipv4",
+            "value": "0.0.0.0/0"
+          },
+          "destination": {
+            "family": "ipv4",
+            "value": "10.1.0.0/16"
+          },
+          "family": "ipv4"
+        }
+      },
+      "nextHop": {
+        "status": "known",
+        "value": {
+          "kind": "resource",
+          "resourceId": "nat64"
+        }
+      }
+    }
+  ],
+  "routeCards": [
+    {
+      "id": "card-ingress",
+      "label": "Ingress",
+      "tableId": "rt-public",
+      "rail": "left"
+    },
+    {
+      "id": "card-private",
+      "label": "Pod networking \u2014 node /80 from subnet /64, pods /128 from node /80",
+      "tableId": "rt-private",
+      "rail": "left"
+    }
+  ],
+  "views": [
+    {
+      "id": "view-overview",
+      "label": "Overview",
+      "kind": "view",
+      "focusIds": [
+        "vpc-eks"
+      ],
+      "detail": "overview",
+      "omittedContext": []
+    }
+  ],
+  "presentation": {
+    "profile": "normalized",
+    "spacing": "comfortable",
+    "flow": "top-down"
+  }
+}

@@ -1,0 +1,580 @@
+{
+  "schemaVersion": 1,
+  "title": "Centralized Network Firewall Inspection \u2014 corrected",
+  "provider": "aws",
+  "geography": [
+    {
+      "id": "geo-us-east-1",
+      "label": "US East (N. Virginia)",
+      "code": "us-east-1",
+      "zones": [
+        "us-east-1a"
+      ]
+    }
+  ],
+  "externals": [
+    {
+      "id": "internet",
+      "label": "Internet",
+      "kind": "external",
+      "actorType": "internet"
+    }
+  ],
+  "policies": [],
+  "frames": [],
+  "planes": [
+    {
+      "id": "plane-egress",
+      "kind": "traffic-plane",
+      "label": "egress",
+      "family": "ipv4",
+      "role": "egress"
+    }
+  ],
+  "cloud": {
+    "kind": "aws-cloud",
+    "id": "aws-cloud",
+    "label": "AWS Cloud",
+    "resources": [],
+    "regions": [
+      {
+        "kind": "aws-region",
+        "id": "region-use1",
+        "label": "US East",
+        "regionId": "geo-us-east-1",
+        "resources": [
+          {
+            "kind": "resource",
+            "id": "tgw",
+            "label": "Transit Gateway",
+            "service": "aws.transit-gateway",
+            "placement": {
+              "kind": "region"
+            },
+            "tier": "ingress"
+          }
+        ],
+        "vpcs": [
+          {
+            "kind": "aws-vpc",
+            "id": "vpc-spoke-a",
+            "label": "Spoke VPC A",
+            "resources": [
+              {
+                "kind": "resource",
+                "id": "workload-a",
+                "label": "Workload A",
+                "service": "aws.asg",
+                "placement": {
+                  "kind": "single-subnet",
+                  "attachment": {
+                    "id": "att-workload-a",
+                    "label": "Workload A",
+                    "subnetId": "subnet-spoke-a-private",
+                    "role": "member"
+                  }
+                },
+                "tier": "compute"
+              }
+            ],
+            "cidrs": {
+              "status": "known",
+              "value": [
+                {
+                  "family": "ipv4",
+                  "value": "10.0.0.0/16"
+                }
+              ]
+            },
+            "azs": [
+              {
+                "kind": "aws-az-slice",
+                "id": "az-sa",
+                "label": "AZ 1",
+                "zone": {
+                  "regionId": "geo-us-east-1",
+                  "zone": "us-east-1a"
+                },
+                "resources": [],
+                "subnets": [
+                  {
+                    "kind": "subnet",
+                    "id": "subnet-spoke-a-private",
+                    "label": "private \u2014 workload",
+                    "resources": [],
+                    "tier": "compute",
+                    "classification": "private",
+                    "cidrs": {
+                      "status": "known",
+                      "value": [
+                        {
+                          "family": "ipv4",
+                          "value": "10.0.1.0/24"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "aws-vpc",
+            "id": "vpc-spoke-b",
+            "label": "Spoke VPC B",
+            "resources": [
+              {
+                "kind": "resource",
+                "id": "workload-b",
+                "label": "Workload B",
+                "service": "aws.asg",
+                "placement": {
+                  "kind": "single-subnet",
+                  "attachment": {
+                    "id": "att-workload-b",
+                    "label": "Workload B",
+                    "subnetId": "subnet-spoke-b-private",
+                    "role": "member"
+                  }
+                },
+                "tier": "compute"
+              }
+            ],
+            "cidrs": {
+              "status": "known",
+              "value": [
+                {
+                  "family": "ipv4",
+                  "value": "10.1.0.0/16"
+                }
+              ]
+            },
+            "azs": [
+              {
+                "kind": "aws-az-slice",
+                "id": "az-sb",
+                "label": "AZ 1",
+                "zone": {
+                  "regionId": "geo-us-east-1",
+                  "zone": "us-east-1a"
+                },
+                "resources": [],
+                "subnets": [
+                  {
+                    "kind": "subnet",
+                    "id": "subnet-spoke-b-private",
+                    "label": "private \u2014 workload",
+                    "resources": [],
+                    "tier": "compute",
+                    "classification": "private",
+                    "cidrs": {
+                      "status": "known",
+                      "value": [
+                        {
+                          "family": "ipv4",
+                          "value": "10.1.1.0/24"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "aws-vpc",
+            "id": "vpc-insp",
+            "label": "Inspection VPC",
+            "resources": [
+              {
+                "kind": "resource",
+                "id": "igw-c",
+                "label": "Internet Gateway",
+                "service": "aws.internet-gateway",
+                "placement": {
+                  "kind": "network",
+                  "networkId": "vpc-insp"
+                },
+                "tier": "ingress"
+              },
+              {
+                "kind": "resource",
+                "id": "fw-c",
+                "label": "Network Firewall",
+                "service": "aws.network-firewall",
+                "placement": {
+                  "kind": "single-subnet",
+                  "attachment": {
+                    "id": "att-fw-c",
+                    "label": "firewall endpoint",
+                    "subnetId": "subnet-insp-public",
+                    "role": "member"
+                  }
+                },
+                "tier": "ingress"
+              }
+            ],
+            "cidrs": {
+              "status": "known",
+              "value": [
+                {
+                  "family": "ipv4",
+                  "value": "10.2.0.0/16"
+                }
+              ]
+            },
+            "azs": [
+              {
+                "kind": "aws-az-slice",
+                "id": "az-insp",
+                "label": "AZ 1",
+                "zone": {
+                  "regionId": "geo-us-east-1",
+                  "zone": "us-east-1a"
+                },
+                "resources": [],
+                "subnets": [
+                  {
+                    "kind": "subnet",
+                    "id": "subnet-insp-public",
+                    "label": "public \u2014 firewall endpoints",
+                    "resources": [],
+                    "tier": "ingress",
+                    "classification": "public",
+                    "cidrs": {
+                      "status": "known",
+                      "value": [
+                        {
+                          "family": "ipv4",
+                          "value": "10.2.1.0/24"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "kind": "subnet",
+                    "id": "subnet-insp-tgw",
+                    "label": "tgw attachment subnet",
+                    "resources": [],
+                    "tier": "auxiliary",
+                    "classification": "private",
+                    "cidrs": {
+                      "status": "known",
+                      "value": [
+                        {
+                          "family": "ipv4",
+                          "value": "10.2.2.0/24"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "edges": [
+    {
+      "kind": "request",
+      "id": "edge-spoke-a-tgw",
+      "label": "spoke-a-tgw",
+      "semanticLabel": {
+        "text": "egress via TGW"
+      },
+      "variant": "normal",
+      "from": {
+        "kind": "resource",
+        "resourceId": "workload-a"
+      },
+      "to": {
+        "kind": "resource",
+        "resourceId": "tgw"
+      },
+      "planeId": "plane-egress",
+      "protocol": {
+        "status": "known",
+        "value": {
+          "transport": "tcp"
+        }
+      },
+      "direction": "forward",
+      "routing": {
+        "status": "unknown",
+        "reason": "spoke route table steers 0.0.0.0/0 through the TGW attachment"
+      },
+      "step": 1
+    },
+    {
+      "kind": "association",
+      "id": "edge-tgw-insp",
+      "label": "tgw-insp",
+      "semanticLabel": {
+        "text": "inspection VPC attachment"
+      },
+      "variant": "normal",
+      "from": {
+        "kind": "resource",
+        "resourceId": "tgw"
+      },
+      "to": {
+        "kind": "scope",
+        "scopeId": "vpc-insp"
+      },
+      "relation": "vpc-service-network",
+      "factIds": []
+    },
+    {
+      "kind": "request",
+      "id": "edge-fw-igw",
+      "label": "fw-igw",
+      "semanticLabel": {
+        "text": "filtered egress"
+      },
+      "variant": "normal",
+      "from": {
+        "kind": "resource",
+        "resourceId": "fw-c",
+        "attachmentId": "att-fw-c"
+      },
+      "to": {
+        "kind": "resource",
+        "resourceId": "igw-c"
+      },
+      "planeId": "plane-egress",
+      "protocol": {
+        "status": "known",
+        "value": {
+          "transport": "tcp"
+        }
+      },
+      "direction": "forward",
+      "routing": {
+        "status": "unknown",
+        "reason": "inspection VPC route tables steer to the firewall endpoints"
+      },
+      "step": 2
+    },
+    {
+      "kind": "request",
+      "id": "edge-igw-internet",
+      "label": "igw-internet",
+      "semanticLabel": {
+        "text": "filtered egress"
+      },
+      "variant": "normal",
+      "from": {
+        "kind": "resource",
+        "resourceId": "igw-c"
+      },
+      "to": {
+        "kind": "external",
+        "actorId": "internet"
+      },
+      "planeId": "plane-egress",
+      "protocol": {
+        "status": "known",
+        "value": {
+          "transport": "tcp"
+        }
+      },
+      "direction": "forward",
+      "routing": {
+        "status": "unknown",
+        "reason": "IGW forwards the filtered traffic to the internet"
+      },
+      "step": 3
+    }
+  ],
+  "routingFacts": [
+    {
+      "kind": "route-table",
+      "id": "rt-spoke-a",
+      "label": "spoke A route table",
+      "tableType": "vpc",
+      "ownerScopeId": "vpc-spoke-a",
+      "appliesTo": [
+        {
+          "kind": "subnet",
+          "subnetId": "subnet-spoke-a-private"
+        }
+      ],
+      "completeness": "complete-for-declared-flow",
+      "rows": [
+        {
+          "id": "row-local",
+          "label": "local",
+          "destination": {
+            "kind": "cidr",
+            "cidr": {
+              "family": "ipv4",
+              "value": "10.0.0.0/16"
+            }
+          },
+          "target": {
+            "status": "known",
+            "value": {
+              "kind": "local"
+            }
+          },
+          "origin": "system"
+        },
+        {
+          "id": "row-tgw",
+          "label": "tgw",
+          "destination": {
+            "kind": "cidr",
+            "cidr": {
+              "family": "ipv4",
+              "value": "0.0.0.0/0"
+            }
+          },
+          "target": {
+            "status": "known",
+            "value": {
+              "kind": "resource",
+              "resourceId": "tgw"
+            }
+          },
+          "origin": "static"
+        }
+      ]
+    },
+    {
+      "kind": "route-table",
+      "id": "rt-tgw",
+      "label": "TGW route table",
+      "tableType": "transit-gateway",
+      "ownerScopeId": "tgw",
+      "appliesTo": [
+        {
+          "kind": "scope",
+          "scopeId": "vpc-spoke-a"
+        },
+        {
+          "kind": "scope",
+          "scopeId": "vpc-spoke-b"
+        },
+        {
+          "kind": "scope",
+          "scopeId": "vpc-insp"
+        }
+      ],
+      "completeness": "complete-for-declared-flow",
+      "rows": [
+        {
+          "id": "row-insp",
+          "label": "inspection attachment",
+          "destination": {
+            "kind": "cidr",
+            "cidr": {
+              "family": "ipv4",
+              "value": "0.0.0.0/0"
+            }
+          },
+          "target": {
+            "status": "known",
+            "value": {
+              "kind": "scope",
+              "scopeId": "vpc-insp"
+            }
+          },
+          "origin": "static"
+        }
+      ]
+    },
+    {
+      "kind": "route-table",
+      "id": "rt-insp",
+      "label": "inspection VPC route table",
+      "tableType": "vpc",
+      "ownerScopeId": "vpc-insp",
+      "appliesTo": [
+        {
+          "kind": "subnet",
+          "subnetId": "subnet-insp-tgw"
+        }
+      ],
+      "completeness": "complete-for-declared-flow",
+      "rows": [
+        {
+          "id": "row-fw",
+          "label": "firewall endpoint",
+          "destination": {
+            "kind": "cidr",
+            "cidr": {
+              "family": "ipv4",
+              "value": "0.0.0.0/0"
+            }
+          },
+          "target": {
+            "status": "known",
+            "value": {
+              "kind": "resource",
+              "resourceId": "fw-c"
+            }
+          },
+          "origin": "static"
+        },
+        {
+          "id": "row-igw",
+          "label": "igw",
+          "destination": {
+            "kind": "cidr",
+            "cidr": {
+              "family": "ipv4",
+              "value": "0.0.0.0/0"
+            }
+          },
+          "target": {
+            "status": "known",
+            "value": {
+              "kind": "resource",
+              "resourceId": "igw-c"
+            }
+          },
+          "origin": "static"
+        }
+      ]
+    },
+    {
+      "kind": "routing-decision",
+      "id": "rd-centralized",
+      "label": "centralized inspection stages",
+      "basis": {
+        "kind": "route",
+        "tableId": "rt-tgw"
+      },
+      "explanation": "Spoke route tables steer 0.0.0.0/0 to the TGW; the TGW route table targets the inspection VPC attachment; the inspection VPC route tables steer to the firewall endpoints; filtered traffic exits via the IGW."
+    }
+  ],
+  "routeCards": [
+    {
+      "id": "card-centralized",
+      "label": "Centralized inspection \u2014 TGW targets the inspection VPC attachment; VPC route tables steer through firewall endpoints",
+      "tableId": "rt-tgw",
+      "rail": "left"
+    }
+  ],
+  "views": [
+    {
+      "id": "view-overview",
+      "label": "Overview",
+      "kind": "view",
+      "focusIds": [
+        "vpc-spoke-a",
+        "vpc-spoke-b",
+        "vpc-insp"
+      ],
+      "detail": "overview",
+      "omittedContext": []
+    }
+  ],
+  "presentation": {
+    "profile": "normalized",
+    "spacing": "comfortable",
+    "flow": "top-down"
+  }
+}

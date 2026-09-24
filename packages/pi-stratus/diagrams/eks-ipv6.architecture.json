@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "layout": { "mode": "grid", "cols": 4 },
+  "meta": {
+    "title": "EKS IPv6 Networking",
+    "output": "eks-ipv6-rendered.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    { "id": "users", "type": "external", "label": "Users", "sublabel": "IPv4 + IPv6", "row": 0, "col": 0 },
+    { "id": "igw", "type": "cloud", "label": "Internet Gateway", "row": 0, "col": 1 },
+    { "id": "alb", "type": "cloud", "label": "ALB", "sublabel": "dual-stack :443", "row": 0, "col": 2 },
+    { "id": "nodes", "type": "backend", "label": "Worker Nodes", "sublabel": "pods: IPv6 /64", "row": 0, "col": 3, "tag": "IPv6" },
+    { "id": "cp", "type": "cloud", "label": "EKS Control Plane", "sublabel": "AWS managed", "row": 1, "col": 2 },
+    { "id": "nat64", "type": "cloud", "label": "NAT64 + DNS64", "sublabel": "public subnet", "row": 2, "col": 1 },
+    { "id": "eigw", "type": "cloud", "label": "Egress-Only IGW", "sublabel": "IPv6 egress", "row": 2, "col": 2 }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "AWS Region: us-west-2", "wraps": ["igw", "alb", "nodes", "cp", "nat64", "eigw"] },
+    { "kind": "region", "label": "Public subnets — dual-stack", "wraps": ["alb", "nat64"] },
+    { "kind": "region", "label": "Private subnets — dual-stack /64", "wraps": ["nodes", "cp"] }
+  ],
+  "connections": [
+    { "id": "users-to-igw", "from": "users", "to": "igw", "label": "HTTPS", "variant": "emphasis" },
+    { "id": "igw-to-alb", "from": "igw", "to": "alb", "label": "ingress" },
+    { "id": "alb-to-nodes", "from": "alb", "to": "nodes", "label": "IPv6", "variant": "emphasis" },
+    { "id": "nodes-to-cp", "from": "nodes", "to": "cp", "label": "API :443", "variant": "security" },
+    { "id": "nodes-to-eigw", "from": "nodes", "to": "eigw", "label": "IPv6 egress", "fromSide": "bottom", "toSide": "top", "via": [[580, 266], [420, 266]] },
+    { "id": "nodes-to-nat64", "from": "nodes", "to": "nat64", "label": "IPv4-only dest", "fromSide": "bottom", "toSide": "top" },
+    { "id": "nat64-to-igw", "from": "nat64", "to": "igw", "label": "IPv4", "variant": "dashed", "labelDx": -22 }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Ingress", "items": ["Dual-stack ALB terminates IPv4 and IPv6", "Requests reach pods over IPv6"] },
+    { "dot": "emerald", "title": "Pod networking", "items": ["Each subnet gets a /64 from the VPC /56", "Pods receive IPv6 addresses — no NAT pod-to-pod", "VPC CNI assigns IPv6 via the node's prefix delegation"] },
+    { "dot": "rose", "title": "Egress", "items": ["IPv6 destinations leave via the egress-only IGW", "IPv4-only destinations translate via NAT64 + DNS64"] }
+  ]
+}

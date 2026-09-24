@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "layout": { "mode": "grid", "cols": 3, "gapX": 70 },
+  "meta": {
+    "title": "Distributed Network Firewall",
+    "output": "firewalls-distributed-rendered.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    { "id": "internet", "type": "external", "label": "Internet", "row": 0, "col": 2 },
+    { "id": "dist", "type": "backend", "label": "Spoke VPC", "sublabel": "workload", "row": 1, "col": 0 },
+    { "id": "fw-d", "type": "security", "label": "Network Firewall", "sublabel": "per-VPC endpoint", "row": 1, "col": 1 },
+    { "id": "igw-d", "type": "cloud", "label": "IGW", "row": 1, "col": 2 }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "AWS Region", "wraps": ["dist", "fw-d", "igw-d"] },
+    { "kind": "region", "label": "Spoke VPC (distributed)", "wraps": ["dist", "fw-d", "igw-d"] }
+  ],
+  "connections": [
+    { "id": "dist-to-fw", "from": "dist", "to": "fw-d", "label": "egress" },
+    { "id": "fw-to-igw", "from": "fw-d", "to": "igw-d", "label": "filtered" },
+    { "id": "igw-to-inet", "from": "igw-d", "to": "internet", "label": "filtered egress", "variant": "emphasis" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "Distributed", "items": ["Each VPC carries its own Network Firewall endpoint", "No Transit Gateway hop for egress — lower latency", "Policy repeats per VPC"] },
+    { "dot": "rose", "title": "Trade-offs", "items": ["More policy surfaces to audit as VPC count grows", "No shared east-west inspection point"] }
+  ]
+}

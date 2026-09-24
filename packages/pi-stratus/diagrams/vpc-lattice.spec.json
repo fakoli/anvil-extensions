@@ -1,0 +1,471 @@
+{
+  "schemaVersion": 1,
+  "title": "VPC Lattice Service Network \u2014 corrected",
+  "provider": "aws",
+  "geography": [
+    {
+      "id": "geo-us-east-1",
+      "label": "US East (N. Virginia)",
+      "code": "us-east-1",
+      "zones": [
+        "us-east-1a"
+      ]
+    }
+  ],
+  "externals": [
+    {
+      "id": "clients",
+      "label": "Clients",
+      "kind": "external",
+      "actorType": "users"
+    }
+  ],
+  "policies": [
+    {
+      "id": "pol-authz",
+      "label": "SigV4 + auth policy",
+      "kind": "auth",
+      "appliesTo": [
+        {
+          "kind": "resource",
+          "resourceId": "lattice"
+        }
+      ]
+    }
+  ],
+  "frames": [],
+  "planes": [
+    {
+      "id": "plane-svc",
+      "kind": "traffic-plane",
+      "label": "service network",
+      "family": "ipv4",
+      "role": "service"
+    }
+  ],
+  "cloud": {
+    "kind": "aws-cloud",
+    "id": "aws-cloud",
+    "label": "AWS Cloud",
+    "resources": [],
+    "regions": [
+      {
+        "kind": "aws-region",
+        "id": "region-use1",
+        "label": "US East",
+        "regionId": "geo-us-east-1",
+        "resources": [
+          {
+            "kind": "resource",
+            "id": "lattice",
+            "label": "VPC Lattice",
+            "service": "aws.vpc-lattice",
+            "placement": {
+              "kind": "region"
+            },
+            "tier": "service-mesh"
+          },
+          {
+            "kind": "resource",
+            "id": "svc-c",
+            "label": "Lambda target",
+            "service": "aws.lambda",
+            "placement": {
+              "kind": "region"
+            },
+            "tier": "compute"
+          }
+        ],
+        "vpcs": [
+          {
+            "kind": "aws-vpc",
+            "id": "vpc-client",
+            "label": "Client VPC",
+            "resources": [],
+            "cidrs": {
+              "status": "known",
+              "value": [
+                {
+                  "family": "ipv4",
+                  "value": "10.0.0.0/16"
+                }
+              ]
+            },
+            "azs": [
+              {
+                "kind": "aws-az-slice",
+                "id": "az-client",
+                "label": "AZ 1",
+                "zone": {
+                  "regionId": "geo-us-east-1",
+                  "zone": "us-east-1a"
+                },
+                "resources": [],
+                "subnets": [
+                  {
+                    "kind": "subnet",
+                    "id": "subnet-client",
+                    "label": "private \u2014 clients",
+                    "resources": [],
+                    "tier": "compute",
+                    "classification": "private",
+                    "cidrs": {
+                      "status": "known",
+                      "value": [
+                        {
+                          "family": "ipv4",
+                          "value": "10.0.1.0/24"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "aws-vpc",
+            "id": "vpc-svc-a",
+            "label": "Service VPC A",
+            "resources": [
+              {
+                "kind": "resource",
+                "id": "svc-a",
+                "label": "EC2 ASG",
+                "service": "aws.asg",
+                "placement": {
+                  "kind": "single-subnet",
+                  "attachment": {
+                    "id": "att-svc-a",
+                    "label": "service A",
+                    "subnetId": "subnet-svc-a",
+                    "role": "member"
+                  }
+                },
+                "tier": "compute"
+              }
+            ],
+            "cidrs": {
+              "status": "known",
+              "value": [
+                {
+                  "family": "ipv4",
+                  "value": "10.1.0.0/16"
+                }
+              ]
+            },
+            "azs": [
+              {
+                "kind": "aws-az-slice",
+                "id": "az-svc-a",
+                "label": "AZ 1",
+                "zone": {
+                  "regionId": "geo-us-east-1",
+                  "zone": "us-east-1a"
+                },
+                "resources": [],
+                "subnets": [
+                  {
+                    "kind": "subnet",
+                    "id": "subnet-svc-a",
+                    "label": "private \u2014 service A",
+                    "resources": [],
+                    "tier": "compute",
+                    "classification": "private",
+                    "cidrs": {
+                      "status": "known",
+                      "value": [
+                        {
+                          "family": "ipv4",
+                          "value": "10.1.1.0/24"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "aws-vpc",
+            "id": "vpc-svc-b",
+            "label": "Service VPC B",
+            "resources": [
+              {
+                "kind": "resource",
+                "id": "svc-b",
+                "label": "EKS pods",
+                "service": "aws.eks",
+                "placement": {
+                  "kind": "single-subnet",
+                  "attachment": {
+                    "id": "att-svc-b",
+                    "label": "service B",
+                    "subnetId": "subnet-svc-b",
+                    "role": "member"
+                  }
+                },
+                "tier": "compute"
+              }
+            ],
+            "cidrs": {
+              "status": "known",
+              "value": [
+                {
+                  "family": "ipv4",
+                  "value": "10.2.0.0/16"
+                }
+              ]
+            },
+            "azs": [
+              {
+                "kind": "aws-az-slice",
+                "id": "az-svc-b",
+                "label": "AZ 1",
+                "zone": {
+                  "regionId": "geo-us-east-1",
+                  "zone": "us-east-1a"
+                },
+                "resources": [],
+                "subnets": [
+                  {
+                    "kind": "subnet",
+                    "id": "subnet-svc-b",
+                    "label": "private \u2014 EKS pods",
+                    "resources": [],
+                    "tier": "compute",
+                    "classification": "private",
+                    "cidrs": {
+                      "status": "known",
+                      "value": [
+                        {
+                          "family": "ipv4",
+                          "value": "10.2.1.0/24"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "edges": [
+    {
+      "kind": "request",
+      "id": "edge-clients-lattice",
+      "label": "clients-lattice",
+      "semanticLabel": {
+        "text": "SigV4 request"
+      },
+      "variant": "emphasis",
+      "from": {
+        "kind": "external",
+        "actorId": "clients"
+      },
+      "to": {
+        "kind": "resource",
+        "resourceId": "lattice"
+      },
+      "planeId": "plane-svc",
+      "protocol": {
+        "status": "known",
+        "value": {
+          "transport": "tcp",
+          "ports": [
+            443
+          ],
+          "application": "HTTPS"
+        }
+      },
+      "direction": "forward",
+      "routing": {
+        "status": "unknown",
+        "reason": "service network association routes the request"
+      },
+      "step": 1
+    },
+    {
+      "kind": "service-target",
+      "id": "edge-lattice-svc-a",
+      "label": "lattice-svc-a",
+      "semanticLabel": {
+        "text": "HTTPS listener"
+      },
+      "variant": "normal",
+      "from": {
+        "kind": "resource",
+        "resourceId": "lattice"
+      },
+      "to": {
+        "kind": "resource",
+        "resourceId": "svc-a",
+        "attachmentId": "att-svc-a"
+      },
+      "planeId": "plane-svc",
+      "routing": {
+        "status": "unknown",
+        "reason": "service network forwards to the registered service"
+      },
+      "step": 2,
+      "targetGroupId": "tg-svc-a"
+    },
+    {
+      "kind": "service-target",
+      "id": "edge-lattice-svc-b",
+      "label": "lattice-svc-b",
+      "semanticLabel": {
+        "text": "HTTPS listener"
+      },
+      "variant": "normal",
+      "from": {
+        "kind": "resource",
+        "resourceId": "lattice"
+      },
+      "to": {
+        "kind": "resource",
+        "resourceId": "svc-b",
+        "attachmentId": "att-svc-b"
+      },
+      "planeId": "plane-svc",
+      "routing": {
+        "status": "unknown",
+        "reason": "service network forwards to the registered service"
+      },
+      "step": 3,
+      "targetGroupId": "tg-svc-b"
+    },
+    {
+      "kind": "service-target",
+      "id": "edge-lattice-svc-c",
+      "label": "lattice-svc-c",
+      "semanticLabel": {
+        "text": "invoke"
+      },
+      "variant": "normal",
+      "from": {
+        "kind": "resource",
+        "resourceId": "lattice"
+      },
+      "to": {
+        "kind": "resource",
+        "resourceId": "svc-c"
+      },
+      "planeId": "plane-svc",
+      "protocol": {
+        "status": "known",
+        "value": {
+          "transport": "tcp",
+          "application": "Lambda invoke"
+        }
+      },
+      "direction": "forward",
+      "routing": {
+        "status": "unknown",
+        "reason": "service network invokes the Lambda target"
+      },
+      "step": 4,
+      "targetGroupId": "tg-svc-c"
+    }
+  ],
+  "routingFacts": [
+    {
+      "kind": "routing-decision",
+      "id": "rd-lattice",
+      "label": "service network stage",
+      "basis": {
+        "kind": "route",
+        "tableId": "rt-lattice"
+      },
+      "explanation": "Client VPC associations route requests to the service network; the service network's HTTPS listeners forward to registered services (EC2, EKS, Lambda) across VPCs \u2014 no VPC peering, no overlapping-CIDR conflicts."
+    },
+    {
+      "kind": "target-group",
+      "id": "tg-svc-a",
+      "label": "targets-svc-a",
+      "serviceId": "svc-a",
+      "targetResourceIds": [
+        "svc-a"
+      ]
+    },
+    {
+      "kind": "target-group",
+      "id": "tg-svc-b",
+      "label": "targets-svc-b",
+      "serviceId": "svc-b",
+      "targetResourceIds": [
+        "svc-b"
+      ]
+    },
+    {
+      "kind": "target-group",
+      "id": "tg-svc-c",
+      "label": "targets-svc-c",
+      "serviceId": "svc-c",
+      "targetResourceIds": [
+        "svc-c"
+      ]
+    },
+    {
+      "kind": "route-table",
+      "id": "rt-lattice",
+      "label": "service network route table",
+      "tableType": "vpc",
+      "ownerScopeId": "lattice",
+      "appliesTo": [
+        {
+          "kind": "scope",
+          "scopeId": "lattice"
+        }
+      ],
+      "completeness": "complete-for-declared-flow",
+      "rows": [
+        {
+          "id": "row-assoc",
+          "label": "client VPCs \u2192 service network",
+          "destination": {
+            "kind": "prefix-list",
+            "prefixListId": "pl-lattice"
+          },
+          "target": {
+            "status": "known",
+            "value": {
+              "kind": "local"
+            }
+          },
+          "origin": "system"
+        }
+      ]
+    }
+  ],
+  "routeCards": [
+    {
+      "id": "card-lattice",
+      "label": "Service network \u2014 clients and services connect across VPCs without peering",
+      "tableId": "rt-lattice",
+      "rail": "left"
+    }
+  ],
+  "views": [
+    {
+      "id": "view-overview",
+      "label": "Overview",
+      "kind": "view",
+      "focusIds": [
+        "vpc-client",
+        "vpc-svc-a",
+        "vpc-svc-b"
+      ],
+      "detail": "overview",
+      "omittedContext": []
+    }
+  ],
+  "presentation": {
+    "profile": "normalized",
+    "spacing": "comfortable",
+    "flow": "top-down"
+  }
+}
