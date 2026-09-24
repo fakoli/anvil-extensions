@@ -46,3 +46,24 @@ python3 -c "import json; d=json.load(open('package-lock.json')); \
 # Which lifecycle scripts were approved?
 npm install-scripts ls
 ```
+
+## Repository diagram skill
+
+`pi-repo-graph` is default-discovered but runs only when its workflow is used.
+It invokes Python through Pi's normal bash tool and permission/cancellation
+handling; there is no hook, server or new tool authority. Local scans read source
+and metadata, then write generated paths/import summaries and caches outside
+the source repository. Generated diagrams may reveal private repository names
+and paths and should be reviewed before sharing. The HTML loads no remote assets.
+Public HTTPS inputs use Git and persist shallow clones in the user's cache.
+`--refresh` mutates only that clone. No source files are executed.
+
+The scanner has no model traffic by default. Explicit `--jev` sends at most
+16 top-level directory names to TypeSafe System One in one request, potentially
+billable. It obtains only `TYPESAFE_API_KEY` from the environment or its exact
+entry in `~/.env`; it never sources or logs that file. The skill respects project
+credential-access restrictions before invoking this option. Keys and raw source
+are absent from the request and generated output. Names and labels are escaped
+for HTML; labels cannot create imports. Cancellation can leave partial output;
+failed classification falls back to the local diagram. See the package README
+for limits, cache cleanup and rollback.

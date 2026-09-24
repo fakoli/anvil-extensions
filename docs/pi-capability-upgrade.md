@@ -169,3 +169,12 @@ services.
 ## Optional observation mediation
 
 `pi-observations` is registered with the bundle but is not part of a default candidate composition and does not select or alter the primary model. It activates only for an empty fresh session with `--observation` and trusted user-agent policy selecting an exact registered image-capable provider/model. It normalizes PNG/JPEG/WebP/GIF input to a validated PNG and mediates one image and bounded question through Pi's native registered client, then gives the primary an opaque, text-only envelope. Animated GIF uses only frame one with a coverage notice. It allows text-only hook transforms while refusing altered, missing, ambiguous, or reordered image sources and compacted history, cancels compaction/fork/tree operations while enabled, and requires a new unobserved session to disable safely. Its primary guard accepts shared non-cyclic schemas from the full registered tool bundle while retaining media, cycle, and traversal-limit rejection. See [its verification evidence](pi-capability-upgrade-verification.md#optional-observation-mediation).
+
+## Repository diagrams
+
+The 0.13.0 baseline adds the default-discovered `repo-graph` skill and no
+extension entrypoint. Existing explicit candidate skill filters remain unchanged;
+include `packages/pi-repo-graph/skills/**` only when diagrams are wanted in that
+selection. `/skill:repo-graph` uses ordinary bash permissions and the existing
+primary provider. It does not enable observation, browser or operations resources.
+See [the package guide](../packages/pi-repo-graph/README.md).

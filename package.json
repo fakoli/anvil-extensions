@@ -27,7 +27,8 @@
     "skills": [
       "./packages/pi-subagents/skills",
       "./packages/pi-nano-banana/skills",
-      "./packages/pi-brag/skills"
+      "./packages/pi-brag/skills",
+      "./packages/pi-repo-graph/skills"
     ],
     "prompts": [
       "./packages/pi-subagents/prompts"

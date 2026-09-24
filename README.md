@@ -5,10 +5,10 @@
 An opinionated, battle-tested bundle of [pi coding agent](https://github.com/badlogic/pi-mono) extensions — installed as **one pinned unit**, tracked as one auditable surface.
 
 ```
-pi install git:github.com/fakoli/anvil-extensions@anvil-v0.12.0
+pi install git:github.com/fakoli/anvil-extensions@anvil-v0.13.0
 ```
 
-- **15 packages · 14 registered extension entrypoints · 1 pin · atomic updates** — every host runs the same reviewed tree; `pi-observations` and `pi-browser` remain inert until a fresh session explicitly uses their opt-in flags
+- **16 packages · 14 registered extension entrypoints · 1 pin · atomic updates** — every host runs the same reviewed tree; `pi-observations` and `pi-browser` remain inert until a fresh session explicitly uses their opt-in flags
 - **Content-hashed lockfile** — transitive dependencies are pinned by SHA-512 integrity
 - **Install-script allowlist** — package postinstall scripts run only when approved
 - **Tag-protected releases** — release tags are immutable via repository rulesets
@@ -19,7 +19,7 @@ Most extension ecosystems distribute one package at a time, and each one floats 
 
 That gives you:
 
-- **Reproducibility** — `anvil-v0.12.0` means the same bytes on every machine, resolved through a committed lockfile, not fresh registry lookups.
+- **Reproducibility** — `anvil-v0.13.0` means the same bytes on every machine, resolved through a committed lockfile, not fresh registry lookups.
 - **A small blast radius** — a compromise or regression rolls back by pointing the pin at the previous tag.
 - **One audit surface** — dependency changes, fork diffs, and provenance all flow through one PR history.
 
@@ -44,6 +44,7 @@ If you maintain a fleet of agent hosts, this packaging model is the point. If yo
 | [pi-brag](packages/pi-brag/) | Turn the current project into a short shareable launch video (`/brag` command + skill + render/poster/doctor tools) |
 | [pi-observations](packages/pi-observations/) | Optional bounded PNG/JPEG/WebP/GIF observation mediation for a fresh `--observation` Pi session; registered by the bundle but inert without that flag |
 | [pi-browser](packages/pi-browser/) | Optional bounded, read-only public-page observations for a fresh `--browser` Pi session with protected configuration; registered by the bundle but inert without that flag |
+| [pi-repo-graph](packages/pi-repo-graph/) | Default-discovered `/skill:repo-graph`: offline system diagrams, repository maps, tables and dependency matrices; Python 3.10+ required when used |
 
 Full catalog — including *why* each exists and how it works — is in [docs/packages.md](docs/packages.md). Fork lineage and what we changed in vendored packages is in [docs/forks.md](docs/forks.md).
 
@@ -52,13 +53,13 @@ Full catalog — including *why* each exists and how it works — is in [docs/pa
 **Install** (pins the exact tag):
 
 ```bash
-pi install git:github.com/fakoli/anvil-extensions@anvil-v0.12.0
+pi install git:github.com/fakoli/anvil-extensions@anvil-v0.13.0
 ```
 
 **Update** (bump the pin, then reinstall):
 
 ```bash
-pi install git:github.com/fakoli/anvil-extensions@anvil-v0.12.0
+pi install git:github.com/fakoli/anvil-extensions@anvil-v0.13.0
 ```
 
 **Disable individual resources** without touching the pin — two ways:
@@ -71,7 +72,7 @@ pi install git:github.com/fakoli/anvil-extensions@anvil-v0.12.0
   "packages": [
     "pi-condense",
     {
-      "source": "git:github.com/fakoli/anvil-extensions@anvil-v0.12.0",
+      "source": "git:github.com/fakoli/anvil-extensions@anvil-v0.13.0",
       "extensions": ["./packages/pi-nano-banana/index.ts"],
       "skills": []
     }
