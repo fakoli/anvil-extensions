@@ -135,6 +135,19 @@ export default function stratusExtension(pi: PiExtensionAPI): void {
       },
     });
   }
+  pi.registerCommand("stratus-doctor", {
+    description: "Probe the Stratus engine status (preset ladder, tools, JEV bridge) and notify the result",
+    handler: async (_args, ctx) => {
+      const presets = listPresets();
+      const lines = [
+        `stratus engine OK — ${presets.length} presets (${presets.map((p) => p.id).join(", ")})`,
+        `${tools.length} tools registered (render, validate, presets, export, evaluate, jev_status, jev_assess, cli)`,
+        `JEV bridge: advisory-only (${jevStatus().advisory ? "advisory" : "off"}, ${jevStatus().enabled ? "enabled" : "disabled"})`,
+      ];
+      const message = lines.join("\n");
+      if (ctx && typeof ctx.ui?.notify === "function") ctx.ui.notify(message);
+    },
+  });
   pi.registerCommand("stratus", {
     description:
       "Compile a Stratus diagram spec (or preset: simple-vpc, three-tier) into deterministic SVG + standalone interactive HTML with a typed validation receipt",
@@ -167,7 +180,7 @@ export interface PiExtensionAPI {
   }): void;
   registerCommand(command: string, def: {
     description: string;
-    handler: (args: string | undefined, ctx: { isIdle: () => boolean }) => void | Promise<void>;
+    handler: (args: string | undefined, ctx: { isIdle: () => boolean; ui?: { notify: (text: string) => void } }) => void | Promise<unknown>;
   }): void;
   sendUserMessage(message: string, options?: { deliverAs?: "followUp" | undefined }): void;
 }

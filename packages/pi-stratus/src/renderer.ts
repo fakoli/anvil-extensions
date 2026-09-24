@@ -163,9 +163,10 @@ export function renderSvg(
       const headingsY = card.headingsY ?? headerLineY + 12;
       const firstRowY = card.firstRowY ?? headingsY + 16;
       out.push(`<line x1="${card.rect.x}" y1="${headerLineY}" x2="${card.rect.x + card.rect.width}" y2="${headerLineY}" stroke="${p.cardHeader}" stroke-width="1"/>`);
-      // Separator lines sit in the gap between row pairs.
-      for (let i = 0; i + 1 < card.rowHeights.length; i += 1) {
-        const lineY = firstRowY + 70 + i * 56;
+      // Separator lines sit in the gap between row baselines (stored).
+      const baselines = card.rowBaselines ?? [];
+      for (let i = 0; i + 1 < baselines.length; i += 2) {
+        const lineY = ((baselines[i] ?? 0) + (baselines[i + 1] ?? 0)) / 2;
         out.push(`<line x1="${card.rect.x}" y1="${lineY}" x2="${card.rect.x + card.rect.width}" y2="${lineY}" stroke="${p.muted}" stroke-width="0.5" stroke-dasharray="2 3"/>`);
       }
       // Column headings side by side inside the transposed width.
@@ -180,9 +181,10 @@ export function renderSvg(
       const headingsY = card.headingsY ?? headerLineY + 12;
       const firstRowY = card.firstRowY ?? headingsY + 16;
       out.push(`<line x1="${card.rect.x}" y1="${headerLineY}" x2="${card.rect.x + card.rect.width}" y2="${headerLineY}" stroke="${p.cardHeader}" stroke-width="1"/>`);
-      // Separator lines sit in the gap between row baselines.
-      for (let i = 0; i + 1 < card.rowHeights.length; i += 1) {
-        const lineY = firstRowY + 2 + i * 28;
+      // Separator lines sit in the gap between row baselines (stored).
+      const baselines = card.rowBaselines ?? [];
+      for (let i = 0; i + 1 < baselines.length; i += 2) {
+        const lineY = ((baselines[i] ?? 0) + (baselines[i + 1] ?? 0)) / 2;
         out.push(`<line x1="${card.rect.x}" y1="${lineY}" x2="${card.rect.x + card.rect.width}" y2="${lineY}" stroke="${p.muted}" stroke-width="0.5" stroke-dasharray="2 3"/>`);
       }
       // Column headings: Destination | Target.

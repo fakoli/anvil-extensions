@@ -1087,7 +1087,7 @@ export function layoutSpec(
     // intersect (masks are up to 24px tall after font-floor expansion).
     const rowHeights = table.rows.map(() => 28);
     const cardW = 24 + destinationWidth + 24 + 170 + 24;
-    const cardH = 64 + rowHeights.reduce((sum, h) => sum + h, 0) + 8;
+    const cardH = 64 + rowHeights.reduce((sum, h) => sum + h, 0) + 8 + (rowHeights.length - 1) * 12;
     const rect: Rect = { x: quantize(canvasW - M - legendW - 24 - cardW), y: quantize(cardY), width: cardW, height: cardH };
     const headerLabel = addLabel(card.id, table.label, FONT.sublabelSize, { x: rect.x + 12 + Math.max(...wrapText(table.label, 220, FONT.sublabelSize).map((l) => fallbackMaskW(l, FONT.sublabelSize))) / 2, y: rect.y + 28 }, "primary");
     const rowLabelIds: string[] = [];

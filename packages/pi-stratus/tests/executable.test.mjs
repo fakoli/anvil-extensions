@@ -312,6 +312,38 @@ test("batch-T behavioral regressions hold", async t => {
     }
   }
 
+  // 5i. Headings clear the first row; many-row cards grow to contain their
+  // labels; separator lines use the stored baselines.
+  {
+    const scene = compileAnyDiagram(getPreset("three-tier"), { theme: "light", interactive: false, flow: "top-down" });
+    assert.ok(scene.ok, "top-down compiles");
+    const cd = scene.scene.cards[0];
+    const titleMask = scene.scene.labels.find((x) => x.id === cd.labelIds[0]);
+    const dest0 = scene.scene.labels.find((x) => x.id === cd.labelIds[1]);
+    assert.ok(dest0.mask.y >= (cd.headingsY ?? 0), `first row below headings (${dest0.mask.y} >= ${cd.headingsY})`);
+    // Many-row card: 5 rows grow the card, no overflow.
+    const spec5 = getPreset("three-tier");
+    const table5 = spec5.cloud.regions[0].vpcs[0].routeTables?.[0];
+    if (table5) {
+      for (let i = 0; i < 3; i++) {
+        table5.rows.push({ id: "row-x" + i, destination: { kind: "cidr", cidr: { value: "10." + i + ".0.0/16" } }, target: { status: "known", value: { kind: "local" } } });
+      }
+    }
+    for (const flow of ["top-down", "left-right"]) {
+      const many = compileAnyDiagram(spec5, { theme: "light", interactive: false, flow });
+      assert.ok(many.ok, `${flow} many-row compiles`);
+      let worstOut = 0;
+      for (const c2 of many.scene.cards) {
+        for (const id of c2.labelIds) {
+          const mk = many.scene.labels.find((x) => x.id === id);
+          if (mk) worstOut = Math.max(worstOut, c2.rect.x - mk.mask.x, (mk.mask.x + mk.mask.width) - (c2.rect.x + c2.rect.width), c2.rect.y - mk.mask.y, (mk.mask.y + mk.mask.height) - (c2.rect.y + c2.rect.height));
+        }
+      }
+      assert.ok(worstOut <= 0.5, `${flow} many-row: card labels inside card (${worstOut.toFixed(1)})`);
+      assert.ok(many.scene.cards.every((c2) => (c2.rowBaselines ?? []).length > 0 || c2.labelIds.length <= 1), `${flow}: row baselines stored`);
+    }
+  }
+
   // 6. Full 8-preset ladder compiles eligible in both flows.
   assert.equal(listPresets().length, 8, "8 presets registered");
   for (const info of listPresets()) {
