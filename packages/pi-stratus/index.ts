@@ -17,7 +17,7 @@ export interface PiTool {
   name: string;
   description: string;
   parameters: Record<string, { type: string; description: string; optional?: boolean; items?: { type: string } }>;
-  run: (args: Record<string, unknown>) => Promise<unknown> | unknown;
+  run: (args: Record<string, unknown>, signal?: AbortSignal) => Promise<unknown> | unknown;
 }
 
 export const tools: readonly PiTool[] = [
@@ -61,11 +61,12 @@ export const tools: readonly PiTool[] = [
       outDir: { type: "string", description: "Output directory" },
       theme: { type: "string", description: "light or dark", optional: true },
     },
-    run: (args) => exportDiagram({
+    run: (args, signal) => exportDiagram({
       spec: args.spec,
       format: String(args.format ?? "svg") as ExportFormat,
       outDir: String(args.outDir ?? "."),
       theme: args.theme === "dark" ? "dark" : "light",
+      ...(signal ? { signal } : {}),
     }),
   },
   {
@@ -142,7 +143,9 @@ export default function stratusExtension(pi: PiExtensionAPI): void {
         if (signal?.aborted) {
           return { content: [{ type: "text", text: "cancelled" }], details: { ok: false, cancelled: true } };
         }
-        const result = await tool.run(params as Record<string, unknown>);
+        // Cancellation reaches the engine: the signal is forwarded into the
+        // tool run (exportDiagram aborts mid-flight, not only pre-flight).
+        const result = await tool.run(params as Record<string, unknown>, signal);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           details: result as Record<string, unknown>,

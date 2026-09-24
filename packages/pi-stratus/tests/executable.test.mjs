@@ -142,6 +142,22 @@ test("packaged adapter registers tools and commands and executes handlers", asyn
   const renderTool = registered.tools.find((t) => t.name === "stratus_render");
   const result = await renderTool.execute("tc1", { preset: "three-tier" }, undefined, undefined, {});
   assert.equal(result.details.ok, true);
+  // Cancellation preservation: the signal is forwarded into the tool run —
+  // aborting stratus_export mid-flight rejects (ok:false), not ok:true with
+  // a written artifact.
+  const exportTool = registered.tools.find((t) => t.name === "stratus_export");
+  assert.ok(exportTool, "stratus_export registered");
+  const { getPreset } = await import(join(pkg, "src/presets.ts"));
+  const ac = new AbortController();
+  setTimeout(() => ac.abort(), 25);
+  const aborted = await exportTool.execute("tc-abort", { spec: getPreset("simple-vpc"), format: "pdf", outDir: "/tmp/stratus-adapter-abort" }, ac.signal, undefined, {});
+  assert.equal(aborted.details.ok, false, "mid-flight abort rejects (ok:false)");
+  // The signal reaches the engine: a pre-aborted export also rejects.
+  const ac2 = new AbortController();
+  ac2.abort();
+  const preAborted = await exportTool.execute("tc-abort2", { spec: getPreset("simple-vpc"), format: "pdf", outDir: "/tmp/stratus-adapter-abort2" }, ac2.signal, undefined, {});
+  assert.equal(preAborted.details.ok, false, "pre-aborted export rejects");
+
   // The stratus_cli handler awaits the async API: a known verb resolves a
   // structured receipt; an unknown verb returns ok:false (never a serialized
   // Promise).

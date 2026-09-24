@@ -2517,11 +2517,11 @@ no test files yet — suite lands with T001
     79	  against a gold-standard reference set, producing a machine-readable scored
     80	  report with per-dimension verdicts, findings with evidence, and concrete
     81	  fixes. Evaluation is advisory: it never mutates specs or gate results.
-    82	
+    82
     83	## Features
-    84	
+    84
     85	### F001 — Cloud-native spec schema
-    86	
+    86
     87	Typed JSON spec with provider-discriminated network/resource scopes:
     88	AWS VPCs, GCP VPC networks, Azure VNets, address ranges where applicable,
     89	regions, zones, subnets, scaling groups, catalog resources, semantic edges,
@@ -2533,9 +2533,9 @@ no test files yet — suite lands with T001
     95	regional/global scope, sufficient for ALB, ASG, and RDS Multi-AZ.
     96	Security-group membership is distinct from containment; visual bands
     97	do not imply network isolation. Decisions D2, D5.
-    98	
+    98
     99	**Requirements:** R001, R002
-   100	
+   100
    380	**Likely files:** src/export.ts, tests/run-tests.mjs
    381	**Acceptance criteria:**
    382	- the same validated spec emits HTML, SVG, PDF, raster image, and slide output
@@ -2545,12 +2545,12 @@ no test files yet — suite lands with T001
    386	**Verification:**
    387	- `npx --no-install tsc --noEmit`
    388	- `node tests/run-tests.mjs`
-   389	
+   389
    390	Implement `src/export.ts`: native SVG serialization, PDF and raster
    391	pipelines over the same SVG geometry, and slide output per guided view or
    392	reference preset. Library choices are recorded in the knowledge base before
    393	implementation.
-   394	
+   394
    395	### T011: Element knowledge base
    396	**Feature:** F010
    397	**Priority:** medium
@@ -2562,7 +2562,7 @@ no test files yet — suite lands with T001
    403	- every rule is cross-checked against the four proof diagrams
    404	**Verification:**
    405	- `node tests/run-tests.mjs`
-   406	
+   406
    407	Record the renderer specification (element shapes, math formulas, design
    408	patterns) from `docs/stratus-renderer-spec.md` into the implementation
    409	knowledge base: recursive boundary stack, grid pitch and label masks,
@@ -2570,7 +2570,7 @@ no test files yet — suite lands with T001
    411	validation gates. Sources: official AWS reference architecture measurements,
    412	AWS layout guidelines, Azure Well-Architected diagram guidance, and the
    413	archify authoring contract.
-   414	
+   414
    415	### T012: Evaluation skill
    416	**Feature:** F011
    417	**Priority:** high
@@ -2578,22 +2578,22 @@ no test files yet — suite lands with T001
    419	**Dependencies:** T003, T004
    420	**Likely files:** src/evaluate.ts, bin/stratus.mjs, skills/stratus-evaluate/SKILL.md, tests/run-tests.mjs
     20	## 1. Core formulas
-    21	
+    21
     22	### 1.1 Uniform scaling
-    23	
+    23
     24	```text
     25	scale   = min(viewportW / referenceW, viewportH / referenceH)
     26	offsetX = (viewportW - scale * referenceW) / 2
     27	screenX = offsetX + scale * logicalX
     28	```
-    29	
+    29
     30	Projected text must stay readable: `projectedFontPx = sourceFontPx × scale ≥ 6`.
     31	At a 1440×900 desktop the available diagram width is ~930px — a viewBox wider
     32	than ~1395px drops 9px sublabels below the floor (measured: 1430px viewBox →
     33	scale 0.650 → 5.85px → FAIL; ≤1395px → ≥6.0px → pass).
-    34	
+    34
     35	### 1.2 Boundary nesting (per-level tokens, not depth-linear)
-    36	
+    36
     37	```text
     38	childOriginX = boundary.x + padLeft
     39	childOriginY = boundary.y + headerH + padTop
@@ -2602,9 +2602,9 @@ no test files yet — suite lands with T001
     42	boundary.w = padLeft + contentW + padRight
     43	boundary.h = headerH + padTop + contentH + padBottom + footerH
     44	```
-    45	
+    45
     46	Recommended starting tokens (from the AWS reference measurements):
-    47	
+    47
     48	```text
     49	Cloud:  headerH=44, padLeft=40, padRight=16, padTop=4,  padBottom=20
     50	Region: headerH=44, padLeft=40, padRight=40, padTop=16, padBottom=24
@@ -2612,19 +2612,19 @@ no test files yet — suite lands with T001
     52	AZ:     headerH=0,  padLeft=24, padRight=24, padTop=16, padBottom=16, footerH=32
     53	Subnet: headerH=56, padLeft=12, padRight=12, padTop=12, padBottom=12
     54	```
-    55	
+    55
     56	Style per level: Cloud = solid corner-tab rectangle; Region/VPC/AZ = dashed;
     57	Subnet = filled panel. AZ label is footer-centered, not header.
-    58	
+    58
     59	### 1.3 Grid pitch and cells
-    60	
+    60
     61	```text
     62	pitchX = cellW + gapX
     63	pitchY = cellH + gapY
     64	cellX  = originX + col * pitchX
     65	gridW  = cols * cellW + (cols - 1) * gapX
     66	```
-    67	
+    67
     68	**User preference (2026-09-24): more spacing, stricter overlap handling.**
     69	Default gaps are raised: gapX ≥ 90 for icon-class cells, gapY ≥ 56 for
     70	boundary-heavy layouts; boundary padding +25% over the AWS-measured tokens.
@@ -2634,39 +2634,39 @@ no test files yet — suite lands with T001
     74	adjacent inflates its bounding box over unrelated boundaries (measured: eks
     75	proof public-subnet box spanned rows 0–2 and swallowed the private subnet);
     76	coincident boundary edges (identical wrap-sets) are a validation failure.
-    77	
+    77
     78	Cell classes (glyph vs occupied cell incl. labels): bare icon 48×48;
     79	gateway+label 144×88; compact compute 112×88; public subnet ≥230×160;
     80	private subnet ≥230×150; AZ ≥310×420 (measured AZ pitch ≈371px, gap ≈80px);
     81	route-table card ≥190×116.
-    82	
+    82
     83	**Measured lesson (proof diagrams):** empty grid rows still consume pitch —
     84	contiguous rows only. A diagram that skips a row rendered ~240px taller than
     85	the viewport and failed visual-check; compacting to contiguous rows fixed it.
-    86	
+    86
     87	### 1.4 Label masks and clear gap
-    88	
+    88
     89	```text
     90	labelMask ≈ 6.5px × ASCII units + 13px   (CJK counts as 2 units)
     91	clear gap > labelMask + 8px breathing room
     92	```
-    93	
+    93
     94	**Measured lesson:** with 120px cells, adjacent-column gaps need gapX ≥ 70 for
     95	7–8 character labels ("ingress", "filtered"); 12-character labels
     96	("allow / deny", 68px mask) do not fit any gap that keeps the font floor —
     97	shorten the label ("filtered", 45px) instead of widening the grid.
     98	Repair order: move label → adjust route/spacing → shorten wording preserving
     99	meaning → omit only fully-implied wording.
-   100	
+   100
    101	### 1.5 Orthogonal routing side contracts
-   102	
+   102
    103	```text
    104	first segment: perpendicular, OUTWARD from the named fromSide
    105	final segment: perpendicular, INWARD to the named toSide
    106	interior segments ≥ 16px; nonzero segments ≥ 8px
    107	parallel traffic planes separated ~10px
    108	```
-   109	
+   109
    110	Edges never cross unrelated opaque nodes; a long run along a container border
 --- diagrams/eks-ipv6.architecture.json
     10	  "components": [
@@ -2812,9 +2812,9 @@ bash: cd /home/fakoli/code/stratus && grep -nE 'Solid green|rou...
 615:| Micro-segments | Remove zero-length segments; reject remaining segments under 8 px and interior segments under 16 px. |
 618:| Border-run detection | Flag an edge parallel to a boundary within 4 px for at least 16 px, unless explicitly allowed. |
 628:- **Note — medium:** `composition-notes.md:21,24–25` has inaccurate size estimates: AZ gap approximately 80 px; private panels approximately 148 px high; route cards approximately 168–183×116 px.
-   113	
+   113
    114	## 2. Repeatable element library
-   115	
+   115
    116	| Element | Shape spec |
    117	|---|---|
    118	| Cloud boundary | solid corner-tab rectangle, logo + label top-left tab |
@@ -2826,9 +2826,9 @@ bash: cd /home/fakoli/code/stratus && grep -nE 'Solid green|rou...
    124	| Numbered badge | solid circle ~22px, white numeral, anchored at source end of the decision edge, 20px offset, 10px min clearance |
    125	| Traffic planes | separate colored line families per protocol/segment (blue=IPv4, orange=IPv6) with legend |
    126	| Auxiliary services | dashed unfilled box, no edges (CloudWatch/CloudTrail/X-Ray/IAM only) |
-   127	
+   127
    128	## 3. Layout patterns
-   129	
+   129
    130	1. **Recursive boundary stack** — Cloud→Region→VPC→AZ→Subnet as nested insets
    131	   with per-level style tokens; containment truth per provider (AWS subnet ∈
    132	   one AZ; GCP regional subnets; Azure regional VNets).
@@ -2842,9 +2842,9 @@ bash: cd /home/fakoli/code/stratus && grep -nE 'Solid green|rou...
    140	   the 6px font floor and label masks; two 4-column diagrams validate clean).
    141	6. **Deterministic layout from spec** — grid placement (row/col) computed from
    142	   the spec; no hand-tuned coordinates; same spec → same layout bytes.
-   185	
+   185
    186	### 6.1 Canonical VPC element vocabulary (16 first-class elements)
-   187	
+   187
    188	VPC; Subnets; Availability Zones; Internet Gateway; Route Tables; Security
    189	Groups; NACLs (subnet-level); NAT Gateway; VPN Connections; Direct Connect;
    190	ALB/NLB; Transit Gateway; VPN Gateway; VPC Endpoint Gateway (S3/DynamoDB);
@@ -2853,12 +2853,12 @@ bash: cd /home/fakoli/code/stratus && grep -nE 'Solid green|rou...
    193	each with provider-true placement rules (IGW at VPC level, NAT/ALB in public
    194	subnets, compute/data in private subnets, Route53/CloudFront/S3/IAM/CloudWatch
    195	outside VPC).
-   196	
+   196
    197	### 6.2 Progressive-disclosure ladder (the generator DNA)
-   198	
+   198
    199	Cloudviz builds complexity by starting simple and adding one resource family
    200	per step, each step a complete readable diagram:
-   201	
+   201
    202	1. Simple VPC — 3 AZs, 3 public/private subnet pairs, IGW, route tables
    203	2. + ALB + EC2 targets in an auto-scaling group
    204	3. Three-tier — external + internal ALBs, presentation/app/data tiers,
@@ -2869,16 +2869,16 @@ bash: cd /home/fakoli/code/stratus && grep -nE 'Solid green|rou...
      4	import { readdirSync } from "node:fs";
      5	import { join, dirname } from "node:path";
      6	import { fileURLToPath } from "node:url";
-     7	
+     7
      8	const here = dirname(fileURLToPath(import.meta.url));
-     9	
+     9
     10	const testFiles = readdirSync(here).filter((f) => f.endsWith(".test.mjs")).sort();
-    11	
+    11
     12	if (testFiles.length === 0) {
     13	  console.log("no test files yet — suite lands with T001");
     14	  process.exit(0);
     15	}
-    16	
+    16
     17	let failed = 0;
     18	for (const f of testFiles) {
     19	  const r = spawnSync(process.execPath, [join(here, f)], { stdio: "inherit" });
@@ -2887,15 +2887,15 @@ bash: cd /home/fakoli/code/stratus && grep -nE 'Solid green|rou...
     22	process.exit(failed === 0 ? 0 : 1);
 index_diff_exit=0
   1055	${asArray(arch.connections).map(renderConnectionLabel).join('\n')}
-  1056	
+  1056
   1057	        <!-- Boundary labels (foreground masks keep routes out of titles) -->
   1058	${boundaries.map(renderBoundaryLabel).join('\n\n')}
-  1059	
+  1059
   1060	        <!-- Legend -->
   1061	${renderLegend()}
   1062	      </svg>`;
   1063	}
-  1064	
+  1064
   1065	validateArchitecture();
   1066	if (layoutJsonMode) {
   1067	  console.log(JSON.stringify(buildLayoutReport(), null, 2));
