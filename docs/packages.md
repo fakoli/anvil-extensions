@@ -4,7 +4,6 @@ Sixteen packages, fifteen registered extension entrypoints, one pinned unit. `pi
 
 | Package | Provenance | Category |
 |---|---|---|
-| [pi-stratus](#pi-stratus) | original | diagram engine |
 | [pi-condense](#pi-condense) | vendored, verbatim | context management |
 | [pi-insights](#pi-insights) | original | observability |
 | [pi-commentary](#pi-commentary) | original | observability |
