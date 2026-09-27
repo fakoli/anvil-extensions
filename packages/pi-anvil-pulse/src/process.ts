@@ -149,6 +149,10 @@ export async function startPulse(opts: PulseStartOptions): Promise<PulseStartRes
   // stdout goes to the log file via an open fd (stdio array entries do not
   // accept "file:" strings); stderr stays on the caller's stderr so a crash
   // is visible where the session ran.
+  // Truncate first (the original start-server.sh used `> "$LOG_FILE"`): the
+  // first `server-started` line in the log must be THIS start's, otherwise a
+  // restart on a new port would report the previous server's URL.
+  writeFileSync(logFile, "", { flag: "w" });
   const logFd = openSync(logFile, "a");
   const child = spawn(
     process.execPath,
@@ -168,12 +172,25 @@ export async function startPulse(opts: PulseStartOptions): Promise<PulseStartRes
   child.unref();
 
   // Wait for the server-started line (up to 5 seconds), then verify the
-  // server survived a short window (catches process reapers).
+  // server survived a short window (catches process reapers). On native
+  // Windows `ps` is unavailable, so identity verification degrades to a
+  // liveness check (signal 0) — the server is our own detached child, so
+  // survival is the strongest claim we can make there.
+  const alive = (p: number): boolean => {
+    try {
+      process.kill(p, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
   for (let i = 0; i < 50; i++) {
     const line = readStartedLine(project);
     if (line) {
       for (let j = 0; j < 20; j++) {
-        if (!isOurServer(pid, project)) {
+        const ok =
+          process.platform === "win32" ? alive(pid) : isOurServer(pid, project);
+        if (!ok) {
           rmSync(pidFile, { force: true });
           throw new Error(
             "server started but was killed; retry in a persistent terminal " +

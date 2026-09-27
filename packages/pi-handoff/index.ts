@@ -23,7 +23,7 @@ import { Type } from "typebox";
 import { existsSync } from "node:fs";
 import { checkFreshness } from "./src/freshness.js";
 import { readNote, saveNote } from "./src/note.js";
-import { noteProse, resolveHandoffPath } from "./src/path.js";
+import { resolveHandoffPath } from "./src/path.js";
 
 function cwdOf(ctx: unknown): string {
   const c = ctx as { cwd?: string } | undefined;
@@ -127,18 +127,28 @@ export default function (pi: ExtensionAPI) {
 
   const injected = new Set<string>();
   let sessionReason: string | null = null;
+  let ephemeralKey: string | null = null;
 
   pi.on("session_start", (event, ctx) => {
     sessionReason = (event as { reason?: string }).reason ?? "startup";
     const file = (ctx.sessionManager as { getSessionFile?: () => string | null }).getSessionFile?.() ?? null;
-    if (file) injected.delete(file); // fresh session: re-arm
+    if (file) {
+      injected.delete(file); // fresh session: re-arm
+      ephemeralKey = null;
+    } else {
+      // Non-persisted sessions have no stable file identity: give each one
+      // its own banner key so the first ephemeral session cannot consume the
+      // banner for every later ephemeral session in this process.
+      ephemeralKey = `ephemeral:${injected.size}:${Date.now()}`;
+    }
+    if (injected.size > 128) injected.clear(); // bound the set
   });
 
   pi.on("before_agent_start", async (_event, ctx) => {
     if (!["startup", "resume", "new", "fork"].includes(sessionReason ?? "startup")) return;
     const sm = ctx.sessionManager as { getSessionFile?: () => string | null };
     const file = sm.getSessionFile?.();
-    const key = file ?? "ephemeral";
+    const key = file ?? ephemeralKey ?? "ephemeral";
     if (injected.has(key)) return;
     injected.add(key);
     try {
@@ -148,7 +158,7 @@ export default function (pi: ExtensionAPI) {
       return {
         message: {
           customType: "handoff-banner",
-          content: buildBanner(noteProse(note.prose), resolved.file),
+          content: buildBanner(note.prose, resolved.file),
           display: true,
         },
       };

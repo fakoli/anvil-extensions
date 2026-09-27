@@ -335,8 +335,11 @@ if(!$('narrative').textContent.trim())$('narrative').style.display='none';
 export function reportHtml(agg: Aggregate, narrativeHtml = ""): string {
   // prevent </script> breakout, as the original does
   const data = JSON.stringify(agg).replace(/</g, "\\u003c");
-  return HTML_TEMPLATE.replace("__DATA__", data).replace(
-    "__NARRATIVE__",
-    narrativeHtml || "",
+  // Single-pass replacement: a sequential .replace("__DATA__").replace(
+  // "__NARRATIVE__) would let the embedded data (or narrative) containing the
+  // other sentinel corrupt the page. A function replacer inserts the value
+  // verbatim, without re-scanning it.
+  return HTML_TEMPLATE.replace(/__DATA__|__NARRATIVE__/g, (m) =>
+    m === "__DATA__" ? data : narrativeHtml || "",
   );
 }

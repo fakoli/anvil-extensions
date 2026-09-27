@@ -258,6 +258,21 @@ console.log("# process management");
     assert.equal(c.running, false);
   });
 
+  await ok("restart reports the NEW server's URL, not the previous one", async () => {
+    // Regression: the log used to be appended, so readStartedLine returned the
+    // first (stale) server-started line after a stop→start cycle.
+    const restarted = await startPulse({ project: dir });
+    try {
+      assert.notEqual(restarted.url, result.url);
+      const c = await checkPulse(dir);
+      assert.equal(c.running, true);
+      assert.equal(c.url, restarted.url);
+      assert.equal(c.pid, restarted.pid);
+    } finally {
+      await stopPulse(dir);
+    }
+  });
+
   await ok("stale/foreign pid file is reported unverified and cleaned, never signalled", async () => {
     // our own test process pid in the file: not a pulse server → unverified
     writeFileSync(join(dir, ".anvil-pulse", "server.pid"), String(process.pid) + "\n");

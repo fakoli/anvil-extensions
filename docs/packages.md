@@ -167,9 +167,10 @@ system roles are heuristic. See [setup, limits, security and tests](../packages/
 ## pi-anvil-pulse
 
 **What:** A live, read-only observability dashboard for an Anvil project:
-claims, task phases, event feed, and per-task staleness. One native tool
-(`anvil_pulse`) with `start` / `check` / `stop` / `read` actions, a `/pulse`
-slash command, and an optional TUI widget. The dashboard is a local
+claims, task phases, event feed, and per-task staleness. Four native tools
+(`anvil_pulse_start`, `anvil_pulse_check`, `anvil_pulse_stop`,
+`anvil_pulse_read`), a `/pulse` slash command, and an optional TUI
+widget. The dashboard is a local
 HTTP server (`src/server.mjs`) serving a self-contained `dashboard.html`.
 
 **Why it exists:** Long Anvil runs need a glanceable "what is happening

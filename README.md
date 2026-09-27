@@ -45,7 +45,7 @@ If you maintain a fleet of agent hosts, this packaging model is the point. If yo
 | [pi-observations](packages/pi-observations/) | Optional bounded PNG/JPEG/WebP/GIF observation mediation for a fresh `--observation` Pi session; registered by the bundle but inert without that flag |
 | [pi-browser](packages/pi-browser/) | Optional bounded, read-only public-page observations for a fresh `--browser` Pi session with protected configuration; registered by the bundle but inert without that flag |
 | [pi-repo-graph](packages/pi-repo-graph/) | Default-discovered `/skill:repo-graph`: offline system diagrams, repository maps, tables and dependency matrices; Python 3.10+ required when used |
-| [pi-anvil-pulse](packages/pi-anvil-pulse/) | Live read-only observability dashboard for an Anvil project: claims, task phases, event feed, staleness (`anvil_pulse` tool + `/pulse` + optional TUI widget) |
+| [pi-anvil-pulse](packages/pi-anvil-pulse/) | Live read-only observability dashboard for an Anvil project: claims, task phases, event feed, staleness (`anvil_pulse_start/check/stop/read` tools + `/pulse` + optional TUI widget) |
 | [pi-handoff](packages/pi-handoff/) | Durable cross-session, cross-checkout handoff notes keyed by project identity: `handoff_save`/`handoff_recall` tools, session-start resume banner, `/handoff` + `/recall` prompts |
 | [pi-session-retro](packages/pi-session-retro/) | Session retros over Pi/Claude/Codex logs: `session_retro` tool (list/find/stats/report/html) + `/session-retro` prompt; deterministic token-economy and workflow reports |
 

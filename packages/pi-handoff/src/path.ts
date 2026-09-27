@@ -16,7 +16,7 @@
 
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 
@@ -84,10 +84,18 @@ function handoffKey(hint: string, source: string): string {
 }
 
 function physicalPath(p: string): string {
+  // Physical (symlinks resolved) canonicalization — the original used
+  // `cd && pwd -P` (bash) and `Path.resolve()` (Python), both physical. A
+  // lexical resolve would key a symlinked project dir to a different file
+  // than its real path (e.g. macOS /var -> /private/var).
   try {
-    return resolve(p);
+    return realpathSync(p);
   } catch {
-    return p;
+    try {
+      return resolve(p);
+    } catch {
+      return p;
+    }
   }
 }
 

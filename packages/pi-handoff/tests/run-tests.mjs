@@ -10,6 +10,7 @@ import {
   writeFileSync,
   readFileSync,
   existsSync,
+  symlinkSync,
 } from "node:fs";
 import { execSync as run } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -140,6 +141,24 @@ await ok("non-git directory keys by its physical path", async () => {
   const p = resolveHandoffPath(dir);
   assert.match(p.key, /-[0-9a-f]{12}$/);
   rmSync(dir, { recursive: true, force: true });
+});
+
+await ok("symlinked project dir keys to the same file as its real path", async () => {
+  // Regression: a lexical resolve keyed a symlink to a different file than
+  // the physical directory it points at (the original used pwd -P / Path.resolve()).
+  const real = mkdtempSync(join(tmpdir(), "handoff-symreal-"));
+  const link = join(tmpdir(), `handoff-sym-${process.pid}-${Date.now()}`);
+  symlinkSync(real, link, "dir");
+  try {
+    assert.equal(
+      resolveHandoffPath(real).file,
+      resolveHandoffPath(link).file,
+      "symlink and real path must share one handoff file",
+    );
+  } finally {
+    rmSync(link, { force: true });
+    rmSync(real, { recursive: true, force: true });
+  }
 });
 
 await ok("legacy (repo-root) notes migrate to the remote key once", async () => {
