@@ -19,7 +19,7 @@ Added to the repository-agnostic core:
 - **Post-merge verification** — `state,mergedAt,mergeCommit`; the
   `mergeCommit` is the tag target.
 - **SHA-pinned review verdicts** — the review verdict names the exact
-  head SHA it reviewed; a push voids it.
+  head SHA it reviewed; a head push or a moved base voids it.
 - **Commit-pinned releases** — `--target <sha>` pins (and creates if
   missing) the release target; `--verify-tag` verifies the remote tag
   exists; never a branch.

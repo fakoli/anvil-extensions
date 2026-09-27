@@ -29,8 +29,10 @@ artifact name, install step).
    ship / ship-with-fixes / reject verdict. Restate any facts that
    exist only in omitted tool output — the reviewer sees none of this
    session. The verdict must name the exact head SHA it reviewed
-   (e.g. `SHIP at <sha>`); a push that moves the head voids the verdict
-   and the CI result — re-review before merging.
+   (e.g. `SHIP at <sha>`); a push that moves the head — or a base that
+   has moved since the review — voids the verdict and the CI result:
+   re-run the review and CI against the new integration before
+   merging.
 4. **Fix + sign-off.** Address findings in a visible commit; re-run the
    review on the fixed diff until the verdict is approve-merge.
 5. **Merge (pinned).** If the repo has CI, watch it with
@@ -39,8 +41,9 @@ artifact name, install step).
    view N --json headRefOid,baseRefOid` — the head must equal the
    reviewed/CI-tested SHA, and the base must equal the base the review
    and CI ran against (`gh run view <run-id> --json headSha` exposes
-   the CI run's head); if the base moved, re-verify the integration and
-   re-run CI before merging. Merge with
+   the CI run's head); if the base moved, the verdict is void —
+   re-run the adversarial review and CI against the new integration
+   before merging. Merge with
    `gh pr merge N --<strategy> --match-head-commit <sha>` — a plain
    merge silently takes a moved head. Post-merge verify with
    `gh pr view N --json state,mergedAt,mergeCommit`; the
