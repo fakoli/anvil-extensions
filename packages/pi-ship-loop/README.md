@@ -46,9 +46,9 @@ One skill: `ship-loop`
   draft PR → SHA-pinned fresh-context adversarial review → fix +
   sign-off → **pinned merge** (`--match-head-commit`, headSha-verified
   CI, post-merge verification) → immutable versioned tag → published
-  checksummed artifact pinned to an exact commit → download-verify →
-  user-authorized install with an approval record → receipt-backed
-  handoff record) plus a **filled-in repository profile for
+  checksummed artifact pinned to an exact commit, with a recorded
+  publication approval → download-verify → user-authorized install
+  with its own approval record → receipt-backed handoff record) plus a **filled-in repository profile for
   anvil-extensions** (tag convention, merge convention, `scripts/release.sh`
   gate, `docs/releases/<tag>.md` in-PR rule that doubles as the release
   ledger, artifact naming, `pi install` step). The core degrades
