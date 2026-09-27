@@ -34,12 +34,13 @@ artifact name, install step).
 4. **Fix + sign-off.** Address findings in a visible commit; re-run the
    review on the fixed diff until the verdict is approve-merge.
 5. **Merge (pinned).** If the repo has CI, watch it with
-   `gh pr checks N --watch` (not a hand-rolled sleep loop) and confirm
-   the green run's `headSha` equals the head being merged; after any
+   `gh pr checks N --watch` (not a hand-rolled sleep loop); after any
    push, cancel stale runs and re-trigger. Pre-merge identity: `gh pr
-   view N --json headRefOid` must equal the reviewed/CI-tested SHA
-   (add `git diff --exit-code <reviewed-sha>^{tree} <head>^{tree}` if
-   the base moved). Merge with
+   view N --json headRefOid,baseRefOid` — the head must equal the
+   reviewed/CI-tested SHA, and the base must equal the base the review
+   and CI ran against (`gh run view <run-id> --json headSha` exposes
+   the CI run's head); if the base moved, re-verify the integration and
+   re-run CI before merging. Merge with
    `gh pr merge N --<strategy> --match-head-commit <sha>` — a plain
    merge silently takes a moved head. Post-merge verify with
    `gh pr view N --json state,mergedAt,mergeCommit`; the
@@ -53,30 +54,34 @@ artifact name, install step).
    of the default branch (it typically enforces clean tree + CI green +
    tag); otherwise create and push the tag directly. Never move or
    overwrite a tag.
-7. **Publish the artifact.** Archive the exact tagged source
+7. **Publish the artifact — with a recorded authorization.** Record
+   the user's authorization to publish (who/when/scope, e.g. a
+   `publish-approval.json` receipt; a documented standing authorization
+   counts) BEFORE publishing; a publish with no approval record is not
+   authorized. Then archive the exact tagged source
    (`git archive`), add a checksum file (`SHA256SUMS`), and publish
    both as release assets with the release notes
-   (`gh release create --verify-tag --notes-file ...`). Pin the
-   release to an exact commit, never a branch: `--target <sha>` for
-   commit-based releases, `--verify-tag` for tag-based ones. The notes
-   file lives in the PR when the repo requires it; otherwise a temp
-   file is fine.
+   (`gh release create --verify-tag --notes-file ...`). Pin the release
+   to an exact commit, never a branch: `--target <sha>` pins (and
+   creates, if missing) the release target; `--verify-tag` verifies the
+   remote tag exists — commit identity itself is established by the
+   tag→commit resolution in step 8. The notes file lives in the PR when
+   the repo requires it; otherwise a temp file is fine.
 8. **Verify publication.** Download the published assets;
    `shasum -a 256 -c`; compare local vs downloaded bytes; confirm the
    remote tag resolves to the exact merged commit.
 9. **Activate/install — only when the user authorizes it.**
-   Publication never changes an installed selection. Record the user's
-   authorization (who/when/scope, e.g. a `publish-approval.json`
-   receipt) before acting; a publish/install with no approval record
-   is not authorized. The install step is repo-specific (e.g. a
-   package-manager pin update for a bundle); verify the installed
-   state afterwards.
+   Publication never changes an installed selection. Record the
+   user's authorization for the install step separately from the
+   publication authorization, then perform the repo-specific install
+   (e.g. a package-manager pin update for a bundle) and verify the
+   installed state afterwards.
 10. **Handoff record.** Release URL, tag, commit SHA, artifact name +
     SHA-256 digest, check results, and the previous version as the
-    rollback target. Every claim in the record must point to a stored
-    receipt (merge output, CI status JSON, asset digests, approval
-    record) and be re-verifiable from the remote, not recalled from
-    session memory. (Profile option: a cumulative
+    rollback target. Remotely verifiable facts (tag→commit resolution,
+    release assets, digests) must be re-verified from the remote; private
+    receipts (approval records, local install state) are stored locally
+    and labeled as such. (Profile option: a cumulative
     `release-inventory.md` ledger — PR URL, reviewed head, tag, and
     release URL per release.)
 

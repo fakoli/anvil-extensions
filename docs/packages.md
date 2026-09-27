@@ -87,7 +87,7 @@ Twenty packages, seventeen registered extension entrypoints, one pinned unit. `p
 
 **Why it exists:** Sessions end; work shouldn't evaporate. The policy is deliberate: core memory stays small and curated (pointers over duplication), the long tail lives in searchable stores, and nothing sensitive gets persisted — writes pass a secret scanner first.
 
-**How it works:** Markdown files remain the durable source of truth (human-readable, agent-editable); a SQLite store with FTS5 indexes mirrors them for search; background consolidation keeps the core under cap; skills capture *how*, not just *what*. This fork carries local patches — see [forks.md](forks.md#pi-hermes-memory).
+**How it works:** Markdown files remain the durable source of truth (human-readable, agent-editable); a SQLite store with FTS5 indexes mirrors them for search; background consolidation keeps the core under cap; skills capture *how*, not just *what*. This fork carries local patches — see [forks.md](forks.md#patched-fork-pi-hermes-memory).
 
 ## pi-sandbox-config
 
@@ -103,7 +103,7 @@ Twenty packages, seventeen registered extension entrypoints, one pinned unit. `p
 
 **Why it exists:** Images belong in the agent's hand, not on the side. The design carries a budget discipline from its plugin ancestor: one billable call per request, no automatic retries, atomic no-clobber writes, and explicit caps on every input and response.
 
-**How it works:** Tools build typed Gemini requests, stream progress, cancel via signal, and render results in the TUI; `sharp` does all image processing (loaded via dynamic import — see the embedded-runtime note in [forks.md](forks.md#pi-nano-banana)); configuration is shared with sibling tooling via a common config file.
+**How it works:** Tools build typed Gemini requests, stream progress, cancel via signal, and render results in the TUI; `sharp` does all image processing (loaded via dynamic import — see the embedded-runtime note in [forks.md](forks.md#adapted-port-pi-nano-banana)); configuration is shared with sibling tooling via a common config file.
 
 ## pi-observations
 

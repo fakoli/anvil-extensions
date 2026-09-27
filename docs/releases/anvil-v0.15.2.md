@@ -11,23 +11,33 @@ Added to the repository-agnostic core:
   <sha>`; a plain merge silently takes a moved head (the corpus's
   dominant pattern, ~76 session files).
 - **Pre-merge identity checks** — `headRefOid` must equal the
-  reviewed/CI-tested SHA; tree-diff when the base moved.
+  reviewed/CI-tested SHA and the base must equal the base the review
+  and CI ran against (`gh run view <run-id> --json headSha` exposes
+  the CI run's head); a moved base re-triggers CI + re-review.
 - **Stale-head CI guard** — watch with `gh pr checks --watch`, verify
   the green run's `headSha`, cancel stale runs after a push.
 - **Post-merge verification** — `state,mergedAt,mergeCommit`; the
   `mergeCommit` is the tag target.
 - **SHA-pinned review verdicts** — the review verdict names the exact
   head SHA it reviewed; a push voids it.
-- **Commit-pinned releases** — `--target <sha>` / `--verify-tag`, never
-  a branch.
-- **Approval records** — user authorization for publish/install is
-  recorded before acting.
-- **Receipt-backed handoff record** — every claim points to a stored
-  receipt re-verifiable from the remote.
+- **Commit-pinned releases** — `--target <sha>` pins (and creates if
+  missing) the release target; `--verify-tag` verifies the remote tag
+  exists; never a branch.
+- **Approval records** — publication authorization (who/when/scope,
+  e.g. a `publish-approval.json` receipt, standing authorization
+  counts) is recorded BEFORE publishing; install authorization is
+  recorded separately before installing.
+- **Receipt-backed handoff record** — remotely verifiable facts are
+  re-verified from the remote; private receipts (approvals, local
+  install state) are stored locally and labeled as such.
 
 The anvil-extensions profile gained the merge convention
 (`--merge --match-head-commit`) and notes that
 `docs/releases/<tag>.md` doubles as the release ledger.
+
+Also fixed: two pre-existing broken anchors in `docs/packages.md`
+(`forks.md#pi-hermes-memory` → `#patched-fork-pi-hermes-memory`,
+`#pi-nano-banana` → `#adapted-port-pi-nano-banana`).
 
 ## Verification and limits
 
