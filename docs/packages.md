@@ -238,25 +238,30 @@ README](../packages/pi-session-retro/README.md).
 
 ## pi-ship-loop
 
-**What:** A default-discovered skill (`ship-loop`) that encodes this
-repository's release completion gate as an agent-executable procedure:
-worktree prep with all doc surfaces in one PR, draft PR, fresh-context
-read-only adversarial review, fix + sign-off, merge on green CI,
-`scripts/release.sh` from a clean `origin/main` checkout, artifact
-publication (tarball + `SHA256SUMS` + `gh release create --verify-tag`),
-download-and-verify, user-authorized `pi install`, and the handoff
-record.
+**What:** A default-discovered skill (`ship-loop`) that encodes a release
+completion gate as an agent-executable procedure: a
+**repository-agnostic core loop** (worktree prep with all doc surfaces
+in one PR, draft PR, fresh-context read-only adversarial review, fix +
+sign-off, merge on green CI or recorded no-CI, immutable versioned tag,
+published checksummed artifact, download-verify, user-authorized
+install, handoff record) plus a **filled-in repository profile for
+anvil-extensions** (tag convention, `scripts/release.sh` gate,
+`docs/releases/<tag>.md` in-PR rule, artifact naming, `pi install`).
+The core degrades gracefully for repos without CI or release tooling, so
+the procedure can be generated for any repository setup.
 
-**Why it exists:** The gate is defined in prose in `AGENTS.md` and
-`CONTRIBUTING.md`, so every agent session re-derives the ordered steps,
-exact commands, and failure classes. The skill makes the loop
-discoverable and consistent across sessions. It was written after
-executing the loop end-to-end for `anvil-v0.14.0`.
+**Why it exists:** Release gates are usually defined in prose
+(`AGENTS.md` / `CONTRIBUTING.md`), so every agent session re-derives
+the ordered steps, exact commands, and failure classes. The skill makes
+the loop discoverable and consistent across sessions, and portable
+across repositories. It was written after executing the loop
+end-to-end for `anvil-v0.14.0`, and its generic core was validated on a
+scratch repository with no release tooling and no CI.
 
 **How it works:** Pure prompt resource — one skill file, no extension
 entrypoint, no tools, no code, no dependencies. It changes no trust
 boundary; the steps it describes carry the same documented authority as
-`CONTRIBUTING.md` itself. Operator-specific host details are
-deliberately kept out of the tracked text. No test suite (no code to
+the repository's own contribution guide. Operator-specific host details
+are deliberately kept out of the tracked text. No test suite (no code to
 test; recorded in `scripts/test-matrix.txt`). See [the package
 README](../packages/pi-ship-loop/README.md).

@@ -39,19 +39,23 @@ One skill: `ship-loop`
 
 - **When to use:** a coherent change is finished in a worktree and needs
   to be shipped; a merged PR still needs its release gate; resuming a
-  partially published release.
-- **What it encodes:** the ten ordered steps — prep (all doc surfaces in
-  one PR), draft PR, fresh-context read-only adversarial review with
-  severity + `file:line` findings, fix + sign-off, merge on green CI,
-  `scripts/release.sh` from a clean `origin/main` checkout, artifact
-  publication (`git archive` → tarball + `SHA256SUMS` → `gh release
-  create --verify-tag`), download-and-verify, user-authorized `pi
-  install`, and the handoff record (release URL, tag, commit, digest,
-  rollback target).
+  partially published release; or when the procedure needs to be
+  generated for a *different* repository (keep the core loop, write
+  the repo's profile).
+- **Structure:** a **repository-agnostic core loop** (ten steps: prep →
+  draft PR → fresh-context adversarial review → fix + sign-off → merge
+  (green CI, or recorded no-CI) → immutable versioned tag → published
+  checksummed artifact → download-verify → user-authorized install →
+  handoff record) plus a **filled-in repository profile for
+  anvil-extensions** (tag convention, `scripts/release.sh` gate,
+  `docs/releases/<tag>.md` in-PR rule, artifact naming, `pi install`
+  step). The core degrades gracefully: no-CI repos record that and tag
+  the merged commit; repos without gate scripts tag + publish directly.
 - **Limits:** it is a procedure, not automation — the agent executes
-  each step with its normal tools. It assumes the repository's own
-  release tooling (`scripts/release.sh`, `scripts/release-verify.sh`,
-  `scripts/test-matrix.txt`) is present and unmodified.
+  each step with its normal tools. For this repository it assumes the
+  repository's own release tooling (`scripts/release.sh`,
+  `scripts/release-verify.sh`, `scripts/test-matrix.txt`) is present and
+  unmodified; the generic core has no such assumption.
 
 ## Configuration
 
@@ -81,15 +85,22 @@ references.
 Not applicable in the code sense: the package ships no executable code,
 so it has no test suite (recorded in
 [scripts/test-matrix.txt](../../scripts/test-matrix.txt)). Verification
-is by inspection:
+is by inspection and live execution:
 
 - `git diff --check` clean; all relative links resolve.
 - The skill's commands match `CONTRIBUTING.md`'s publication procedure
   and `scripts/release.sh`'s actual behavior (tag-only; publication is
   separate).
-- Live evidence: the procedure was executed end-to-end for
-  `anvil-v0.14.0` (PR #24 → tag → published artifact → verified
-  download → host install) before this skill was written.
+- Live evidence (this repository): the procedure was executed
+  end-to-end for `anvil-v0.14.0` and `anvil-v0.15.0` (PR → tag →
+  published artifact → verified download → host install).
+- Live evidence (any-repo generality): the generic core was executed
+  end-to-end on a scratch repository (`fakoli/ship-loop-test`) with no
+  release tooling and no CI — worktree → PR → fresh-context review →
+  merge → `v0.1.0` tag on the exact merge commit → published tarball +
+  `SHA256SUMS` → download/checksum/byte-identity verification. The
+  no-CI and no-gate-script degradations in the core loop come from
+  that run.
 
 ## Disable, upgrade, and rollback
 

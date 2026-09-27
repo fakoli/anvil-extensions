@@ -48,7 +48,7 @@ If you maintain a fleet of agent hosts, this packaging model is the point. If yo
 | [pi-anvil-pulse](packages/pi-anvil-pulse/) | Live read-only observability dashboard for an Anvil project: claims, task phases, event feed, staleness (`anvil_pulse_start/check/stop/read` tools + `/pulse` + optional TUI widget) |
 | [pi-handoff](packages/pi-handoff/) | Durable cross-session, cross-checkout handoff notes keyed by project identity: `handoff_save`/`handoff_recall` tools, session-start resume banner, `/handoff` + `/recall` prompts |
 | [pi-session-retro](packages/pi-session-retro/) | Session retros over Pi/Claude/Codex logs: `session_retro` tool (list/find/stats/report/html) + `/session-retro` prompt; deterministic token-economy and workflow reports |
-| [pi-ship-loop](packages/pi-ship-loop/) | Default-discovered `ship-loop` skill: the release completion gate (review → merge → tag → published, checksum-verified artifact → handoff) as an agent-executable procedure |
+| [pi-ship-loop](packages/pi-ship-loop/) | Default-discovered `ship-loop` skill: a release-gate procedure (review → merge → tag → published, checksum-verified artifact → handoff) with a repository-agnostic core and a filled-in profile for this repo |
 
 Full catalog — including *why* each exists and how it works — is in [docs/packages.md](docs/packages.md). Fork lineage and what we changed in vendored packages is in [docs/forks.md](docs/forks.md).
 
