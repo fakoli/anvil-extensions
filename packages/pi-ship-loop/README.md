@@ -43,14 +43,17 @@ One skill: `ship-loop`
   generated for a *different* repository (keep the core loop, write
   the repo's profile).
 - **Structure:** a **repository-agnostic core loop** (ten steps: prep →
-  draft PR → fresh-context adversarial review → fix + sign-off → merge
-  (green CI, or recorded no-CI) → immutable versioned tag → published
-  checksummed artifact → download-verify → user-authorized install →
-  handoff record) plus a **filled-in repository profile for
-  anvil-extensions** (tag convention, `scripts/release.sh` gate,
-  `docs/releases/<tag>.md` in-PR rule, artifact naming, `pi install`
-  step). The core degrades gracefully: no-CI repos record that and tag
-  the merged commit; repos without gate scripts tag + publish directly.
+  draft PR → SHA-pinned fresh-context adversarial review → fix +
+  sign-off → **pinned merge** (`--match-head-commit`, headSha-verified
+  CI, post-merge verification) → immutable versioned tag → published
+  checksummed artifact pinned to an exact commit, with a recorded
+  publication approval → download-verify → user-authorized install
+  with its own approval record → receipt-backed handoff record) plus a **filled-in repository profile for
+  anvil-extensions** (tag convention, merge convention, `scripts/release.sh`
+  gate, `docs/releases/<tag>.md` in-PR rule that doubles as the release
+  ledger, artifact naming, `pi install` step). The core degrades
+  gracefully: no-CI repos record that and tag the merged commit; repos
+  without gate scripts tag + publish directly.
 - **Limits:** it is a procedure, not automation — the agent executes
   each step with its normal tools. For this repository it assumes the
   repository's own release tooling (`scripts/release.sh`,
@@ -98,9 +101,12 @@ is by inspection and live execution:
   end-to-end on a scratch repository (`fakoli/ship-loop-test`) with no
   release tooling and no CI — worktree → PR → fresh-context review →
   merge → `v0.1.0` tag on the exact merge commit → published tarball +
-  `SHA256SUMS` → download/checksum/byte-identity verification. The
-  no-CI and no-gate-script degradations in the core loop come from
-  that run.
+  `SHA256SUMS` → download/checksum/byte-identity verification.
+- Pattern grounding (0.15.2): the pinned-merge, stale-head CI, and
+  receipt-discipline steps were added after mining 72 Codex session
+  files + Pi sessions for actual shipping commands; the corpus's
+  dominant pattern (`gh pr merge … --match-head-commit <sha>`, ~76
+  session files) was absent from the skill and is now step 5.
 
 ## Disable, upgrade, and rollback
 

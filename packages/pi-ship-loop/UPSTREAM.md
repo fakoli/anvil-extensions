@@ -33,6 +33,16 @@ the exact merge commit → published tarball + `SHA256SUMS` →
 download/checksum/byte-identity verification. The core's no-CI and
 no-gate-script degradations come from that run.
 
+In the 0.15.2 revision the merge/verification band was strengthened
+from corpus mining of the operator's actual shipping sessions (72
+Codex session files + Pi sessions): head-pinned merges
+(`--match-head-commit`), pre-merge identity checks, post-merge
+verification, SHA-pinned review verdicts, stale-head CI guards,
+commit-pinned release creation, approval records, and receipt-backed
+handoff records. The anvil-extensions profile gained the merge
+convention (`--merge --match-head-commit`) and notes that
+`docs/releases/<tag>.md` doubles as the release ledger.
+
 ## Deliberate omissions
 
 Operator-specific host details (personal tool install locations,
