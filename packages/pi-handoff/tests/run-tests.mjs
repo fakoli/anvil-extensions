@@ -397,6 +397,25 @@ console.log("# extension factory");
     assert.equal(r4, undefined, "reload is quiet");
     rmSync(repo, { recursive: true, force: true });
   });
+
+  await ok("ephemeral (no session file) sessions each get their own banner", async () => {
+    const repo = makeRepo();
+    saveNote(repo, "Resume:\n- ephemeral banner test\n");
+    const mkCtx = () => ({
+      cwd: repo,
+      sessionManager: { getSessionFile: () => null },
+    });
+    // first ephemeral session
+    handlers.get("session_start")({ reason: "startup" }, mkCtx());
+    const e1 = await handlers.get("before_agent_start")({}, mkCtx());
+    assert.ok(e1?.message, "first ephemeral session injects the banner");
+    assert.match(e1.message.content, /ephemeral banner test/);
+    // a second ephemeral session must not be starved by the first one's key
+    handlers.get("session_start")({ reason: "new" }, mkCtx());
+    const e2 = await handlers.get("before_agent_start")({}, mkCtx());
+    assert.ok(e2?.message, "second ephemeral session gets its own banner");
+    rmSync(repo, { recursive: true, force: true });
+  });
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

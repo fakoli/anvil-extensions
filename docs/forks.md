@@ -83,7 +83,8 @@ the per-file delta table.
 - **pi-anvil-pulse** — the anvil-project observability dashboard
   (bash scripts + CJS server) becomes `src/process.ts` (start/check/stop
   with PID-identity verification), `src/server.mjs` (ESM port of the
-dashboard server), and a native `anvil_pulse` tool + `/pulse` command +
+dashboard server), and four native `anvil_pulse_start` / `anvil_pulse_check` /
+`anvil_pulse_stop` / `anvil_pulse_read` tools + a `/pulse` command +
 optional TUI widget. The `dashboard.html` is copied verbatim. Behavior
 guards carried over: the PID-identity check (never signal a foreign PID),
 stale-PID cleanup, and read-only anvil polling.

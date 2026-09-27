@@ -355,6 +355,21 @@ await ok("reportHtml embeds data safely and the narrative", async () => {
   assert.ok(!html.includes("</script>const"), "no script breakout");
 });
 
+await ok("reportHtml survives sentinel collision in data and narrative", async () => {
+  // Regression: sequential .replace("__DATA__").replace("__NARRATIVE__") let
+  // embedded data containing the other sentinel (or $-tokens in the narrative)
+  // corrupt the page. The single-pass function replacer must embed both verbatim.
+  const agg = aggregate([parse(pi1)]);
+  agg.__sentinel_probe = "x__NARRATIVE__y";
+  const narrative = mdToHtml("narrative with __DATA__ and $& $$ tokens");
+  const html = reportHtml(agg, narrative);
+  const m = html.match(/const D = (.*), fmt =/s);
+  const data = JSON.parse(m[1]);
+  assert.equal(data.__sentinel_probe, "x__NARRATIVE__y", "data containing the narrative sentinel embeds verbatim");
+  assert.ok(html.includes("__DATA__ and $&amp; $$ tokens"), "narrative containing $-tokens and the data sentinel embeds verbatim (mdToHtml escapes & to &amp;)");
+  assert.ok(!html.includes('id="narrative">__NARRATIVE__</div>'), "the narrative placeholder was replaced (the sentinel text inside the embedded data JSON is content, not a leftover placeholder)");
+});
+
 await ok("mdToHtml handles headings/lists/bold/code/links", async () => {
   const h = mdToHtml("# T\n\n- a **b** `c`\n- [l](https://x.y)\n- bad [j](javascript:alert(1))\n");
   assert.ok(h.includes("<h1>T</h1>"));
