@@ -241,12 +241,17 @@ README](../packages/pi-session-retro/README.md).
 **What:** A default-discovered skill (`ship-loop`) that encodes a release
 completion gate as an agent-executable procedure: a
 **repository-agnostic core loop** (worktree prep with all doc surfaces
-in one PR, draft PR, fresh-context read-only adversarial review, fix +
-sign-off, merge on green CI or recorded no-CI, immutable versioned tag,
-published checksummed artifact, download-verify, user-authorized
-install, handoff record) plus a **filled-in repository profile for
-anvil-extensions** (tag convention, `scripts/release.sh` gate,
-`docs/releases/<tag>.md` in-PR rule, artifact naming, `pi install`).
+in one PR, draft PR, SHA-pinned fresh-context adversarial review, fix +
+sign-off, **pinned merge** — `--match-head-commit` with headSha-verified
+CI and post-merge verification — immutable versioned tag, published
+checksummed artifact pinned to an exact commit, download-verify,
+user-authorized install with an approval record, receipt-backed
+handoff record) plus a **filled-in repository profile for
+anvil-extensions** (tag convention, merge convention, `scripts/release.sh`
+gate, `docs/releases/<tag>.md` in-PR rule that doubles as the release
+ledger, artifact naming, `pi install`). The merge/verification band was
+grounded in corpus mining of actual shipping sessions (72 Codex + Pi
+session files), where head-pinned merges were the dominant pattern.
 The core degrades gracefully for repos without CI or release tooling, so
 the procedure can be generated for any repository setup.
 
@@ -255,8 +260,10 @@ the procedure can be generated for any repository setup.
 the ordered steps, exact commands, and failure classes. The skill makes
 the loop discoverable and consistent across sessions, and portable
 across repositories. It was written after executing the loop
-end-to-end for `anvil-v0.14.0`, and its generic core was validated on a
-scratch repository with no release tooling and no CI.
+end-to-end for `anvil-v0.14.0`, its generic core was validated on a
+scratch repository with no release tooling and no CI, and its
+merge/verification band was strengthened in 0.15.2 from corpus mining
+of the operator's actual shipping sessions.
 
 **How it works:** Pure prompt resource — one skill file, no extension
 entrypoint, no tools, no code, no dependencies. It changes no trust

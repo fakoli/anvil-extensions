@@ -28,12 +28,24 @@ artifact name, install step).
    require severity + `file:line` findings and a
    ship / ship-with-fixes / reject verdict. Restate any facts that
    exist only in omitted tool output — the reviewer sees none of this
-   session.
+   session. The verdict must name the exact head SHA it reviewed
+   (e.g. `SHIP at <sha>`); a push that moves the head voids the verdict
+   and the CI result — re-review before merging.
 4. **Fix + sign-off.** Address findings in a visible commit; re-run the
    review on the fixed diff until the verdict is approve-merge.
-5. **Merge.** If the repo has CI, it must be green on the exact head
-   before merging. If it has no CI, record that explicitly and tag the
-   merged commit (optionally add a minimal CI workflow first).
+5. **Merge (pinned).** If the repo has CI, watch it with
+   `gh pr checks N --watch` (not a hand-rolled sleep loop) and confirm
+   the green run's `headSha` equals the head being merged; after any
+   push, cancel stale runs and re-trigger. Pre-merge identity: `gh pr
+   view N --json headRefOid` must equal the reviewed/CI-tested SHA
+   (add `git diff --exit-code <reviewed-sha>^{tree} <head>^{tree}` if
+   the base moved). Merge with
+   `gh pr merge N --<strategy> --match-head-commit <sha>` — a plain
+   merge silently takes a moved head. Post-merge verify with
+   `gh pr view N --json state,mergedAt,mergeCommit`; the
+   `mergeCommit` is the tag target. If the repo has no CI, record that
+   explicitly and tag the merged commit (optionally add a minimal CI
+   workflow first).
 6. **Immutable versioned tag** on the exact merged commit, following
    the repo's tag convention (e.g. `vX.Y.Z` or a prefixed form; minor
    for new capability, patch for fixes/docs, major for breaking). If
@@ -44,22 +56,36 @@ artifact name, install step).
 7. **Publish the artifact.** Archive the exact tagged source
    (`git archive`), add a checksum file (`SHA256SUMS`), and publish
    both as release assets with the release notes
-   (`gh release create --verify-tag --notes-file ...`). The notes file
-   lives in the PR when the repo requires it; otherwise a temp file is
-   fine.
+   (`gh release create --verify-tag --notes-file ...`). Pin the
+   release to an exact commit, never a branch: `--target <sha>` for
+   commit-based releases, `--verify-tag` for tag-based ones. The notes
+   file lives in the PR when the repo requires it; otherwise a temp
+   file is fine.
 8. **Verify publication.** Download the published assets;
    `shasum -a 256 -c`; compare local vs downloaded bytes; confirm the
    remote tag resolves to the exact merged commit.
 9. **Activate/install — only when the user authorizes it.**
-   Publication never changes an installed selection. The install step
-   is repo-specific (e.g. a package-manager pin update for a bundle);
-   verify the installed state afterwards.
+   Publication never changes an installed selection. Record the user's
+   authorization (who/when/scope, e.g. a `publish-approval.json`
+   receipt) before acting; a publish/install with no approval record
+   is not authorized. The install step is repo-specific (e.g. a
+   package-manager pin update for a bundle); verify the installed
+   state afterwards.
 10. **Handoff record.** Release URL, tag, commit SHA, artifact name +
     SHA-256 digest, check results, and the previous version as the
-    rollback target.
+    rollback target. Every claim in the record must point to a stored
+    receipt (merge output, CI status JSON, asset digests, approval
+    record) and be re-verifiable from the remote, not recalled from
+    session memory. (Profile option: a cumulative
+    `release-inventory.md` ledger — PR URL, reviewed head, tag, and
+    release URL per release.)
 
 ## Pitfalls (generic)
 
+- A green CI on a stale head is not green: after a push, verify the
+  run's `headSha`, cancel stale runs, and re-trigger. Never merge a
+  head that moved past the reviewed SHA, and never point a release at
+  a branch.
 - Release notes (wherever the repo keeps them) must exist before
   publication; the gate does not create them for you.
 - Tags are immutable: after a partial publish, re-publish the SAME
@@ -79,6 +105,8 @@ artifact name, install step).
 
 ## Repository profile: anvil-extensions
 
+- **Merge convention:** `gh pr merge N --merge --match-head-commit
+  <sha>` (merge commits), after `gh pr ready N` for draft PRs.
 - **Tag convention:** `anvil-vMAJOR.MINOR.PATCH` (immutable via
   repository rulesets).
 - **Gate tooling:** `bash scripts/release.sh <tag>` from a clean
@@ -89,7 +117,8 @@ artifact name, install step).
   pushes the tag. Ensure `gh` and `bun` are on PATH (the script
   prepends the standard locations itself).
 - **Release notes:** `docs/releases/<tag>.md` MUST be committed in the
-  PR before merge; publication uses it as `--notes-file`.
+  PR before merge; publication uses it as `--notes-file`. It doubles as
+  the release ledger — no separate inventory file is needed.
 - **Artifact:** `anvil-extensions-<tag>.tar.gz`
   (`git archive --format=tar --prefix=anvil-extensions/ <tag> |
   gzip -n`) + `SHA256SUMS`, published with
