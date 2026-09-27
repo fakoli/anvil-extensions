@@ -1,0 +1,38 @@
+{
+  "name": "pi-anvil-pulse",
+  "version": "0.1.0",
+  "description": "Pi coding-agent extension: live operator dashboard for long autonomous anvil runs — local web page with claims, lease countdowns, event feed, and stuck-state detection, plus native start/check/stop/read tools, a /pulse command, and a TUI status widget.",
+  "author": "Fakoli",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-coding-agent",
+    "anvil",
+    "dashboard",
+    "observability"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "files": [
+    "index.ts",
+    "src/**/*",
+    "tests/*.mjs",
+    "README.md",
+    "UPSTREAM.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "scripts": {
+    "test": "node tests/run-tests.mjs"
+  }
+}

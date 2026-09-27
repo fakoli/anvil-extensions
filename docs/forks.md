@@ -71,3 +71,35 @@ working-directory handling and adds Pi invocation and credential permission
 guidance. Tests use package-relative paths and add native Pi discovery/execution
 coverage. [The ledger](../packages/pi-repo-graph/UPSTREAM.md) records the exact
 source commit, hashes, retained license and every adaptation.
+
+## Adapted ports: pi-anvil-pulse, pi-handoff, pi-session-retro
+
+Native TypeScript ports of three plugins from the private
+`fakoli/fakoli-plugins` repository (same author, MIT) — the same
+category as the pi-nano-banana port: a native rewrite around the
+original's logic, not a wrapper. Each ships an `UPSTREAM.md` ledger with
+the per-file delta table.
+
+- **pi-anvil-pulse** — the anvil-project observability dashboard
+  (bash scripts + CJS server) becomes `src/process.ts` (start/check/stop
+  with PID-identity verification), `src/server.mjs` (ESM port of the
+dashboard server), and four native `anvil_pulse_start` / `anvil_pulse_check` /
+`anvil_pulse_stop` / `anvil_pulse_read` tools + a `/pulse` command +
+optional TUI widget. The `dashboard.html` is copied verbatim. Behavior
+guards carried over: the PID-identity check (never signal a foreign PID),
+stale-PID cleanup, and read-only anvil polling.
+- **pi-handoff** — the identity-keyed cross-checkout handoff (three bash
+  scripts + a Python SessionStart hook) becomes `src/path.ts` (key
+  resolution; the original's `git hash-object` key hash is replicated with
+`node:crypto`), `src/meta.ts` (state capture), `src/freshness.ts`
+(staleness flags), and a once-per-session resume banner on
+`before_agent_start`. Storage moves from `~/.claude/handoff` to
+`~/.pi/agent/handoff` (deliberate; `HANDOFF_DATA_DIR` still overrides).
+- **pi-session-retro** — the 966-line stdlib-only Python CLI becomes
+`src/parse.ts` (faithful Claude/Codex parsers + a NEW native Pi parser —
+the capability the original lacked), `src/aggregate.ts` (faithful, incl.
+Codex fork exclusion and integrity guards), `src/report.ts` (markdown +
+the verbatim HTML template), and `src/discover.ts`/`src/expand.ts`
+(list/find + Codex rollout expansion). One typed `session_retro` tool
+replaces the five CLI modes; the "narrative is the model's job" design is
+preserved via the `/session-retro` prompt.

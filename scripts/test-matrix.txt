@@ -17,3 +17,6 @@ pi-sandbox-config
 pi-voice-clone
 pi-capability-upgrade
 pi-repo-graph
+pi-anvil-pulse
+pi-handoff
+pi-session-retro

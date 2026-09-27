@@ -1,0 +1,42 @@
+{
+  "name": "pi-handoff",
+  "version": "0.1.0",
+  "description": "Pi coding-agent extension for durable cross-session, cross-checkout project handoff notes: identity-keyed storage (~/.pi/agent/handoff), save-time state capture, staleness checks, a session-start resume banner, and /handoff + /recall prompts.",
+  "author": "Fakoli",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-coding-agent",
+    "handoff",
+    "continuity",
+    "worktree"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "files": [
+    "index.ts",
+    "src/**/*.ts",
+    "prompts/*.md",
+    "tests/*.mjs",
+    "README.md",
+    "UPSTREAM.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "prompts": [
+      "./prompts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "scripts": {
+    "test": "node tests/run-tests.mjs"
+  }
+}
