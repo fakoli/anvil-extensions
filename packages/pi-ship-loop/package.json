@@ -1,0 +1,24 @@
+{
+  "name": "pi-ship-loop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agent-executable ship-loop skill for delivering anvil-extensions changes through the release gate.",
+  "license": "MIT",
+  "keywords": [
+    "pi-package"
+  ],
+  "files": [
+    "skills",
+    "README.md",
+    "UPSTREAM.md",
+    "LICENSE"
+  ],
+  "pi": {
+    "skills": [
+      "./skills"
+    ]
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

@@ -8,7 +8,7 @@ An opinionated, battle-tested bundle of [pi coding agent](https://github.com/bad
 pi install git:github.com/fakoli/anvil-extensions@anvil-v0.13.0
 ```
 
-- **19 packages · 17 registered extension entrypoints · 1 pin · atomic updates** — every host runs the same reviewed tree; `pi-observations` and `pi-browser` remain inert until a fresh session explicitly uses their opt-in flags
+- **20 packages · 17 registered extension entrypoints · 1 pin · atomic updates** — every host runs the same reviewed tree; `pi-observations` and `pi-browser` remain inert until a fresh session explicitly uses their opt-in flags
 - **Content-hashed lockfile** — transitive dependencies are pinned by SHA-512 integrity
 - **Install-script allowlist** — package postinstall scripts run only when approved
 - **Tag-protected releases** — release tags are immutable via repository rulesets
@@ -48,6 +48,7 @@ If you maintain a fleet of agent hosts, this packaging model is the point. If yo
 | [pi-anvil-pulse](packages/pi-anvil-pulse/) | Live read-only observability dashboard for an Anvil project: claims, task phases, event feed, staleness (`anvil_pulse_start/check/stop/read` tools + `/pulse` + optional TUI widget) |
 | [pi-handoff](packages/pi-handoff/) | Durable cross-session, cross-checkout handoff notes keyed by project identity: `handoff_save`/`handoff_recall` tools, session-start resume banner, `/handoff` + `/recall` prompts |
 | [pi-session-retro](packages/pi-session-retro/) | Session retros over Pi/Claude/Codex logs: `session_retro` tool (list/find/stats/report/html) + `/session-retro` prompt; deterministic token-economy and workflow reports |
+| [pi-ship-loop](packages/pi-ship-loop/) | Default-discovered `ship-loop` skill: the release completion gate (review → merge → tag → published, checksum-verified artifact → handoff) as an agent-executable procedure |
 
 Full catalog — including *why* each exists and how it works — is in [docs/packages.md](docs/packages.md). Fork lineage and what we changed in vendored packages is in [docs/forks.md](docs/forks.md).
 

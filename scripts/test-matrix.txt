@@ -5,6 +5,7 @@
 #   pi-subagents                     — no test dir vendored
 #   pi-tool-repair                   — no test files vendored
 #   pi-plan-mode (@narumitw)         — no test script at all
+#   pi-ship-loop                     — pure skill (prompt text only), no code to test
 pi-brag
 pi-browser
 pi-commentary

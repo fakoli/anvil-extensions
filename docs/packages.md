@@ -1,6 +1,6 @@
 # Package catalog
 
-Nineteen packages, seventeen registered extension entrypoints, one pinned unit. `pi-observations` and `pi-browser` are registered but inert until a fresh session opts in with `--observation` or `--browser`. Their image and browser workflows are independent. Each entry covers what it does, why it exists, and how it works. Provenance (original vs vendored vs forked) is summarized here and detailed in [forks.md](forks.md); every package ships an `UPSTREAM.md` ledger beside its code.
+Twenty packages, seventeen registered extension entrypoints, one pinned unit. `pi-observations` and `pi-browser` are registered but inert until a fresh session opts in with `--observation` or `--browser`. Their image and browser workflows are independent. Each entry covers what it does, why it exists, and how it works. Provenance (original vs vendored vs forked) is summarized here and detailed in [forks.md](forks.md); every package ships an `UPSTREAM.md` ledger beside its code.
 
 | Package | Provenance | Category |
 |---|---|---|
@@ -23,6 +23,7 @@ Nineteen packages, seventeen registered extension entrypoints, one pinned unit. 
 | [pi-anvil-pulse](#pi-anvil-pulse) | original (native port) | anvil project observability |
 | [pi-handoff](#pi-handoff) | original (native port) | cross-session continuity |
 | [pi-session-retro](#pi-session-retro) | original (native port) | observability |
+| [pi-ship-loop](#pi-ship-loop) | original | release-gate procedure skill |
 
 ## pi-condense
 
@@ -234,3 +235,28 @@ recommendations) is the agent's job, guided by the prompt. Reads only
 local session JSONL (`~/.pi/agent/sessions`, `~/.claude/projects`,
 `~/.codex/sessions`); no network, no provider calls. See [the package
 README](../packages/pi-session-retro/README.md).
+
+## pi-ship-loop
+
+**What:** A default-discovered skill (`ship-loop`) that encodes this
+repository's release completion gate as an agent-executable procedure:
+worktree prep with all doc surfaces in one PR, draft PR, fresh-context
+read-only adversarial review, fix + sign-off, merge on green CI,
+`scripts/release.sh` from a clean `origin/main` checkout, artifact
+publication (tarball + `SHA256SUMS` + `gh release create --verify-tag`),
+download-and-verify, user-authorized `pi install`, and the handoff
+record.
+
+**Why it exists:** The gate is defined in prose in `AGENTS.md` and
+`CONTRIBUTING.md`, so every agent session re-derives the ordered steps,
+exact commands, and failure classes. The skill makes the loop
+discoverable and consistent across sessions. It was written after
+executing the loop end-to-end for `anvil-v0.14.0`.
+
+**How it works:** Pure prompt resource — one skill file, no extension
+entrypoint, no tools, no code, no dependencies. It changes no trust
+boundary; the steps it describes carry the same documented authority as
+`CONTRIBUTING.md` itself. Operator-specific host details are
+deliberately kept out of the tracked text. No test suite (no code to
+test; recorded in `scripts/test-matrix.txt`). See [the package
+README](../packages/pi-ship-loop/README.md).
