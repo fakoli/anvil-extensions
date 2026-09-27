@@ -22,6 +22,17 @@ It was written after executing that loop end-to-end for `anvil-v0.14.0`
 (PR #24: merge → `scripts/release.sh` → published tarball +
 `SHA256SUMS` → download verification → `pi install`).
 
+In the 0.15.1 revision the skill was restructured into a
+**repository-agnostic core loop** plus a **filled-in repository
+profile** for anvil-extensions, so the procedure can be generated for
+any repository setup. The restructuring was validated by executing the
+generic core end-to-end on a scratch repository
+(`fakoli/ship-loop-test`): no release tooling, no CI — worktree → PR →
+fresh-context adversarial review → merge → `v0.1.0` immutable tag on
+the exact merge commit → published tarball + `SHA256SUMS` →
+download/checksum/byte-identity verification. The core's no-CI and
+no-gate-script degradations come from that run.
+
 ## Deliberate omissions
 
 Operator-specific host details (personal tool install locations,
