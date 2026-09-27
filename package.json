@@ -32,7 +32,7 @@
       "./packages/pi-nano-banana/skills",
       "./packages/pi-brag/skills",
       "./packages/pi-repo-graph/skills",
-    "./packages/pi-ship-loop/skills"
+      "./packages/pi-ship-loop/skills"
     ],
     "prompts": [
       "./packages/pi-subagents/prompts",

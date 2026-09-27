@@ -10,8 +10,7 @@
   "files": [
     "skills",
     "README.md",
-    "UPSTREAM.md",
-    "LICENSE"
+    "UPSTREAM.md"
   ],
   "pi": {
     "skills": [
