@@ -1,6 +1,6 @@
 # Package catalog
 
-Sixteen packages, fourteen registered extension entrypoints, one pinned unit. `pi-observations` and `pi-browser` are registered but inert until a fresh session opts in with `--observation` or `--browser`. Their image and browser workflows are independent. Each entry covers what it does, why it exists, and how it works. Provenance (original vs vendored vs forked) is summarized here and detailed in [forks.md](forks.md); every package ships an `UPSTREAM.md` ledger beside its code.
+Nineteen packages, seventeen registered extension entrypoints, one pinned unit. `pi-observations` and `pi-browser` are registered but inert until a fresh session opts in with `--observation` or `--browser`. Their image and browser workflows are independent. Each entry covers what it does, why it exists, and how it works. Provenance (original vs vendored vs forked) is summarized here and detailed in [forks.md](forks.md); every package ships an `UPSTREAM.md` ledger beside its code.
 
 | Package | Provenance | Category |
 |---|---|---|
@@ -20,6 +20,9 @@ Sixteen packages, fourteen registered extension entrypoints, one pinned unit. `p
 | [pi-observations](#pi-observations) | original | optional PNG/JPEG/WebP/GIF vision mediation |
 | [pi-browser](#pi-browser) | original | optional read-only public-page observations |
 | [pi-repo-graph](#pi-repo-graph) | adapted MIT port | default-discovered repository diagram skill |
+| [pi-anvil-pulse](#pi-anvil-pulse) | original (native port) | anvil project observability |
+| [pi-handoff](#pi-handoff) | original (native port) | cross-session continuity |
+| [pi-session-retro](#pi-session-retro) | original (native port) | observability |
 
 ## pi-condense
 
@@ -160,3 +163,73 @@ System grouping, paged drilldown, filters and exports reuse that scan. No model
 calls are made by the scanner unless the user opts into `--jev` for advisory
 role labels. The agent still uses its normal configured model. Imports and
 system roles are heuristic. See [setup, limits, security and tests](../packages/pi-repo-graph/README.md).
+
+## pi-anvil-pulse
+
+**What:** A live, read-only observability dashboard for an Anvil project:
+claims, task phases, event feed, and per-task staleness. One native tool
+(`anvil_pulse`) with `start` / `check` / `stop` / `read` actions, a `/pulse`
+slash command, and an optional TUI widget. The dashboard is a local
+HTTP server (`src/server.mjs`) serving a self-contained `dashboard.html`.
+
+**Why it exists:** Long Anvil runs need a glanceable "what is happening
+right now" surface: which tasks are claimed, by whom, in which phase, and
+which claims have gone quiet. The original `anvil-pulse` plugin ran this as
+bash scripts + a CJS server; this is the native TypeScript port.
+
+**How it works:** `start` launches the dashboard server bound to localhost
+with a PID file and log under the project's `.anvil-pulse/` directory, and
+returns the URL. `check` verifies the PID is still ours (PID-identity check:
+the process's command line must name our server script) and reports
+running/stale/foreign. `stop` signals only a verified-ours PID. `read`
+returns the current pulse snapshot (tasks, claims, recent events) as JSON.
+The server polls `anvil status --json` and the project's event log; it is
+read-only and sends nothing externally. See [the package README](../packages/pi-anvil-pulse/README.md).
+
+## pi-handoff
+
+**What:** Durable cross-session, cross-checkout project handoff notes. Two
+typed tools (`handoff_save`, `handoff_recall`), a session-start resume
+banner, and `/handoff` + `/recall` prompts. Notes are keyed by project
+identity (normalized `origin` remote, or git common dir for local repos),
+not cwd, so separate clones and linked worktrees share one note.
+
+**Why it exists:** Per-session worktrees and fresh clones throw away
+checkout-local state. A handoff keyed by identity survives both, and a
+staleness report (branch moved, HEAD advanced/diverged, recorded anvil
+claims no longer active, note age) tells the next session what to verify
+before acting.
+
+**How it works:** `handoff_save` composes the note (resume steps, open
+threads, recently shipped, gotchas), captures a flat state frontmatter
+(branch, HEAD, dirty count, optional anvil claim snapshot), and writes
+atomically (tmp + rename, 0600) under `~/.pi/agent/handoff/<repo-key>/`
+(`HANDOFF_DATA_DIR` overrides). `handoff_recall` returns the prose plus a
+freshness report (informational, never blocking). At session start the
+saved note is injected once as a banner (capped at 16,000 chars). Storage
+is private to the Pi runtime; nothing is written into the repo. See [the
+package README](../packages/pi-handoff/README.md).
+
+## pi-session-retro
+
+**What:** Session retrospectives over **Pi**, **Claude Code**, and **Codex**
+session logs: one `session_retro` tool with five modes (`list`, `find`,
+`stats`, `report`, `html`) and a `/session-retro` prompt. `report` renders a
+deterministic markdown skeleton (session shape, token economy, workflow
+taxonomy, tool distribution, human-turn list); `html` renders an
+interactive single-page retro site with an optional embedded narrative.
+
+**Why it exists:** Long autonomous runs need an evaluable retro — where the
+tokens went (main-loop vs delegated, cache economy), what workflows ran,
+how the human steered, and what to change. The native extension adds
+first-class Pi session parsing, which the original plugin (Claude/Codex
+only) lacked.
+
+**How it works:** The tool does all deterministic counting (usage
+accounting with reasoning counted as generated output, toolCall and
+subagent dispatch counting, Codex fork-exclusion and integrity guards);
+the judgment (interaction analysis, retrospective, Five Whys,
+recommendations) is the agent's job, guided by the prompt. Reads only
+local session JSONL (`~/.pi/agent/sessions`, `~/.claude/projects`,
+`~/.codex/sessions`); no network, no provider calls. See [the package
+README](../packages/pi-session-retro/README.md).

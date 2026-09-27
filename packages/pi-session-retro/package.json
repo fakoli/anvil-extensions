@@ -1,0 +1,42 @@
+{
+  "name": "pi-session-retro",
+  "version": "0.1.0",
+  "description": "Pi coding-agent extension for session retrospectives: native parsing of Pi/Claude/Codex session JSONL, deterministic token-economy + workflow + tool reports (markdown and interactive HTML), and a /session-retro prompt that drives the retro workflow.",
+  "author": "Fakoli",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-coding-agent",
+    "session-retro",
+    "retrospective",
+    "token-economy"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "files": [
+    "index.ts",
+    "src/**/*.ts",
+    "prompts/*.md",
+    "tests/*.mjs",
+    "README.md",
+    "UPSTREAM.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "prompts": [
+      "./prompts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "scripts": {
+    "test": "node tests/run-tests.mjs"
+  }
+}

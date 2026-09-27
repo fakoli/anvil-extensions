@@ -22,7 +22,10 @@
       "./packages/pi-nano-banana/index.ts",
       "./packages/pi-brag/index.ts",
       "./packages/pi-observations/index.ts",
-      "./packages/pi-browser/index.ts"
+      "./packages/pi-browser/index.ts",
+      "./packages/pi-anvil-pulse/index.ts",
+      "./packages/pi-handoff/index.ts",
+      "./packages/pi-session-retro/index.ts"
     ],
     "skills": [
       "./packages/pi-subagents/skills",
@@ -31,7 +34,9 @@
       "./packages/pi-repo-graph/skills"
     ],
     "prompts": [
-      "./packages/pi-subagents/prompts"
+      "./packages/pi-subagents/prompts",
+      "./packages/pi-handoff/prompts",
+      "./packages/pi-session-retro/prompts"
     ]
   },
   "description": "Anvil Extensions: an opinionated, pinned bundle of pi coding-agent extensions (context management, memory, subagent orchestration, image generation, and more).",
