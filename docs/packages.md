@@ -19,7 +19,7 @@ Twenty packages, seventeen registered extension entrypoints, one pinned unit. `p
 | [pi-brag](#pi-brag) | original (port) | capabilities |
 | [pi-observations](#pi-observations) | original | optional PNG/JPEG/WebP/GIF vision mediation |
 | [pi-browser](#pi-browser) | original | optional read-only public-page observations |
-| [pi-repo-graph](#pi-repo-graph) | adapted MIT port | default-discovered repository diagram and search skill |
+| [pi-repo-graph](#pi-repo-graph) | canonical MIT dependency + adapter | default-discovered repository diagram and search skill |
 | [pi-anvil-pulse](#pi-anvil-pulse) | original (native port) | anvil project observability |
 | [pi-handoff](#pi-handoff) | original (native port) | cross-session continuity |
 | [pi-session-retro](#pi-session-retro) | original (native port) | observability |
@@ -149,26 +149,23 @@ The root `package.json` declares `pi.extensions`, `pi.skills`, and `pi.prompts` 
 
 ## pi-repo-graph
 
-**What:** The default-discovered `/skill:repo-graph` builds system, directory and
-dependency diagrams, table/matrix views and a searchable local SQLite index.
-It adds no extension entrypoint. Python 3.10+ is required when invoked; Git is
-required for public HTTPS input. Optional CPU semantic search and local reranking
-use uv and the package's committed Python lock.
+**What:** The default-discovered `/skill:repo-graph` builds system and directory
+maps, dependency views and a searchable local index. It adds no extension
+entrypoint. Python 3.10+ is required when invoked; Git is required for HTTPS
+input. Optional CPU models use the product's committed Python lock.
 
-**Why it exists:** Large repository exploration needs readable, bounded visual
-detail and targeted retrieval instead of loading the source tree into agent context.
+**Why it exists:** Anvil ships the same canonical product as standalone Pi,
+Codex and Claude installations. Improvements and product evaluations are
+maintained once instead of copied into separate ports.
 
-**How it works:** Pi's native skill and bash tool invoke the packaged scanner
-from the caller's repository. Bounded reads, cached imports and file summaries
-produce self-contained HTML, JSON, Mermaid and keyword search. Optional BGE
-embeddings update only changed summaries. The loopback Search tab preserves
-query/scope and opens a result's source file with keyboard focus. System, Explore
-and Data share the scan; breadcrumbs, responsive controls and bounded scenes
-keep navigation readable. Optional MiniLM reranks locally; explicit Jev reranking
-exports a bounded shortlist and falls back to local ranking on failure. The
-independent `map --jev` option labels source areas without changing imports.
-Default mapping/search makes no inference API calls. Imports and source-area
-roles remain heuristic. See [setup, limits, security and tests](../packages/pi-repo-graph/README.md).
+**How it works:** The root dependency lock installs Repo Graph 0.6.0 and
+`pi.skills` explicitly discovers its skill under
+`node_modules/repo-graph-agent/skills`. The local workspace keeps only legacy
+script wrappers and native Pi integration tests. Explicit old skill filters
+must migrate to `node_modules/repo-graph-agent/skills/**`. No new tool authority
+or model/provider selection is introduced. Imports remain heuristic source-area
+dependencies, not function calls. See [setup, interfaces, migration, security
+and verification](../packages/pi-repo-graph/README.md).
 
 ## pi-anvil-pulse
 

@@ -1,6 +1,6 @@
 # Forks and provenance
 
-This bundle mixes three kinds of packages: **verbatim vendored** upstream code (pinned by registry integrity hash), **patched forks** (vendored, then locally changed — never byte-identical), and **original work**. Every package carries an `UPSTREAM.md` ledger beside its code; this document summarizes the deltas that matter.
+This bundle mixes four kinds of packages: **canonical dependencies** (external products pinned by exact source commit), **verbatim vendored** upstream code (pinned by registry integrity hash), **patched forks** (vendored, then locally changed — never byte-identical), and **original work**. Every package carries an `UPSTREAM.md` ledger beside its code; this document summarizes the deltas that matter.
 
 The rule behind the ledger: if we run code we didn't write, we record exactly what it is, what integrity hash it was imported from, and every line we changed. If we write code ourselves, we say so.
 
@@ -37,7 +37,7 @@ Verbatim vendoring is deliberate: updates to these packages are explicit diffs w
 - **pi-sandbox-config** — original; fail-closed run-config editing cross-checked against the platform validator.
 - **pi-voice-clone** — original bridge to a privately-owned style plugin; the repo ships the bridge, not the private corpus.
 - **pi-capability-upgrade** — original receipt, documentation guard, and MCP-policy code, plus concise adapted workflow material from the public Fakoli plugin repository. Its `UPSTREAM.md` records the exact source revision and external package integrities.
-- **pi-observations** — original Pi extension and package documentation. It imports the neutral `@anvil-serving/observations` owner only through its public owner/PNG exports; its `UPSTREAM.md` and the root lock record the exact merged Serving commit and dependency integrity. Image normalization reuses unmodified `sharp@0.35.4`, already present in the bundle, through dynamic import under Node (a bounded decoder child for embedded Pi); GIF coverage is explicitly first-frame only. Its original media guard accepts shared non-cyclic Pi tool schemas without modifying upstream tools; media, cycles, and traversal limits remain enforced.
+- **pi-observations** — original Pi extension and package documentation. It imports the neutral `@anvil-serving/observations` owner only through its public owner/PNG exports; its `UPSTREAM.md` and the root lock record the exact merged Serving commit and dependency integrity. Image normalization reuses unmodified `sharp@0.35.5`, already present in the bundle, through dynamic import under Node (a bounded decoder child for embedded Pi); GIF coverage is explicitly first-frame only. Its original media guard accepts shared non-cyclic Pi tool schemas without modifying upstream tools; media, cycles, and traversal limits remain enforced.
 - **pi-browser** — original Pi integration and package documentation. Its own package manifest pins the reviewed `@anvil-serving/observations/browser` adapter and Playwright. Serving owns page capture, browser ownership, receipt validation, freshness, coverage, and fixed Jev policy; the Node 24 worker owns the Playwright launch handoff, framed process protocol, deadlines, and lifecycle. The integration preserves that closed boundary: Pi receives bounded text receipts, never a page object, screenshot, pixel buffer, raw media, or arbitrary action channel.
 - **pi-ship-loop** — original; a default-discovered skill that codifies this repository's own release completion gate (from `AGENTS.md`/`CONTRIBUTING.md`) as an agent-executable procedure. Pure prompt text: no code, no tools, no dependencies, no changed trust boundary. Operator-specific host details are deliberately kept out of the tracked text. [The ledger](../packages/pi-ship-loop/UPSTREAM.md) records the derivation and the deliberate omissions.
 
@@ -63,18 +63,18 @@ Ported from [latent-spaces/brag](https://github.com/latent-spaces/brag) v0.2.2 (
 
 Three reasons: hosts must be able to install without trusting a registry at load time; we patch what we need without waiting on upstream release cycles; and the git history of every vendored change is reviewable. The cost — re-syncing upstream improvements manually — is accepted and tracked in each `UPSTREAM.md`.
 
-## Adapted port: pi-repo-graph
+## Canonical dependency: Repo Graph
 
-The MIT Repo Graph 0.5.0 runtime, viewer, Python metadata and lock are imported
-verbatim from the canonical `fakoli/repo-graph` release. Pi uses native skill
-discovery and ordinary bash permissions. The old no-command scanner script is
-a compatibility wrapper around the shared CLI; the new CLI adds incremental
-keyword/semantic search, a loopback viewer and optional local/Jev reranking.
-The skill and tests use bundle-relative paths and preserve caller-directory
-handling. FastEmbed/NumPy are optional distribution dependencies, not vendored
-extension code; models are separately downloaded during explicit setup. No new
-extension is registered and no host selection is changed. [The ledger](../packages/pi-repo-graph/UPSTREAM.md)
-records the exact source commit, hashes, retained license and local adaptations.
+Repo Graph 0.6.0 is installed from the canonical MIT product repository under
+an exact Git release pin; the lock records its resolved commit. npm does not
+verify tarball integrity for this Git dependency. The separately verified release
+asset digest is recorded in its ledger, independently of npm packaging.
+The former copied runtime, viewer, skill and product tests are removed.
+`pi-repo-graph` retains two compatibility scripts and native Pi integration
+checks. The root manifest selects the canonical dependency's skill explicitly.
+Product changes and evaluations are maintained upstream once, for Pi, Codex
+and Claude. [The ledger](../packages/pi-repo-graph/UPSTREAM.md) records the prior
+port, exact dependency binding, retained license and local integration.
 
 ## Adapted ports: pi-anvil-pulse, pi-handoff, pi-session-retro
 

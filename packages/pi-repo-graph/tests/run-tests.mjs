@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { once } from 'node:events';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -10,27 +9,50 @@ import { fileURLToPath } from 'node:url';
 
 const pkg = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const bundle = resolve(pkg, '../..');
-for (const [command, args] of [
-  ['python3', ['-B', '-m', 'unittest', 'discover', '-s', 'tests', '-v']],
-  [process.execPath, ['tests/test_repo_graph_views.cjs']],
-]) {
-  const result = spawnSync(command, args, { cwd: pkg, stdio: 'inherit' });
-  assert.equal(result.status, 0, result.error?.message ?? command);
-}
-for (const [, digest, path] of readFileSync(resolve(pkg, 'UPSTREAM.md'), 'utf8').matchAll(/^([a-f0-9]{64})  (.+)$/gm)) {
-  assert.equal(createHash('sha256').update(readFileSync(resolve(pkg, path))).digest('hex'), digest, path);
+const product = resolve(bundle, 'node_modules/repo-graph-agent');
+const rootManifest = JSON.parse(readFileSync(resolve(bundle, 'package.json'), 'utf8'));
+const adapterManifest = JSON.parse(readFileSync(resolve(pkg, 'package.json'), 'utf8'));
+const productManifest = JSON.parse(readFileSync(resolve(product, 'package.json'), 'utf8'));
+const productLock = JSON.parse(readFileSync(resolve(bundle, 'package-lock.json'), 'utf8')).packages['node_modules/repo-graph-agent'];
+assert.equal(productLock?.version, '0.6.0');
+assert.match(productLock.resolved, /^git\+[^#]+github\.com[/:]fakoli\/repo-graph\.git#b21a7c19fc3f068d3b0227ba1fa6acd5eda17280$/);
+assert.equal(productManifest.name, 'repo-graph-agent');
+assert.equal(productManifest.version, '0.6.0');
+assert.equal(rootManifest.dependencies['repo-graph-agent'], adapterManifest.dependencies['repo-graph-agent']);
+assert.equal(rootManifest.dependencies['repo-graph-agent'], 'git+https://github.com/fakoli/repo-graph.git#v0.6.0');
+assert.ok(rootManifest.pi.skills.includes('./node_modules/repo-graph-agent/skills'));
+assert.deepEqual(productManifest.pi.skills, ['./skills']);
+assert.equal(existsSync(resolve(pkg, 'repo_graph')), false, 'the adapter must not carry copied runtime');
+assert.equal(existsSync(resolve(pkg, 'skills')), false, 'the adapter must not carry copied skill');
+for (const script of ['repo_graph.py', 'build_repo_graph.py']) {
+  const checked = spawnSync('python3', [resolve(pkg, 'scripts', script), '--help'], { cwd: bundle, encoding: 'utf8' });
+  assert.equal(checked.status, 0, checked.stderr);
 }
 
 // Real Pi discovery and bash execution, isolated from user settings and providers.
 const scratch = mkdtempSync(resolve(tmpdir(), 'pi-repo-graph-'));
 const home = resolve(scratch, 'home'), agentDir = resolve(home, '.pi/agent');
 const repo = resolve(scratch, 'caller repo'), output = resolve(scratch, 'diagram output');
+const standalone = resolve(scratch, 'standalone adapter');
+mkdirSync(resolve(standalone, 'scripts'), { recursive: true });
+for (const script of ['repo_graph.py', 'build_repo_graph.py']) {
+  copyFileSync(resolve(pkg, 'scripts', script), resolve(standalone, 'scripts', script));
+  const missing = spawnSync('python3', [resolve(standalone, 'scripts', script), '--help'], { encoding: 'utf8' });
+  assert.notEqual(missing.status, 0);
+  assert.match(missing.stderr, /dependency is missing; reinstall/);
+}
+mkdirSync(resolve(standalone, 'node_modules'), { recursive: true });
+symlinkSync(product, resolve(standalone, 'node_modules/repo-graph-agent'), 'dir');
+for (const script of ['repo_graph.py', 'build_repo_graph.py']) {
+  const local = spawnSync('python3', [resolve(standalone, 'scripts', script), '--help'], { encoding: 'utf8' });
+  assert.equal(local.status, 0, local.stderr);
+}
 mkdirSync(agentDir, { recursive: true });
 mkdirSync(resolve(repo, 'src'), { recursive: true });
 writeFileSync(resolve(repo, 'src/main.py'), 'import src.helper\n');
 writeFileSync(resolve(repo, 'src/helper.py'), 'value = 1\n');
 writeFileSync(resolve(agentDir, 'settings.json'), JSON.stringify({
-  packages: [{ source: bundle, extensions: [], prompts: [], themes: [], skills: ['packages/pi-repo-graph/skills/**'] }],
+  packages: [{ source: bundle, extensions: [], prompts: [], themes: [], skills: ['node_modules/repo-graph-agent/skills/**'] }],
 }));
 const piArgs = ['--mode', 'rpc', '--offline', '--no-session', '--no-extensions', '--no-context-files', '--no-prompt-templates', '--no-themes'];
 const command = process.env.PI_TEST_BINARY ?? process.execPath;
@@ -65,7 +87,9 @@ try {
   assert.equal(commands.success, true);
   const skill = commands.data.commands.find(entry => entry.name === 'skill:repo-graph');
   assert.ok(skill, 'root bundle must discover /skill:repo-graph');
-  const script = resolve(dirname(skill.sourceInfo.path), '../../scripts/build_repo_graph.py');
+  assert.equal(resolve(skill.sourceInfo.path), resolve(product, 'skills/repo-graph/SKILL.md'));
+  const script = resolve(pkg, 'scripts/build_repo_graph.py');
+  const adapterCli = resolve(pkg, 'scripts/repo_graph.py');
   const cli = resolve(dirname(skill.sourceInfo.path), '../../scripts/repo_graph.py');
   const command = `python3 ${quote(script)} --output ${quote(output)}`;
   for (let run = 0; run < 2; run++) {
@@ -83,8 +107,10 @@ try {
       assert.ok(readFileSync(resolve(output, file)).length > 0, file);
     }
   }
-  const mapped = await request('bash', { command: `python3 ${quote(cli)} map --output ${quote(output)}` });
-  assert.equal(mapped.data.exitCode, 0, mapped.data.output);
+  for (const runner of [cli, adapterCli]) {
+    const mapped = await request('bash', { command: `python3 ${quote(runner)} map --output ${quote(output)}` });
+    assert.equal(mapped.data.exitCode, 0, mapped.data.output);
+  }
   const found = await request('bash', { command: `python3 ${quote(cli)} search ${quote(output)} helper --mode keyword --limit 1` });
   assert.equal(found.data.exitCode, 0, found.data.output);
   const hits = JSON.parse(found.data.output);
@@ -95,7 +121,7 @@ try {
   assert.notEqual(rejected.data.exitCode, 0, 'output inside source must be refused');
   const rejectedCli = await request('bash', { command: `python3 ${quote(cli)} map --output src` });
   assert.notEqual(rejectedCli.data.exitCode, 0, 'shared CLI must refuse output inside source');
-  console.log('Pi discovery, both caller-directory entrypoints, artifacts, keyword search, cache reuse and source-output rejection passed (no model calls)');
+  console.log('Canonical Pi skill discovery, compatibility entrypoints, caller directory, artifacts, keyword search, cache reuse and source-output rejection passed (no model calls)');
 } finally {
   child.kill('SIGTERM');
   const killTimer = setTimeout(() => child.kill('SIGKILL'), 3000);

@@ -1,37 +1,26 @@
 {
   "name": "pi-repo-graph",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "Local repository diagrams, incremental keyword and semantic search, and optional reranking for Pi.",
+  "description": "Compatibility entrypoints and native Pi verification for the pinned canonical Repo Graph product.",
   "license": "MIT",
   "keywords": [
     "pi-package"
   ],
   "files": [
-    "repo_graph/**/*.py",
-    "repo_graph/assets/*.html",
-    "repo_graph/assets/*.js",
     "scripts/*.py",
-    "skills",
-    "tests/*.py",
     "tests/*.mjs",
-    "tests/*.cjs",
-    "pyproject.toml",
-    "uv.lock",
     "README.md",
     "UPSTREAM.md",
     "LICENSE"
   ],
   "scripts": {
-    "test": "node tests/run-tests.mjs",
-    "test:ux": "node tests/ux.mjs"
-  },
-  "pi": {
-    "skills": [
-      "./skills"
-    ]
+    "test": "node tests/run-tests.mjs"
   },
   "engines": {
     "node": ">=24"
+  },
+  "dependencies": {
+    "repo-graph-agent": "git+https://github.com/fakoli/repo-graph.git#v0.6.0"
   }
 }
