@@ -4,3 +4,7 @@ node_modules/
 brag-output/
 packages/pi-brag/skills/brag/assets/music/
 packages/pi-brag/skills/brag/assets/sfx/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/

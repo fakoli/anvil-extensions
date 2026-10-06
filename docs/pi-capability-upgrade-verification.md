@@ -136,3 +136,32 @@ files. Of those, 441 exceeded the 64 KiB extraction cap; the repeat reused all
 9,528 import entries. This checks the local scanner and bounded output structure,
 not semantic completeness of heuristic imports. Jev remained off. Existing
 candidate selection and installed bundle pins were preserved.
+
+## Repository diagrams and search (0.16.0)
+
+The existing native package carries the Repo Graph 0.5.0 runtime verbatim,
+verified by 18 import hashes. The original no-command map entrypoint remains
+supported; the shared CLI adds index/search/serve. Package tests check native
+Pi discovery and both caller-directory entrypoints in an isolated configuration
+without provider calls. The optional locked environment passed all 17 Python
+regressions; the stdlib suite skips only the two NumPy-specific cases.
+
+The bundled scanner mapped the same pinned public AWS source used upstream:
+20,370 files, 6,657 directories, 6,944 imports and 20,370 indexed paths. Complete
+structure and grouping matched canonical output. All 21 browser checks passed
+on the actual bundled viewer/server with no browser errors: seven views,
+scoped search, focused source selection, breadcrumbs, keyboard controls and
+360px layout. All 12 cards fit with minimum title size 14.95 px and measured
+label contrast 6.02:1. A bundled hybrid query reused the existing semantic
+index and cached CPU model, making no API calls.
+
+The development harness uses upstream Pi 1.0.4 to remove the former shrinkwrap
+security gate failure. Its root override leaves vendored manifests unchanged;
+installed host Pi and candidate selections are preserved. Exact-commit CI and
+the full clean-room bundle matrix are release gates. All 15 package suites
+passed locally with this harness and the installed dependency audit reported
+zero vulnerabilities. Hermes' 864 checks used an isolated temporary filesystem
+to avoid an unrelated host Git marker. See [release notes](releases/anvil-v0.16.0.md)
+for migration, rollback and limitations, and [upstream evaluations](https://github.com/fakoli/repo-graph/blob/v0.5.0/evaluations/README.md)
+for paired timing/relevance evidence. No new live Jev, model instruction-following,
+million-file or full accessibility qualification is claimed for this port.

@@ -66,6 +66,7 @@ try {
   const skill = commands.data.commands.find(entry => entry.name === 'skill:repo-graph');
   assert.ok(skill, 'root bundle must discover /skill:repo-graph');
   const script = resolve(dirname(skill.sourceInfo.path), '../../scripts/build_repo_graph.py');
+  const cli = resolve(dirname(skill.sourceInfo.path), '../../scripts/repo_graph.py');
   const command = `python3 ${quote(script)} --output ${quote(output)}`;
   for (let run = 0; run < 2; run++) {
     const result = await request('bash', { command });
@@ -75,14 +76,26 @@ try {
     assert.equal(graph.name, 'caller repo');
     assert.deepEqual(graph.files, ['src/helper.py', 'src/main.py']);
     assert.equal(graph.scan.reused, run ? 2 : 0);
+    assert.equal(graph.search.documents, 2);
+    assert.equal(graph.search.reused, run ? 2 : 0);
     assert.equal(graph.jev, 'off');
     for (const file of ['architecture.html', 'graph.html', 'architecture.mmd', 'architecture.md']) {
       assert.ok(readFileSync(resolve(output, file)).length > 0, file);
     }
   }
+  const mapped = await request('bash', { command: `python3 ${quote(cli)} map --output ${quote(output)}` });
+  assert.equal(mapped.data.exitCode, 0, mapped.data.output);
+  const found = await request('bash', { command: `python3 ${quote(cli)} search ${quote(output)} helper --mode keyword --limit 1` });
+  assert.equal(found.data.exitCode, 0, found.data.output);
+  const hits = JSON.parse(found.data.output);
+  assert.equal(hits.documents, 2);
+  assert.equal(hits.results.length, 1);
+  assert.equal(hits.results[0].path, 'src/helper.py');
   const rejected = await request('bash', { command: `python3 ${quote(script)} --output .` });
   assert.notEqual(rejected.data.exitCode, 0, 'output inside source must be refused');
-  console.log('Pi package discovery, caller-directory execution, artifacts and cache reuse passed (no model calls)');
+  const rejectedCli = await request('bash', { command: `python3 ${quote(cli)} map --output src` });
+  assert.notEqual(rejectedCli.data.exitCode, 0, 'shared CLI must refuse output inside source');
+  console.log('Pi discovery, both caller-directory entrypoints, artifacts, keyword search, cache reuse and source-output rejection passed (no model calls)');
 } finally {
   child.kill('SIGTERM');
   const killTimer = setTimeout(() => child.kill('SIGKILL'), 3000);

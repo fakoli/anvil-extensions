@@ -19,7 +19,7 @@ Twenty packages, seventeen registered extension entrypoints, one pinned unit. `p
 | [pi-brag](#pi-brag) | original (port) | capabilities |
 | [pi-observations](#pi-observations) | original | optional PNG/JPEG/WebP/GIF vision mediation |
 | [pi-browser](#pi-browser) | original | optional read-only public-page observations |
-| [pi-repo-graph](#pi-repo-graph) | adapted MIT port | default-discovered repository diagram skill |
+| [pi-repo-graph](#pi-repo-graph) | adapted MIT port | default-discovered repository diagram and search skill |
 | [pi-anvil-pulse](#pi-anvil-pulse) | original (native port) | anvil project observability |
 | [pi-handoff](#pi-handoff) | original (native port) | cross-session continuity |
 | [pi-session-retro](#pi-session-retro) | original (native port) | observability |
@@ -149,21 +149,26 @@ The root `package.json` declares `pi.extensions`, `pi.skills`, and `pi.prompts` 
 
 ## pi-repo-graph
 
-**What:** The default-discovered `/skill:repo-graph` builds offline system,
-directory and dependency diagrams plus table/matrix data views. It adds no
-extension entrypoint. Python 3.10+ is required when invoked; Git is required
-for public HTTPS repository input.
+**What:** The default-discovered `/skill:repo-graph` builds system, directory and
+dependency diagrams, table/matrix views and a searchable local SQLite index.
+It adds no extension entrypoint. Python 3.10+ is required when invoked; Git is
+required for public HTTPS input. Optional CPU semantic search and local reranking
+use uv and the package's committed Python lock.
 
-**Why it exists:** Large repository exploration needs bounded visual detail and
-compact scan results instead of loading the source tree into the agent context.
+**Why it exists:** Large repository exploration needs readable, bounded visual
+detail and targeted retrieval instead of loading the source tree into agent context.
 
-**How it works:** Pi's native skill and bash tool invoke the packaged stdlib
-scanner from the caller's repository. It batches bounded source reads, caches
-imports and emits self-contained HTML, JSON and Mermaid in the user's cache.
-System grouping, paged drilldown, filters and exports reuse that scan. No model
-calls are made by the scanner unless the user opts into `--jev` for advisory
-role labels. The agent still uses its normal configured model. Imports and
-system roles are heuristic. See [setup, limits, security and tests](../packages/pi-repo-graph/README.md).
+**How it works:** Pi's native skill and bash tool invoke the packaged scanner
+from the caller's repository. Bounded reads, cached imports and file summaries
+produce self-contained HTML, JSON, Mermaid and keyword search. Optional BGE
+embeddings update only changed summaries. The loopback Search tab preserves
+query/scope and opens a result's source file with keyboard focus. System, Explore
+and Data share the scan; breadcrumbs, responsive controls and bounded scenes
+keep navigation readable. Optional MiniLM reranks locally; explicit Jev reranking
+exports a bounded shortlist and falls back to local ranking on failure. The
+independent `map --jev` option labels source areas without changing imports.
+Default mapping/search makes no inference API calls. Imports and source-area
+roles remain heuristic. See [setup, limits, security and tests](../packages/pi-repo-graph/README.md).
 
 ## pi-anvil-pulse
 
