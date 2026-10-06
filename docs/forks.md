@@ -65,13 +65,16 @@ Three reasons: hosts must be able to install without trusting a registry at load
 
 ## Adapted port: pi-repo-graph
 
-The MIT Repo Graph 0.3.0 scanner and viewer from `fakoli/agent-plugins`
-are imported verbatim. Pi uses its native skill discovery and bash tool;
-no extension wrapper or runtime dependency is added. The skill fixes caller
-working-directory handling and adds Pi invocation and credential permission
-guidance. Tests use package-relative paths and add native Pi discovery/execution
-coverage. [The ledger](../packages/pi-repo-graph/UPSTREAM.md) records the exact
-source commit, hashes, retained license and every adaptation.
+The MIT Repo Graph 0.5.0 runtime, viewer, Python metadata and lock are imported
+verbatim from the canonical `fakoli/repo-graph` release. Pi uses native skill
+discovery and ordinary bash permissions. The old no-command scanner script is
+a compatibility wrapper around the shared CLI; the new CLI adds incremental
+keyword/semantic search, a loopback viewer and optional local/Jev reranking.
+The skill and tests use bundle-relative paths and preserve caller-directory
+handling. FastEmbed/NumPy are optional distribution dependencies, not vendored
+extension code; models are separately downloaded during explicit setup. No new
+extension is registered and no host selection is changed. [The ledger](../packages/pi-repo-graph/UPSTREAM.md)
+records the exact source commit, hashes, retained license and local adaptations.
 
 ## Adapted ports: pi-anvil-pulse, pi-handoff, pi-session-retro
 

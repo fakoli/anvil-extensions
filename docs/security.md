@@ -16,6 +16,15 @@ Nothing moves unless a maintainer moves it:
 - Vendored packages pin their upstream import by **registry integrity hash** (see each package's `UPSTREAM.md`), so even the import step is content-addressed, not version-addressed.
 - **Install scripts are gated.** Package lifecycle scripts (the classic npm supply-chain vector) run only for packages explicitly approved by the installer's allowlist. An unapproved script blocks the install rather than executing.
 
+The bundle's development harness pins unmodified upstream Pi 1.0.4. A root npm
+override resolves workspace development/peer references to that single tested
+runtime while preserving vendored package manifests. This replaces Pi 0.85.1's
+published shrinkwrap, which held vulnerable brace-expansion/undici versions that
+ordinary npm overrides could not update. The lock also records patched
+source-map-js 1.2.2 and smol-toml 1.9.0. The installed host Pi pin is separate;
+publication does not change it. Clean installs must pass the full offline test
+matrix and dependency audit before a release.
+
 ## Identity hygiene
 
 - Commit history carries no real names or personal emails — contributors should commit as their GitHub handle with a noreply email (`git config user.email "<handle>@users.noreply.github.com"`).
@@ -52,21 +61,41 @@ npm install-scripts ls
 
 ## Repository diagram skill
 
-`pi-repo-graph` is default-discovered but runs only when its workflow is used.
-It invokes Python through Pi's normal bash tool and permission/cancellation
-handling; there is no hook, server or new tool authority. Local scans read source
-and metadata, then write generated paths/import summaries and caches outside
-the source repository. Generated diagrams may reveal private repository names
-and paths and should be reviewed before sharing. The HTML loads no remote assets.
-Public HTTPS inputs use Git and persist shallow clones in the user's cache.
-`--refresh` mutates only that clone. No source files are executed.
+`pi-repo-graph` is default-discovered and runs only when its workflow is used.
+It invokes Python through Pi's normal bash permissions and cancellation. The
+scanner reads bounded source/metadata and writes generated diagrams, file
+synopses, vectors and caches outside the source. Source files are not executed.
+Generated indexes and diagrams can reveal private paths and source evidence;
+review them before sharing. The HTML loads no remote assets. Public HTTPS
+inputs invoke Git and retain a shallow clone; `--refresh` updates that clone.
 
-The scanner has no model traffic by default. Explicit `--jev` sends at most
-16 top-level directory names to TypeSafe System One in one request, potentially
-billable. It obtains only `TYPESAFE_API_KEY` from the environment or its exact
-entry in `~/.env`; it never sources or logs that file. The skill respects project
-credential-access restrictions before invoking this option. Keys and raw source
-are absent from the request and generated output. Names and labels are escaped
-for HTML; labels cannot create imports. Cancellation can leave partial output;
-failed classification falls back to the local diagram. See the package README
-for limits, cache cleanup and rollback.
+Keyword mapping/search uses Python stdlib. Optional semantic setup installs the
+committed Python lock and downloads public BGE weights; optional local reranking
+downloads MiniLM. FastEmbed is an unmodified distribution library and no model
+weights are bundled. Subsequent model queries use cached CPU weights. Local
+mapping/search makes no inference API calls. File contents and embeddings remain
+local unless explicit Jev export is authorized.
+
+`serve` starts an explicit foreground server bound to `127.0.0.1`, with Host,
+Origin and JSON request checks. Status and static files remain responsive during
+inference. At most one expensive search runs at once; another receives a busy
+response. Stop the process to stop the server. No background service or new Pi
+tool authority is installed.
+
+`map --jev` exports up to 16 top-level directory names for advisory labels.
+`search --rerank jev` exports the query and up to 32 paths with at most 900 bytes
+of evidence per file, under a 48 KiB request cap. Browser Jev use additionally
+requires `serve --allow-jev` and explicit reranker selection. These requests may
+incur API cost. Project source-export and credential-access rules still apply.
+Only `TYPESAFE_API_KEY` is read from the environment or its exact entry in `~/.env`;
+that file is never sourced, displayed or logged. Requests pin `jev-1.13.0`, refuse
+redirects and make one attempt under bounded socket timeouts and response size.
+Failures retain local labels/ranking; unknown failed-call usage is not reported
+as free. Model labels cannot create edges, and rerankers cannot add source paths.
+
+A maximum of 512 canonical, validated ranking receipts are cached in the local
+index using exact request hashes. Provider extras/echoed requests are discarded;
+keys are absent from artifacts. The underlying corpus already contains bounded
+source synopses. HTML names and labels are escaped. Cancellation can leave partial
+scan/index output; re-run mapping/indexing to recover. See the package README for
+limits, retained cache data, disablement and rollback.
