@@ -5,22 +5,22 @@
 An opinionated, battle-tested bundle of [pi coding agent](https://github.com/badlogic/pi-mono) extensions — installed as **one pinned unit**, tracked as one auditable surface.
 
 ```
-pi install git:github.com/fakoli/anvil-extensions@anvil-v0.16.0
+pi install git:github.com/fakoli/anvil-extensions@anvil-v0.17.0
 ```
 
 - **20 packages · 17 registered extension entrypoints · 1 pin · atomic updates** — every host runs the same reviewed tree; `pi-observations` and `pi-browser` remain inert until a fresh session explicitly uses their opt-in flags
-- **Content-hashed lockfile** — transitive dependencies are pinned by SHA-512 integrity
+- **Content-hashed lockfile** — registry dependencies carry SHA-512 integrity; Git dependencies pin exact commits
 - **Install-script allowlist** — package postinstall scripts run only when approved
 - **Isolated compatibility tests** — the development harness pins upstream Pi 1.0.4; publication never changes an installed host's Pi runtime
 - **Tag-protected releases** — release tags are immutable via repository rulesets
 
 ## Why a bundle
 
-Most extension ecosystems distribute one package at a time, and each one floats independently. This repo takes the opposite position: your agent toolchain is a *tracked artifact*. Everything the agent can do — and everything its dependencies can do — lives in one repository, one lockfile, one version, one review history.
+Most extension ecosystems distribute one package at a time, and each one floats independently. This repo takes the opposite position: your agent toolchain is a *tracked artifact*. The bundle maintains integrations in one repository and pins external product dependencies through one lockfile, one bundle version and one review history.
 
 That gives you:
 
-- **Reproducibility** — `anvil-v0.16.0` means the same bytes on every machine, resolved through a committed lockfile, not fresh registry lookups.
+- **Reproducibility** — `anvil-v0.17.0` means the same bytes on every machine, resolved through a committed lockfile, not fresh registry lookups.
 - **A small blast radius** — a compromise or regression rolls back by pointing the pin at the previous tag.
 - **One audit surface** — dependency changes, fork diffs, and provenance all flow through one PR history.
 
@@ -45,7 +45,7 @@ If you maintain a fleet of agent hosts, this packaging model is the point. If yo
 | [pi-brag](packages/pi-brag/) | Turn the current project into a short shareable launch video (`/brag` command + skill + render/poster/doctor tools) |
 | [pi-observations](packages/pi-observations/) | Optional bounded PNG/JPEG/WebP/GIF observation mediation for a fresh `--observation` Pi session; registered by the bundle but inert without that flag |
 | [pi-browser](packages/pi-browser/) | Optional bounded, read-only public-page observations for a fresh `--browser` Pi session with protected configuration; registered by the bundle but inert without that flag |
-| [pi-repo-graph](packages/pi-repo-graph/) | Default-discovered `/skill:repo-graph`: system diagrams, repository maps and data views with incremental keyword/semantic search and optional reranking; Python 3.10+ when used, uv for optional CPU models |
+| [pi-repo-graph](packages/pi-repo-graph/) | Default-discovered canonical Repo Graph skill, pinned as a dependency; system diagrams and incremental keyword/semantic search, with compatibility scripts; Python 3.10+ when used, uv for optional CPU models |
 | [pi-anvil-pulse](packages/pi-anvil-pulse/) | Live read-only observability dashboard for an Anvil project: claims, task phases, event feed, staleness (`anvil_pulse_start/check/stop/read` tools + `/pulse` + optional TUI widget) |
 | [pi-handoff](packages/pi-handoff/) | Durable cross-session, cross-checkout handoff notes keyed by project identity: `handoff_save`/`handoff_recall` tools, session-start resume banner, `/handoff` + `/recall` prompts |
 | [pi-session-retro](packages/pi-session-retro/) | Session retros over Pi/Claude/Codex logs: `session_retro` tool (list/find/stats/report/html) + `/session-retro` prompt; deterministic token-economy and workflow reports |
@@ -58,13 +58,13 @@ Full catalog — including *why* each exists and how it works — is in [docs/pa
 **Install** (pins the exact tag):
 
 ```bash
-pi install git:github.com/fakoli/anvil-extensions@anvil-v0.16.0
+pi install git:github.com/fakoli/anvil-extensions@anvil-v0.17.0
 ```
 
 **Update** (bump the pin, then reinstall):
 
 ```bash
-pi install git:github.com/fakoli/anvil-extensions@anvil-v0.16.0
+pi install git:github.com/fakoli/anvil-extensions@anvil-v0.17.0
 ```
 
 **Disable individual resources** without touching the pin — two ways:
@@ -77,7 +77,7 @@ pi install git:github.com/fakoli/anvil-extensions@anvil-v0.16.0
   "packages": [
     "pi-condense",
     {
-      "source": "git:github.com/fakoli/anvil-extensions@anvil-v0.16.0",
+      "source": "git:github.com/fakoli/anvil-extensions@anvil-v0.17.0",
       "extensions": ["./packages/pi-nano-banana/index.ts"],
       "skills": []
     }
@@ -92,7 +92,7 @@ An empty `"extensions"` array loads nothing from that resource type — the pack
 This repo is maintained under a supply-chain discipline summarized in [docs/security.md](docs/security.md):
 
 - **Pins, not floats** — hosts never install moving targets; releases are immutable tags.
-- **Committed lockfile** — every transitive dependency is resolved to an exact version with a SHA-512 integrity hash.
+- **Committed lockfile** — registry dependencies resolve to exact versions with SHA-512 integrity hashes; Git dependencies resolve to exact commits.
 - **Install-script gate** — packages whose postinstall scripts want to run must be explicitly approved.
 - **Identity hygiene** — history is identity-scrubbed; contributors should commit with a noreply email (`git config user.email "you@users.noreply.github.com"`).
 - **Retroactive scrub gate** — before any release, all history is re-scanned for real names, personal emails, hostnames, and credentials.

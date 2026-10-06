@@ -165,3 +165,29 @@ to avoid an unrelated host Git marker. See [release notes](releases/anvil-v0.16.
 for migration, rollback and limitations, and [upstream evaluations](https://github.com/fakoli/repo-graph/blob/v0.5.0/evaluations/README.md)
 for paired timing/relevance evidence. No new live Jev, model instruction-following,
 million-file or full accessibility qualification is claimed for this port.
+
+## Canonical Repo Graph integration (0.17.0)
+
+The bundle installs canonical Repo Graph 0.6.0 at exact Git commit
+`b21a7c19fc3f068d3b0227ba1fa6acd5eda17280` instead of maintaining a copied port.
+A fresh locked install fetched that release. Native checks passed on Pi 1.0.4
+and 0.85.1 with isolated settings and no provider calls: root resource discovery
+identifies the actual canonical skill, scripts preserve a synthetic caller
+directory with spaces, artifacts and keyword results are checked, repeat scans
+reuse caches, and source-contained output is refused. Compatibility wrappers
+also reject a missing dependency and resolve a package-local dependency.
+
+The first full matrix passed 14 suites; Hermes lacked its native SQLite binding
+because the install disabled lifecycle scripts. After normal `npm ci`, its
+focused rerun passed 864 checks across 47 files. Post-patch Nano Banana passed
+39 checks, Observations passed 23, and Repo Graph native integration passed.
+The compatible Sharp 0.35.5 update cleared the new upstream librsvg advisory;
+fresh `npm audit` reported zero vulnerabilities. Only the canonical product
+and Sharp platform closure changed in the dependency lock.
+
+The final clean-room full matrix and exact-commit CI remain delivery gates.
+Product algorithm and browser UX tests are owned by the canonical repository.
+This integration changes packaging; it does not qualify polyglot function
+calls, new search relevance, million-file scaling or model instruction-following.
+See [release notes](releases/anvil-v0.17.0.md) for the skill-filter migration
+and rollback.

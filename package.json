@@ -31,7 +31,7 @@
       "./packages/pi-subagents/skills",
       "./packages/pi-nano-banana/skills",
       "./packages/pi-brag/skills",
-      "./packages/pi-repo-graph/skills",
+      "./node_modules/repo-graph-agent/skills",
       "./packages/pi-ship-loop/skills"
     ],
     "prompts": [
@@ -44,7 +44,8 @@
   "license": "MIT",
   "dependencies": {
     "@upstash/context7-pi": "0.1.2",
-    "pi-mcp-adapter": "2.33.0"
+    "pi-mcp-adapter": "2.33.0",
+    "repo-graph-agent": "git+https://github.com/fakoli/repo-graph.git#v0.6.0"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "1.0.4"

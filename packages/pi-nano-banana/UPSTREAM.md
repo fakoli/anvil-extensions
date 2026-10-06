@@ -38,3 +38,8 @@ Preserved from the original, non-negotiable:
 Registry-integrity hashes: N/A — original package.
 - 2026-09-12: pin sharp 0.35.4 to include the libvips/libheif security fixes
   (GHSA-f88m-g3jw-g9cj and GHSA-rgj7-g3m4-5g8c). Image behavior is unchanged.
+
+- 2026-10-06: pin unmodified sharp 0.35.5 for the librsvg security fix
+  [GHSA-wq5f-xc86-pv6w](https://github.com/advisories/GHSA-wq5f-xc86-pv6w).
+  Registry/platform integrity hashes are recorded in the root lock; no Sharp
+  source is vendored or patched.

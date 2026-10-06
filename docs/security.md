@@ -12,7 +12,8 @@ Nothing moves unless a maintainer moves it:
 
 ## Dependency integrity
 
-- `package-lock.json` is committed and must be updated **in the same change** as any dependency change. Transitive dependencies resolve to exact versions with SHA-512 integrity hashes — a reinstall cannot silently pull a different tarball.
+- `package-lock.json` is committed and must be updated **in the same change** as any dependency change. Registry dependencies resolve to exact versions with SHA-512 integrity hashes — a reinstall cannot silently pull a different tarball.
+- Git product dependencies record their exact resolved commit in the lock. npm 11 does not record or verify tarball integrity for the Repo Graph Git dependency; its verified release asset checksum is a separate provenance check. Native resource discovery explicitly selects its reviewed skill.
 - Vendored packages pin their upstream import by **registry integrity hash** (see each package's `UPSTREAM.md`), so even the import step is content-addressed, not version-addressed.
 - **Install scripts are gated.** Package lifecycle scripts (the classic npm supply-chain vector) run only for packages explicitly approved by the installer's allowlist. An unapproved script blocks the install rather than executing.
 
@@ -24,6 +25,14 @@ ordinary npm overrides could not update. The lock also records patched
 source-map-js 1.2.2 and smol-toml 1.9.0. The installed host Pi pin is separate;
 publication does not change it. Clean installs must pass the full offline test
 matrix and dependency audit before a release.
+
+The two image packages pin unmodified Sharp 0.35.5. Its upstream librsvg fix
+addresses [GHSA-wq5f-xc86-pv6w](https://github.com/advisories/GHSA-wq5f-xc86-pv6w),
+added to the advisory database on 2026-10-06. The prior 0.35.4 pin failed the
+release audit; this compatible dependency patch changes no image-tool interface.
+Registry platform packages and their integrity hashes are recorded in the lock.
+The fresh post-patch audit reported zero vulnerabilities; installed Sharp 0.35.5
+uses librsvg 2.63.2, and both affected image suites passed.
 
 ## Identity hygiene
 
@@ -61,7 +70,11 @@ npm install-scripts ls
 
 ## Repository diagram skill
 
-`pi-repo-graph` is default-discovered and runs only when its workflow is used.
+The root manifest explicitly discovers the locked canonical Repo Graph skill
+from `node_modules/repo-graph-agent/skills`; it runs only when its workflow is used.
+The Git dependency is fetched during bundle installation. Its runtime and skill
+are maintained once upstream; `pi-repo-graph` contains compatibility scripts and
+native integration tests only. No install hook, daemon or provider setting is added.
 It invokes Python through Pi's normal bash permissions and cancellation. The
 scanner reads bounded source/metadata and writes generated diagrams, file
 synopses, vectors and caches outside the source. Source files are not executed.

@@ -12,7 +12,7 @@ LLM-callable pi tools. TypeScript port of the Claude plugin
   editing, and remixing. The key is read from the environment, then project
   `.env`, then `~/.env` — never pasted into chat, never logged, never stored
   by this package. No API key is needed for optimization or configuration.
-- Node ≥ 22.19 and the `sharp` dependency (installed with the package).
+- Node ≥ 22.19 and the exact `sharp` 0.35.5 dependency (installed with the package).
 
 ## Installation
 

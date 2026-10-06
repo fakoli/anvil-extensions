@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Preserve the original map-only entrypoint and caller working directory."""
+"""Preserve the map-only entrypoint and caller working directory."""
 from pathlib import Path
+import runpy
 import sys
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from repo_graph.cli import main
-raise SystemExit(main(['map', *sys.argv[1:]]))
+
+sys.argv.insert(1, "map")
+runpy.run_path(str(Path(__file__).with_name("repo_graph.py")), run_name="__main__")

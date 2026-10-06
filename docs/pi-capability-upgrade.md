@@ -173,12 +173,12 @@ services.
 ## Repository diagrams and search
 
 The baseline discovers the `repo-graph` skill without an extension entrypoint.
-Version 0.16.0 carries the Repo Graph 0.5.0 runtime: readable diagrams, scoped
+Version 0.17.0 installs the canonical Repo Graph 0.6.0 dependency: readable diagrams, scoped
 incremental keyword/semantic search, keyboard navigation and optional reranking.
-Existing explicit candidate filters remain unchanged; include
-`packages/pi-repo-graph/skills/**` when this workflow is wanted. The skill uses
+Existing explicit Repo Graph filters must migrate to
+`node_modules/repo-graph-agent/skills/**`; other candidate filters remain unchanged. The skill uses
 ordinary bash permissions and the existing primary provider. CPU model setup is
 optional and independent of that provider. Jev needs explicit source-export and
 credential authorization, and browser use needs both server enablement and a
 reranker selection. See [the package guide](../packages/pi-repo-graph/README.md)
-and [verification](pi-capability-upgrade-verification.md#repository-diagrams-and-search-0160).
+and [verification](pi-capability-upgrade-verification.md#canonical-repo-graph-integration-0170).
