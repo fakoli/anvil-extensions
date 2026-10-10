@@ -7,7 +7,7 @@ description: Write, edit, or check text in ASD-STE100 Simplified Technical Engli
 
 Controlled natural language for technical documentation. Restricted grammar (Part 1) + restricted dictionary (Part 2). Write short, clear, direct sentences.
 
-Source: ASD-STE100 Issue 9, 2025-01-15. 53 rules, 9 sections. Dictionary: 1679 words in `words.txt` beside this file.
+Source: ASD-STE100 Issue 9, 2025-01-15. 53 rules, 9 sections. Dictionary: 1828 words in `words.txt` beside this file.
 
 ## Procedure
 
@@ -41,7 +41,7 @@ Source: ASD-STE100 Issue 9, 2025-01-15. 53 rules, 9 sections. Dictionary: 1679 w
 
 ### Section 3 – Verbs
 - **3.1** Use only the verb forms that are given in the dictionary.
-- **3.2** Use only these verb forms and tenses: simple present (`starts`), simple past (`started`), simple future (`will start`), present perfect (`has started`), infinitive (`to start`), command form (`Start the engine.`), negative command (`Do not start...`).
+- **3.2** Use only these verb forms and tenses: simple present (`starts`), simple past (`started`), simple future (`will start`), infinitive (`to start`), command form (`Start the engine.`), negative command (`Do not start...`).
 - **3.3** Use the past participle form as an adjective (installed / `the installed pump`).
 - **3.4** Do not use auxiliary verbs to make complex verb constructions (no `is starting`, `has been started`, `will be starting`).
 - **3.5** Use the "-ing" form (gerund) only as a technical noun or as a modifier in a technical noun (`the landing gear`, `the existing file`). No `is starting`, `he is checking`.

@@ -27,6 +27,8 @@
     "src/**/*.ts",
     "skills/**/*",
     "CHANGELOG.md",
+    "UPSTREAM.md",
+    "LICENSE-ASD-STE100.md",
     "README.md"
   ],
   "pi": {

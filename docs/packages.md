@@ -22,6 +22,7 @@ Twenty packages, seventeen registered extension entrypoints, one pinned unit. `p
 | [pi-repo-graph](#pi-repo-graph) | canonical MIT dependency + adapter | default-discovered repository diagram and search skill |
 | [pi-anvil-pulse](#pi-anvil-pulse) | original (native port) | anvil project observability |
 | [pi-handoff](#pi-handoff) | original (native port) | cross-session continuity |
+| [pi-asd-ste](#pi-asd-ste) | original (standard conversion) | Simplified Technical English writing rules |
 | [pi-session-retro](#pi-session-retro) | original (native port) | observability |
 | [pi-ship-loop](#pi-ship-loop) | original | release-gate procedure skill |
 
@@ -274,3 +275,11 @@ the repository's own contribution guide. Operator-specific host details
 are deliberately kept out of the tracked text. No test suite (no code to
 test; recorded in `scripts/test-matrix.txt`). See [the package
 README](../packages/pi-ship-loop/README.md).
+
+## pi-asd-ste
+
+**What:** ASD-STE100 Simplified Technical English (Issue 9, Jan 2025) as `/asd-ste` command + skill: refactor text, inject the 53-rule STE format into any session, check words against the 1828-word dictionary.
+
+**Why it exists:** Technical documentation needs short, clear, direct sentences. STE is the controlled natural language for aerospace and defence manuals; the extension injects its 53 rules into any session and checks words without an LLM.
+
+**How it works:** The command refactors text through the running agent (skill + words.txt), injects compact rules before every turn in session mode, and checks words deterministic (exact, lowercase, -s/-ed/-ing strip; be-forms approved; lowercase word = NOT approved). See [the package README](../packages/pi-asd-ste/README.md).

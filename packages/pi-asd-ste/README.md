@@ -48,3 +48,19 @@ Reports: `ensure (v) -> SURE, MAKE SURE`, `avoid (v) -> PREVENT`, `press (v) -> 
 ## Source
 
 ASD-STE100 Issue 9 (2025-01-15) converted from https://www.asd-ste100.org/assets/files/ASD-STE100_ISSUE9.pdf
+
+## Status, loading, and provenance
+
+- **Status:** original (standard conversion) — not a plugin port. Source: ASD-STE100 Issue 9 (2025-01-15) PDF, 53 rules Part 1 + 1828-word dictionary Part 2. See `UPSTREAM.md` / `LICENSE-ASD-STE100.md`.
+- **Loading:** Pi loads the bundle extension (`pi.extensions` in root package.json) and skill (`pi.skills`); the skill also loads standalone on "STE", "Simplified Technical English", or aerospace manual text.
+- **Verification:** `tsc --noEmit` clean (strict, nodenext); jiti loads extension; RPC `get_commands` registers `asd-ste` (147 commands); RPC `/asd-ste check` notify hits; RPC `/asd-ste <text>` prompt sent, agent turn started; skill standalone 3/3 sentences rewritten, rules cited (`pi -p`); `dict.ts` word-check engine inline verified (hits, ste-hits, clean-hits).
+- **Disable/rollback:** `pi config` → Tab to package scope → disable `pi-asd-ste`; or `pi remove github.com/fakoli/anvil-extensions/packages/pi-asd-ste`. Session mode off: `/asd-ste off`. Root `package.json` arrays: remove `./packages/pi-asd-ste/index.ts` (extensions) and `./packages/pi-asd-ste/skills` (skills).
+- **License:** ASD-STE100 © ASD 2025 all rights reserved; special usage rights grant reproduction to universities and research institutes for educational purposes (category 8). See `LICENSE-ASD-STE100.md`.
+
+## Tests
+
+```bash
+cd packages/pi-asd-ste && node --experimental-strip-types -e "import('./src/dict.ts').then(async m => { m.loadDict(); const h = m.checkWords('Ensure the bolts are secure'); console.log(h); })"
+```
+
+Inline verified: `tsc --noEmit` clean (strict, nodenext); jiti loads extension; RPC `get_commands` registers `asd-ste`; RPC `/asd-ste check` notify hits; RPC `/asd-ste <text>` prompt sent, agent turn started; skill standalone 3/3 sentences rewritten, rules cited. No network, no engine calls. No test dir vendored (see `scripts/test-matrix.txt`).
