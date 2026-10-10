@@ -27,6 +27,15 @@ export function skillDir(): string {
 	return path.join(real, "..", "skills", "asd-ste");
 }
 
+/** Package-relative skill path for LLM prompts (works from any install dir). */
+export function skillPromptPath(): string {
+	return path.join(skillDir(), "SKILL.md");
+}
+
+export function wordsPath(): string {
+	return path.join(skillDir(), "words.txt");
+}
+
 export function loadDict(): Map<string, WordEntry> {
 	if (dict) return dict;
 	dict = new Map();
@@ -99,7 +108,7 @@ export function checkWords(text: string): WordHit[] {
 }
 
 /** Compact one-line rules digest — injected into the session by /asd-ste. */
-export const STE_RULES_DIGEST = `ASD-STE100 Simplified Technical English (Issue 9) ACTIVE. Skill: /home/fakoli/code/anvil-extensions/packages/pi-asd-ste/skills/asd-ste/SKILL.md + words.txt (word|pos|approved-alternatives, UPPERCASE=approved).
+export const STE_RULES_DIGEST = `ASD-STE100 Simplified Technical English (Issue 9) ACTIVE. Skill: ${skillPromptPath()} + words.txt (word|pos|approved-alternatives, UPPERCASE=approved).
 CORE RULES: 1.1-1.14 approved words only / tech-nouns ok / no noun-as-verb / American spelling. 2.1-2.2 multi-word nouns max 3 words. 3.1-3.7 verb forms: simple present/past/future, present perfect, infinitive, command, negative command ONLY; no auxiliary verbs (no is starting/has been started); -ing only as tech-noun or modifier; ACTIVE voice (passive only descriptive, object more important); verb not noun for actions. 4.1-4.5 short clear sentences; no omissions/contractions (don't -> do not); vertical lists for complex text; connecting words ok; article/demonstrative before noun. 5.1-5.5 procedural: max 20 words/sentence; ONE instruction per sentence; imperative form; condition first (If X, do Y.); notes give info not instructions. 6.1-6.6 descriptive: info gradually; key words structure; max 25 words/sentence; paragraphs related info; 1 topic/paragraph; max 6 sentences/paragraph. 7.1-7.3 safety: warning/caution word; clear command or condition first; explanation shows risk. 8.1-8.7 all punctuation EXCEPT semicolon; hyphens connect related words; parentheses ok (sequence, example, explanation); text in () = 1 word; numbers+units=1 word (10 knots); abbreviations=1 word; alphanumeric ids=1 word (36L7); quoted text=1 word; hyphenated words=1 word. 9.1-9.4 different construction when word-for-word fails; use approved words correctly; no phrasal verbs; consistent style.
 TOP SWAPS: ensure->MAKE SURE, avoid->PREVENT, check(v)->CHECK(n), damage(v)->DAMAGE(n), fit(v)->INSTALL, follow->OBEY, insert->PUT, main->PRIMARY, may/should/shall->MUST/CAN, need->NECESSARY, now->AT THIS TIME, old->REMAINING/USED/EXPIRED, over->ABOVE/ON/ALONG, people->PERSON/PERSONNEL, perform->DO, portion->PART, press->PUSH, reach->GET, repeat->DO AGAIN, rotate->TURN, secure->ATTACH/SAFETY, test(v)->TEST(n), therefore->THUS, under->BELOW/IN/LESS THAN, using->USE/WITH, acceptable->PERMITTED, complete(adj)->COMPLETED, further->MORE, however->BUT.`;
 
@@ -110,4 +119,4 @@ export function loadSkillMarkdown(): string {
 }
 
 /** Compact before-every-turn block — 1/3 of the digest, rules only. */
-export const STE_COMPACT = `ASD-STE100 Simplified Technical English (Issue 9) ACTIVE. Write ALL text in STE: short clear sentences (procedural max 20 words, descriptive max 25), ONE instruction per sentence, imperative form, condition first, active voice, no contractions (do not), no semicolons, no auxiliary verbs (no is starting), -ing only as tech-noun, articles before nouns (the/a), multi-word nouns max 3 words. Approved words only — dictionary: /home/fakoli/code/anvil-extensions/packages/pi-asd-ste/skills/asd-ste/words.txt (word|pos|alts). Top swaps: ensure->MAKE SURE, avoid->PREVENT, insert->PUT, main->PRIMARY, may/should/shall->MUST/CAN, need->NECESSARY, now->AT THIS TIME, over->ABOVE, perform->DO, press->PUSH, reach->GET, repeat->DO AGAIN, using->USE. Full rules: /home/fakoli/code/anvil-extensions/packages/pi-asd-ste/skills/asd-ste/SKILL.md`;
+export function steCompact(): string { return `ASD-STE100 Simplified Technical English (Issue 9) ACTIVE. Write ALL text in STE: short clear sentences (procedural max 20 words, descriptive max 25), ONE instruction per sentence, imperative form, condition first, active voice, no contractions (do not), no semicolons, no auxiliary verbs (no is starting), -ing only as tech-noun, articles before nouns (the/a), multi-word nouns max 3 words. Approved words only — dictionary: ${wordsPath()} (word|pos|alts). Top swaps: ensure->MAKE SURE, avoid->PREVENT, insert->PUT, main->PRIMARY, may/should/shall->MUST/CAN, need->NECESSARY, now->AT THIS TIME, over->ABOVE, perform->DO, press->PUSH, reach->GET, repeat->DO AGAIN, using->USE. Full rules: ${skillPromptPath()}`; }

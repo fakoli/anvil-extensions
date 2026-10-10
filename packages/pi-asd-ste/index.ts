@@ -5,8 +5,9 @@
 // /asd-ste check      check words in args text against dictionary, report hits
 // The skill (skills/asd-ste) owns the words; this extension injects the
 // format into the session and refactors text through the running agent.
+import * as fs from "node:fs";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { STE_RULES_DIGEST, STE_COMPACT, loadSkillMarkdown, checkWords, loadDict } from "./src/dict.js";
+import { STE_RULES_DIGEST, steCompact, loadSkillMarkdown, checkWords, loadDict, skillPromptPath, wordsPath } from "./src/dict.js";
 
 interface BranchMessageEntry {
 	type: string;
@@ -22,7 +23,7 @@ export default function asdSte(pi: ExtensionAPI): void {
 	const state: State = { sessionOn: false, lastRefactorText: "" };
 
 	const refactorPrompt = (text: string): string =>
-		`Use the asd-ste skill. Read /home/fakoli/code/anvil-extensions/packages/pi-asd-ste/skills/asd-ste/SKILL.md and words.txt beside it. Rewrite this text in ASD-STE100 Simplified Technical English. Fix every rule violation, list each non-STE word with its approved alternative and rule number:\n${text}`;
+		`Use the asd-ste skill. Read ${skillPromptPath()} and ${wordsPath()} beside it. Rewrite this text in ASD-STE100 Simplified Technical English. Fix every rule violation, list each non-STE word with its approved alternative and rule number:\n${text}`;
 
 	const lastAgentText = (ctx: ExtensionContext): string => {
 		const branch = ctx.sessionManager.getBranch();
@@ -62,11 +63,12 @@ export default function asdSte(pi: ExtensionAPI): void {
 
 			if (mode === "full") {
 				const md = loadSkillMarkdown();
+				const words = fs.readFileSync(wordsPath(), "utf8");
 				if (!ctx.isIdle()) {
 					ctx.ui.notify("Agent is busy — use /asd-ste full when idle", "warning");
 					return;
 				}
-				pi.sendUserMessage(`Injecting ASD-STE100 full rules into this session. Read and apply from now on:\n\n${md}`);
+				pi.sendUserMessage(`Injecting ASD-STE100 full rules into this session. Read and apply from now on. Rules:\n\n${md}\n\n## Dictionary\n\nwords.txt (${wordsPath()}): word|pos|approved-alternatives, UPPERCASE alternative = approved STE word. Lines:\n\n${words}`);
 				return;
 			}
 
@@ -109,7 +111,7 @@ export default function asdSte(pi: ExtensionAPI): void {
 	pi.on("before_agent_start", async (event) => {
 		if (!state.sessionOn) return;
 		return {
-			systemPrompt: `${event.systemPrompt}\n\n${STE_COMPACT}`,
+			systemPrompt: `${event.systemPrompt}\n\n${steCompact()}`,
 		};
 	});
 }

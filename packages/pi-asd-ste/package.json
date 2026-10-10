@@ -26,6 +26,7 @@
     "index.ts",
     "src/**/*.ts",
     "skills/**/*",
+    "CHANGELOG.md",
     "README.md"
   ],
   "pi": {
