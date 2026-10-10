@@ -34,6 +34,7 @@ Verbatim vendoring is deliberate: updates to these packages are explicit diffs w
 
 - **pi-insights** — original, designed as a deterministic activity ledger with a persistent widget (observational only; no provider calls).
 - **pi-commentary** — original; the idle-commentary widget with silence-on-quiet/failure semantics and supersession restore.
+- **pi-asd-ste** — original; converted from the ASD-STE100 Issue 9 (2025-01-15) PDF (53 rules + 1828-word dictionary). Not a plugin port: the standard text is the upstream, `src/dict.ts` word-check engine and `/asd-ste` extension command are NEW. See `packages/pi-asd-ste/UPSTREAM.md`.
 - **pi-sandbox-config** — original; fail-closed run-config editing cross-checked against the platform validator.
 - **pi-voice-clone** — original bridge to a privately-owned style plugin; the repo ships the bridge, not the private corpus.
 - **pi-capability-upgrade** — original receipt, documentation guard, and MCP-policy code, plus concise adapted workflow material from the public Fakoli plugin repository. Its `UPSTREAM.md` records the exact source revision and external package integrities.

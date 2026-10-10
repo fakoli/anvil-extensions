@@ -48,6 +48,7 @@ If you maintain a fleet of agent hosts, this packaging model is the point. If yo
 | [pi-repo-graph](packages/pi-repo-graph/) | Default-discovered canonical Repo Graph skill, pinned as a dependency; system diagrams and incremental keyword/semantic search, with compatibility scripts; Python 3.10+ when used, uv for optional CPU models |
 | [pi-anvil-pulse](packages/pi-anvil-pulse/) | Live read-only observability dashboard for an Anvil project: claims, task phases, event feed, staleness (`anvil_pulse_start/check/stop/read` tools + `/pulse` + optional TUI widget) |
 | [pi-handoff](packages/pi-handoff/) | Durable cross-session, cross-checkout handoff notes keyed by project identity: `handoff_save`/`handoff_recall` tools, session-start resume banner, `/handoff` + `/recall` prompts |
+| [pi-asd-ste](packages/pi-asd-ste/) | ASD-STE100 Simplified Technical English: `/asd-ste` refactors text, injects the 53-rule format into sessions, checks words against the 1828-word dictionary |
 | [pi-session-retro](packages/pi-session-retro/) | Session retros over Pi/Claude/Codex logs: `session_retro` tool (list/find/stats/report/html) + `/session-retro` prompt; deterministic token-economy and workflow reports |
 | [pi-ship-loop](packages/pi-ship-loop/) | Default-discovered `ship-loop` skill: a release-gate procedure (SHA-pinned review → pinned, headSha-verified merge → tag → published, checksum-verified artifact → receipt-backed handoff) with a repository-agnostic core and a filled-in profile for this repo |
 

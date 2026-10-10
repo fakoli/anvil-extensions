@@ -1,0 +1,45 @@
+{
+  "name": "pi-asd-ste",
+  "version": "0.1.0",
+  "description": "Pi coding-agent extension for ASD-STE100 Simplified Technical English: /asd-ste refactors text, injects the 53-rule format into sessions, and checks words against the 1828-word STE dictionary",
+  "author": "Fakoli",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-coding-agent",
+    "asd-ste100",
+    "simplified-technical-english",
+    "ste",
+    "technical-writing",
+    "aerospace"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "exports": {
+    ".": "./index.ts",
+    "./dict": "./src/dict.ts"
+  },
+  "files": [
+    "index.ts",
+    "src/**/*.ts",
+    "skills/**/*",
+    "CHANGELOG.md",
+    "UPSTREAM.md",
+    "LICENSE-ASD-STE100.md",
+    "README.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  }
+}
